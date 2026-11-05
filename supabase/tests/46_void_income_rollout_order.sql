@@ -142,12 +142,15 @@ BEGIN
         has_table_privilege('anon', 'public.inquiries', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')::text, 'false');
     PERFORM pg_temp.expect('authenticated on inquiries',
         has_table_privilege('authenticated', 'public.inquiries', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')::text, 'false');
-    PERFORM pg_temp.expect('anon on the catalog',
-        has_table_privilege('anon', 'public.cost_control_templates', 'SELECT,TRUNCATE')::text, 'false');
-    PERFORM pg_temp.expect('signed in reads the catalog',
-        has_table_privilege('authenticated', 'public.cost_control_templates', 'SELECT')::text, 'true');
-    PERFORM pg_temp.expect('signed in cannot truncate it',
-        has_table_privilege('authenticated', 'public.cost_control_templates', 'TRUNCATE')::text, 'false');
+    -- Live has no templates table (test 47 covers both states).
+    IF to_regclass('public.cost_control_templates') IS NOT NULL THEN
+        PERFORM pg_temp.expect('anon on the catalog',
+            has_table_privilege('anon', 'public.cost_control_templates', 'SELECT,TRUNCATE')::text, 'false');
+        PERFORM pg_temp.expect('signed in reads the catalog',
+            has_table_privilege('authenticated', 'public.cost_control_templates', 'SELECT')::text, 'true');
+        PERFORM pg_temp.expect('signed in cannot truncate it',
+            has_table_privilege('authenticated', 'public.cost_control_templates', 'TRUNCATE')::text, 'false');
+    END IF;
     RAISE NOTICE 'PASSED: 000600 leaves the same privileges, TRUNCATE revoked already or not.';
 END $$;
 

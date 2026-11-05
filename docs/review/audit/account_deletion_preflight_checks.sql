@@ -61,7 +61,7 @@ WHERE schemaname = 'public'
   AND NOT (roles <@ ARRAY['authenticated', 'service_role']::name[]);
 
 -- 2b. What each client role can do. After the fix: all false, except that authenticated
--- can select templates.
+-- can select templates. Live has no templates table: this query then shows inquiries only.
 SELECT t.relname AS table_name, r.rolname AS role,
        has_table_privilege(r.rolname, t.oid, 'SELECT') AS can_select,
        has_table_privilege(r.rolname, t.oid, 'INSERT') AS can_insert,
@@ -70,7 +70,7 @@ SELECT t.relname AS table_name, r.rolname AS role,
        has_table_privilege(r.rolname, t.oid, 'TRUNCATE') AS can_truncate
 FROM pg_class t
 CROSS JOIN (VALUES ('anon'), ('authenticated')) AS r(rolname)
-WHERE t.oid IN ('public.inquiries'::regclass, 'public.cost_control_templates'::regclass)
+WHERE t.oid IN (to_regclass('public.inquiries'), to_regclass('public.cost_control_templates'))
 ORDER BY 1, 2;
 
 -- 2c. Who can call the two RPCs. After the fix: both false for both.
@@ -205,3 +205,354 @@ SELECT
     (SELECT count(*) FROM public.transactions WHERE user_id IS NULL) AS transactions_no_creator,
     (SELECT count(*) FROM public.transactions) AS transactions_total,
     (SELECT count(DISTINCT household_id) FROM public.transactions WHERE user_id IS NULL) AS households_affected;
+
+
+-- ── 5. Which of the 2026102* to 202611* migrations this database has ──────────
+-- Live has drifted from the migration chain: read-only checks on 2026-11-05 found no
+-- cost_control_templates table and neither function of 20261026120000. Run this first,
+-- before any of the 20261105 batch, to measure the gap. It only reads. Applying an older
+-- migration that is missing is a separate decision for the owner, not part of this rollout.
+--
+-- One row per migration. The objects are what each file creates: tables, views, functions,
+-- policies, triggers, indexes, added or renamed columns, added constraints and enum values,
+-- listed from the files on 2026-11-05. in_full_chain says whether the object still exists
+-- after a clean rebuild of the whole chain: false means a later migration removed it on
+-- purpose, so its absence here is expected.
+--
+--   expected       objects that exist after the whole chain
+--   present_here   how many of those exist on this database
+--   missing_here   which of those are missing. Before the 20261105 batch, expect all of its
+--                  objects listed here. Elsewhere, a file with most of its objects missing was
+--                  probably never applied.
+--   removed_later_but_present  objects a later migration removes, still here. A hint that
+--                  the later migration did not run.
+--
+-- Limits: a function is checked by name only, and a CREATE OR REPLACE of a function that
+-- already existed proves nothing, so tables, columns, policies and indexes are the better
+-- evidence. Three files create none of these and cannot be detected here:
+-- 20261020070000_audit_definer_search_path_and_household_insert,
+-- 20261020080000_audit_receipts_bucket_limits and 20261020500000_review_lock_financial_role.
+-- Compare their function definitions and grants by hand if it matters.
+WITH created(migration, kind, object_name, on_table, in_full_chain) AS (VALUES
+    ('20261020005000_preflight_live_alignment', 'column', 'rollover_rule', 'households', True),
+    ('20261020010000_audit_invites_rls_and_targeted_claims', 'function', 'validate_invite_target_member', NULL, True),
+    ('20261020010000_audit_invites_rls_and_targeted_claims', 'function', 'join_household_by_code', NULL, True),
+    ('20261020010000_audit_invites_rls_and_targeted_claims', 'function', 'claim_household_role_invite', NULL, True),
+    ('20261020010000_audit_invites_rls_and_targeted_claims', 'trigger', 'trg_validate_invite_target_member', 'household_invites', True),
+    ('20261020020000_audit_membership_policy_recursion', 'function', 'is_household_admin', NULL, True),
+    ('20261020020000_audit_membership_policy_recursion', 'function', 'get_auth_user_household_id', NULL, True),
+    ('20261020020000_audit_membership_policy_recursion', 'function', 'get_auth_user_role', NULL, True),
+    ('20261020020000_audit_membership_policy_recursion', 'policy', 'memberships_select_own_or_admin', 'household_memberships', True),
+    ('20261020030000_audit_reallocate_budget_authz', 'function', 'reallocate_budget', NULL, True),
+    ('20261020040000_audit_cost_control_codes_policies', 'policy', 'cost_control_codes_insert', 'cost_control_codes', True),
+    ('20261020040000_audit_cost_control_codes_policies', 'policy', 'cost_control_codes_update', 'cost_control_codes', True),
+    ('20261020050000_audit_ledger_precision_and_income_append_only', 'function', 'transfer_between_accounts', NULL, True),
+    ('20261020050000_audit_ledger_precision_and_income_append_only', 'function', 'record_income', NULL, True),
+    ('20261020060000_audit_transaction_cycle_key_integrity', 'trigger', 'trg_populate_transaction_cycle_key', 'transactions', True),
+    ('20261020090000_audit_sole_admin_account_deletion', 'function', 'handover_households_on_user_delete', NULL, True),
+    ('20261020090000_audit_sole_admin_account_deletion', 'trigger', 'trg_handover_households_on_user_delete', 'users', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'transactions_select_household', 'transactions', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'transactions_insert_household', 'transactions', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'transactions_update_household', 'transactions', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'transactions_delete_household', 'transactions', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'budgets_select_household', 'budgets', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'budgets_insert_admin', 'budgets', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'budgets_update_admin', 'budgets', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'accounts_select', 'accounts', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'accounts_insert_personal', 'accounts', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'accounts_insert_shared', 'accounts', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'accounts_update_personal', 'accounts', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'accounts_update_shared', 'accounts', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'accounts_delete_admin_or_owner', 'accounts', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'transfers_select_household', 'account_transfers', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'income_select_household', 'income_records', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'households_select_own', 'households', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'households_update_admin', 'households', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'users_select_household', 'users', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'users_insert_own', 'users', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'users_update_own_profile', 'users', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'invites_select_household', 'household_invites', False),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'invites_insert_household', 'household_invites', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'invites_delete_admin', 'household_invites', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'cost_control_codes_select', 'cost_control_codes', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'household_category_settings_all', 'household_category_settings', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'dependents_select_household', 'household_dependents', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'dependents_delete_household', 'household_dependents', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'dependents_insert_household', 'household_dependents', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'dependents_update_household', 'household_dependents', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'Allow household members full access to installment_plans', 'installment_plans', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'receipts_insert_household', 'storage.objects', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'receipts_select_household', 'storage.objects', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'policy', 'receipts_delete_household', 'storage.objects', True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'index', 'idx_transactions_reallocated_from_budget', NULL, True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'index', 'idx_household_invites_household', NULL, True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'index', 'idx_household_invites_created_by', NULL, True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'index', 'idx_household_invites_used_by', NULL, True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'index', 'idx_account_transfers_user', NULL, True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'index', 'idx_income_records_user', NULL, True),
+    ('20261020100000_audit_rls_initplan_and_fk_indexes', 'index', 'idx_invite_attempt_log_user_time', NULL, True),
+    ('20261020200000_remove_sms_artifacts', 'constraint', 'transactions_source_check', 'transactions', True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'table', 'member_allowances', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'table', 'spouse_reimbursements', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'function', 'nafaqah_is_spouse_member', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'function', 'nafaqah_husband_id', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'function', 'validate_transaction_nafaqah_class', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'function', 'nafaqah_resolve_actor', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'function', 'nafaqah_require_member', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'function', 'nafaqah_current_cycle_key', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'function', 'get_member_allowance_status', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'function', 'set_member_allowance', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'function', 'get_spouse_reimbursement_balance', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'function', 'record_spouse_reimbursement', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'policy', 'member_allowances_select_household', 'member_allowances', True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'policy', 'spouse_reimbursements_select_household', 'spouse_reimbursements', True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'trigger', 'trg_validate_transaction_nafaqah_class', 'transactions', True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'index', 'idx_transactions_nafaqah_spouse', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'index', 'idx_member_allowances_member', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'index', 'idx_member_allowances_set_by', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'index', 'idx_spouse_reimbursements_household_wife', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'index', 'idx_spouse_reimbursements_wife', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'index', 'idx_spouse_reimbursements_paid_by', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'index', 'idx_spouse_reimbursements_recorded_by', NULL, True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'column', 'nafaqah_class', 'transactions', True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'column', 'nafaqah_spouse_id', 'transactions', True),
+    ('20261020300000_nafaqah_wife_allowance_and_reimbursements', 'constraint', 'transactions_nafaqah_class_check', 'transactions', True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'household_resolve_actor', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'household_member_role', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'household_primary_admin_id', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'protect_primary_admin_membership', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'maintain_household_primary_admin', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'get_household_members', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'household_apply_role', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'household_require_admin', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'promote_member_to_admin', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'revoke_admin', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'transfer_primary_admin', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'set_member_role', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'remove_member', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'get_user_households', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'bind_transaction_creator', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'enforce_transaction_write_permission', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'transaction_account_matches', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'transaction_personal_account_writable', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'update_account_balance_on_transaction', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'transfer_between_accounts', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'function', 'nafaqah_husband_id', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'policy', 'transactions_insert_household', 'transactions', True),
+    ('20261020400000_admin_permissions_and_co_admins', 'policy', 'transactions_update_household', 'transactions', True),
+    ('20261020400000_admin_permissions_and_co_admins', 'policy', 'transactions_delete_household', 'transactions', True),
+    ('20261020400000_admin_permissions_and_co_admins', 'trigger', 'trg_protect_primary_admin', 'household_memberships', True),
+    ('20261020400000_admin_permissions_and_co_admins', 'trigger', 'trg_maintain_primary_admin', 'household_memberships', True),
+    ('20261020400000_admin_permissions_and_co_admins', 'trigger', 'trg_bind_transaction_creator', 'transactions', True),
+    ('20261020400000_admin_permissions_and_co_admins', 'trigger', 'trg_enforce_transaction_write_permission', 'transactions', True),
+    ('20261020400000_admin_permissions_and_co_admins', 'index', 'idx_households_owner_user_id', NULL, True),
+    ('20261020400000_admin_permissions_and_co_admins', 'column', 'owner_user_id', 'households', True),
+    ('20261020600000_e2e_helper_rpcs_and_sub_category_visibility', 'policy', 'cost_control_sub_categories_select_visible_parent', 'cost_control_sub_categories', False),
+    ('20261020700000_fable_db_hardening', 'function', 'reallocate_budget', NULL, True),
+    ('20261020700000_fable_db_hardening', 'constraint', 'household_invites_created_by_fkey', 'household_invites', True),
+    ('20261020700000_fable_db_hardening', 'constraint', 'household_invites_used_by_fkey', 'household_invites', True),
+    ('20261020750000_installment_pay_atomic', 'function', 'pay_installment_plan', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'household_member_financial_role', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'household_default_financial_role', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'membership_financial_role_rules', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'membership_financial_role_cache', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'clear_nafaqah_provider_on_membership_end', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'households_nafaqah_provider_rules', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'nafaqah_is_spouse_member', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'nafaqah_husband_id', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'validate_transaction_nafaqah_class', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'get_household_members', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'sync_user_household_membership', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'switch_active_household', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'create_household_and_claim', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'join_household_by_code', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'claim_household_role_invite', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'refuse_invite_claim_by_member', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'set_nafaqah_provider', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'transfer_primary_admin', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'guard_wife_reimbursable_ledger', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'update_budget_on_transaction', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'update_budget_on_transaction_delete', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'update_budget_on_transaction_update', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'recompute_budget_spent', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'rekey_household_cycles', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'function', 'rekey_cycles_on_payday_change', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'policy', 'invites_select_admin', 'household_invites', True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'trigger', 'trg_membership_financial_role_rules', 'household_memberships', True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'trigger', 'trg_membership_financial_role_cache', 'household_memberships', True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'trigger', 'trg_clear_nafaqah_provider', 'household_memberships', True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'trigger', 'trg_households_nafaqah_provider', 'households', True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'trigger', 'trg_refuse_invite_claim_by_member', 'household_invites', True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'trigger', 'trg_wife_ledger_guard', 'transactions', True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'trigger', 'trg_rekey_cycles_on_payday_change', 'households', True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'index', 'idx_households_nafaqah_provider', NULL, True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'column', 'financial_role', 'household_memberships', True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'constraint', 'household_memberships_financial_role_check', 'household_memberships', True),
+    ('20261020800000_household_roles_and_nafaqah_integrity', 'column', 'nafaqah_provider_user_id', 'households', True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'household_financial_role_allowed', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'household_default_financial_role', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'membership_financial_role_rules', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'households_nafaqah_provider_rules', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'maintain_household_primary_admin', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'nafaqah_husband_id', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'validate_transaction_nafaqah_class', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'guard_wife_reimbursable_ledger', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'remove_nafaqah_ledger_on_membership_end', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'update_budget_on_transaction', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'update_budget_on_transaction_delete', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'update_budget_on_transaction_update', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'create_household_and_claim', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'join_household_by_code', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'claim_household_role_invite', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'set_nafaqah_provider', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'transfer_primary_admin', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'set_household_type', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'set_member_financial_role', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'function', 'pay_installment_plan', NULL, True),
+    ('20261020900000_household_type_and_round2_fixes', 'trigger', 'trg_membership_financial_role_rules', 'household_memberships', True),
+    ('20261020900000_household_type_and_round2_fixes', 'trigger', 'trg_households_nafaqah_provider', 'households', True),
+    ('20261020900000_household_type_and_round2_fixes', 'trigger', 'trg_remove_nafaqah_ledger_on_membership_end', 'household_memberships', True),
+    ('20261020900000_household_type_and_round2_fixes', 'column', 'household_type', 'households', True),
+    ('20261020900000_household_type_and_round2_fixes', 'constraint', 'households_household_type_check', 'households', True),
+    ('20261020900000_household_type_and_round2_fixes', 'constraint', 'installment_plans_paid_installments_range', 'installment_plans', True),
+    ('20261021000000_saudi_taxonomy_and_bnpl_schedule', 'function', 'installment_next_due_at', NULL, True),
+    ('20261021000000_saudi_taxonomy_and_bnpl_schedule', 'function', 'installment_plans_schedule', NULL, True),
+    ('20261021000000_saudi_taxonomy_and_bnpl_schedule', 'function', 'pay_installment_plan', NULL, True),
+    ('20261021000000_saudi_taxonomy_and_bnpl_schedule', 'trigger', 'trg_installment_plans_schedule', 'installment_plans', True),
+    ('20261021000000_saudi_taxonomy_and_bnpl_schedule', 'index', 'idx_installment_plans_next_due', NULL, True),
+    ('20261021000000_saudi_taxonomy_and_bnpl_schedule', 'column', 'frequency', 'installment_plans', True),
+    ('20261021000000_saudi_taxonomy_and_bnpl_schedule', 'column', 'next_due_at', 'installment_plans', True),
+    ('20261021000000_saudi_taxonomy_and_bnpl_schedule', 'constraint', 'installment_plans_frequency_check', 'installment_plans', True),
+    ('20261024000000_create_inquiries_table', 'table', 'inquiries', NULL, True),
+    ('20261024000000_create_inquiries_table', 'policy', 'Allow anonymous and authenticated insert into inquiries', 'inquiries', False),
+    ('20261024000000_create_inquiries_table', 'index', 'idx_inquiries_email_type', NULL, True),
+    ('20261024000000_create_inquiries_table', 'index', 'idx_inquiries_created_at', NULL, True),
+    ('20261024000000_create_inquiries_table', 'index', 'idx_inquiries_reference', NULL, True),
+    ('20261026000000_add_savings_account_type', 'constraint', 'accounts_account_type_check', 'accounts', True),
+    ('20261026120000_household_autonomous_taxonomy', 'table', 'cost_control_templates', NULL, True),
+    ('20261026120000_household_autonomous_taxonomy', 'function', 'replace_household_category', NULL, True),
+    ('20261026120000_household_autonomous_taxonomy', 'function', 'seed_household_default_taxonomy', NULL, True),
+    ('20261026120000_household_autonomous_taxonomy', 'policy', 'cost_control_templates_select', 'cost_control_templates', True),
+    ('20261026120000_household_autonomous_taxonomy', 'policy', 'cost_control_sub_categories_select_autonomous', 'cost_control_sub_categories', False),
+    ('20261026120000_household_autonomous_taxonomy', 'policy', 'cost_control_sub_categories_insert', 'cost_control_sub_categories', False),
+    ('20261026120000_household_autonomous_taxonomy', 'policy', 'cost_control_sub_categories_update', 'cost_control_sub_categories', False),
+    ('20261026120000_household_autonomous_taxonomy', 'policy', 'cost_control_sub_categories_delete', 'cost_control_sub_categories', False),
+    ('20261026120000_household_autonomous_taxonomy', 'index', 'idx_sub_categories_hh_parent', NULL, True),
+    ('20261026120000_household_autonomous_taxonomy', 'column', 'household_id', 'cost_control_sub_categories', True),
+    ('20261101000000_nafaqah_wife_no_account', 'constraint', 'transactions_wife_class_no_account', 'transactions', False),
+    ('20261101000100_nafaqah_wife_account_owner_guard', 'function', 'enforce_wife_class_account', NULL, True),
+    ('20261101000100_nafaqah_wife_account_owner_guard', 'trigger', 'trg_enforce_wife_class_account', 'transactions', True),
+    ('20261102000000_cleanup_database_jargon_and_zombie_columns', 'column', 'notes', 'transactions', True),
+    ('20261102010000_void_income_record_rpc', 'function', 'void_income_record', NULL, True),
+    ('20261105000000_account_deletion_ledger_fks', 'function', 'handover_households_on_user_delete', NULL, True),
+    ('20261105000000_account_deletion_ledger_fks', 'constraint', 'income_records_user_id_fkey', 'income_records', True),
+    ('20261105000000_account_deletion_ledger_fks', 'constraint', 'account_transfers_user_id_fkey', 'account_transfers', True),
+    ('20261105000000_account_deletion_ledger_fks', 'constraint', 'account_transfers_from_account_id_fkey', 'account_transfers', True),
+    ('20261105000000_account_deletion_ledger_fks', 'constraint', 'account_transfers_to_account_id_fkey', 'account_transfers', True),
+    ('20261105000100_account_deletion_schema', 'table', 'account_deletion_requests', NULL, True),
+    ('20261105000100_account_deletion_schema', 'table', 'account_deletion_storage_queue', NULL, True),
+    ('20261105000100_account_deletion_schema', 'table', 'account_deletion_worker_runs', NULL, True),
+    ('20261105000100_account_deletion_schema', 'function', 'account_deletion_user_pending', NULL, True),
+    ('20261105000100_account_deletion_schema', 'function', 'account_deletion_guard_membership', NULL, True),
+    ('20261105000100_account_deletion_schema', 'function', 'account_deletion_guard_invite', NULL, True),
+    ('20261105000100_account_deletion_schema', 'function', 'account_deletion_guard_provider', NULL, True),
+    ('20261105000100_account_deletion_schema', 'function', 'account_deletion_clear_marks_on_membership_end', NULL, True),
+    ('20261105000100_account_deletion_schema', 'function', 'handover_households_on_user_delete', NULL, True),
+    ('20261105000100_account_deletion_schema', 'function', 'maintain_household_primary_admin', NULL, True),
+    ('20261105000100_account_deletion_schema', 'function', 'transfer_primary_admin', NULL, True),
+    ('20261105000100_account_deletion_schema', 'trigger', 'trg_account_deletion_guard_membership', 'household_memberships', True),
+    ('20261105000100_account_deletion_schema', 'trigger', 'trg_account_deletion_guard_invite', 'household_invites', True),
+    ('20261105000100_account_deletion_schema', 'trigger', 'trg_account_deletion_guard_provider', 'households', True),
+    ('20261105000100_account_deletion_schema', 'trigger', 'trg_account_deletion_clear_marks', 'household_memberships', True),
+    ('20261105000100_account_deletion_schema', 'index', 'uq_account_deletion_requests_active_user', NULL, True),
+    ('20261105000100_account_deletion_schema', 'index', 'idx_account_deletion_requests_user', NULL, True),
+    ('20261105000100_account_deletion_schema', 'index', 'idx_account_deletion_requests_due', NULL, True),
+    ('20261105000100_account_deletion_schema', 'index', 'idx_households_deletion_requested_by', NULL, True),
+    ('20261105000100_account_deletion_schema', 'column', 'deletion_requested_at', 'households', True),
+    ('20261105000100_account_deletion_schema', 'column', 'deletion_scheduled_for', 'households', True),
+    ('20261105000100_account_deletion_schema', 'column', 'deletion_requested_by', 'households', True),
+    ('20261105000100_account_deletion_schema', 'constraint', 'inquiries_type_check', 'inquiries', True),
+    ('20261105000200_account_deletion_rpcs', 'function', 'account_deletion_recent_login_ok', NULL, True),
+    ('20261105000200_account_deletion_rpcs', 'function', 'account_deletion_household_positions', NULL, True),
+    ('20261105000200_account_deletion_rpcs', 'function', 'account_deletion_status_json', NULL, True),
+    ('20261105000200_account_deletion_rpcs', 'function', 'get_account_deletion_status', NULL, True),
+    ('20261105000200_account_deletion_rpcs', 'function', 'get_account_deletion_preflight', NULL, True),
+    ('20261105000200_account_deletion_rpcs', 'function', 'request_account_deletion', NULL, True),
+    ('20261105000200_account_deletion_rpcs', 'function', 'cancel_account_deletion', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'account_deletion_require_service', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'account_deletion_repoint_active_household', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'account_deletion_note_token', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'account_deletion_scrub_own_note', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'account_deletion_scrub_other_note', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'account_deletion_scrub_items', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'claim_due_account_deletions', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'prepare_account_purge', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'list_account_purge_storage', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'mark_account_purge_storage_done', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'complete_account_purge', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'record_account_purge_failure', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'list_account_deletion_notices_due', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'mark_account_deletion_notice_sent', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'record_account_deletion_worker_run', NULL, True),
+    ('20261105000400_account_deletion_worker_support', 'function', 'get_account_deletion_queue_summary', NULL, True),
+    ('20261105000400_account_deletion_worker_support', 'function', 'list_account_deletion_alerts_due', NULL, True),
+    ('20261105000400_account_deletion_worker_support', 'function', 'purge_expired_account_deletion_inquiries', NULL, True),
+    ('20261105000400_account_deletion_worker_support', 'function', 'list_account_deletion_notices_due', NULL, True),
+    ('20261105000400_account_deletion_worker_support', 'function', 'mark_account_deletion_notice_sent', NULL, True),
+    ('20261105000500_void_income_single_subtraction', 'function', 'void_income_record', NULL, True),
+    ('20261105000600_limit_anonymous_contact_form', 'policy', 'cost_control_templates_select', 'cost_control_templates', True),
+    ('20261105000700_sub_categories_household_scope', 'policy', 'cost_control_sub_categories_select_scoped', 'cost_control_sub_categories', True),
+    ('20261105000800_account_deletion_operator_request', 'function', 'account_deletion_schedule', NULL, True),
+    ('20261105000800_account_deletion_operator_request', 'function', 'account_deletion_cancel', NULL, True),
+    ('20261105000800_account_deletion_operator_request', 'function', 'request_account_deletion', NULL, True),
+    ('20261105000800_account_deletion_operator_request', 'function', 'cancel_account_deletion', NULL, True),
+    ('20261105000800_account_deletion_operator_request', 'function', 'account_deletion_require_operator_handle', NULL, True),
+    ('20261105000800_account_deletion_operator_request', 'function', 'get_account_deletion_operator_preview', NULL, True),
+    ('20261105000800_account_deletion_operator_request', 'function', 'schedule_account_deletion_by_operator', NULL, True),
+    ('20261105000800_account_deletion_operator_request', 'function', 'cancel_account_deletion_by_operator', NULL, True),
+    ('20261105000800_account_deletion_operator_request', 'function', 'complete_account_purge', NULL, True),
+    ('20261105000800_account_deletion_operator_request', 'column', 'initiated_by', 'account_deletion_requests', True),
+    ('20261105000800_account_deletion_operator_request', 'column', 'operator_inquiry_reference', 'account_deletion_requests', True),
+    ('20261105000800_account_deletion_operator_request', 'column', 'operator_verified_by', 'account_deletion_requests', True),
+    ('20261105000800_account_deletion_operator_request', 'column', 'operator_cancelled_by', 'account_deletion_requests', True),
+    ('20261105000800_account_deletion_operator_request', 'column', 'operator_cancel_reference', 'account_deletion_requests', True),
+    ('20261105000800_account_deletion_operator_request', 'constraint', 'account_deletion_requests_operator_recorded', 'account_deletion_requests', True),
+    ('20261105000800_account_deletion_operator_request', 'constraint', 'account_deletion_requests_user_has_no_operator', 'account_deletion_requests', True),
+    ('20261105000900_account_deletion_notice_windows', 'function', 'list_account_deletion_notices_due', NULL, True)
+), checked AS (
+    SELECT c.*,
+           CASE c.kind
+               WHEN 'table' THEN to_regclass('public.' || c.object_name) IS NOT NULL
+               WHEN 'view' THEN to_regclass('public.' || c.object_name) IS NOT NULL
+               WHEN 'index' THEN to_regclass('public.' || c.object_name) IS NOT NULL
+               WHEN 'function' THEN EXISTS (SELECT 1 FROM pg_proc p
+                                            WHERE p.pronamespace = 'public'::regnamespace AND p.proname = c.object_name)
+               WHEN 'policy' THEN EXISTS (SELECT 1 FROM pg_policies p
+                                          WHERE p.schemaname || '.' || p.tablename
+                                                = CASE WHEN c.on_table LIKE '%.%' THEN c.on_table ELSE 'public.' || c.on_table END
+                                            AND p.policyname = c.object_name)
+               WHEN 'trigger' THEN EXISTS (SELECT 1 FROM pg_trigger t
+                                           WHERE t.tgrelid = to_regclass(CASE WHEN c.on_table LIKE '%.%' THEN c.on_table
+                                                                              ELSE 'public.' || c.on_table END)
+                                             AND t.tgname = c.object_name AND NOT t.tgisinternal)
+               WHEN 'column' THEN EXISTS (SELECT 1 FROM information_schema.columns k
+                                          WHERE k.table_schema = 'public' AND k.table_name = c.on_table
+                                            AND k.column_name = c.object_name)
+               WHEN 'constraint' THEN EXISTS (SELECT 1 FROM pg_constraint k
+                                              WHERE k.conrelid = to_regclass('public.' || c.on_table)
+                                                AND k.conname = c.object_name)
+               WHEN 'enum_value' THEN EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+                                              WHERE t.typname = c.on_table AND e.enumlabel = c.object_name)
+           END AS present
+    FROM created c
+)
+SELECT migration,
+       count(*) FILTER (WHERE in_full_chain) AS expected,
+       count(*) FILTER (WHERE in_full_chain AND present) AS present_here,
+       string_agg(kind || ' ' || COALESCE(on_table || '.', '') || object_name, ', ' ORDER BY kind, object_name)
+           FILTER (WHERE in_full_chain AND NOT present) AS missing_here,
+       string_agg(kind || ' ' || COALESCE(on_table || '.', '') || object_name, ', ' ORDER BY kind, object_name)
+           FILTER (WHERE NOT in_full_chain AND present) AS removed_later_but_present
+FROM checked
+GROUP BY migration
+ORDER BY migration;

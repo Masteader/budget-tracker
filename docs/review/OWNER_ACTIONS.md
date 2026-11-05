@@ -122,12 +122,16 @@ None of this is done, and nothing is deployed. Each step needs explicit approval
 - Purges and emails have separate switches. `ACCOUNT_DELETION_PURGE_ENABLED=1` runs jobs and developer alerts. `ACCOUNT_DELETION_EMAILS_ENABLED=1` emails account holders and household members, only with the purge switch on too, and needs its own approval. To enable purges before approving reminders, set only the first: failure alerts still reach the developer, and completion emails are skipped for those accounts for good. See [the runbook](../runbooks/account-deletion-purge.md#the-email-switch).
 
 ### Supabase
-- Run the read-only checks in `docs/review/audit/account_deletion_preflight_checks.sql`, section 4 before the migrations.
-- Apply the migrations one per run, in filename order, with these notes, because production has no migration history and nothing records what has run:
-  - **The void hotfix may already be on live.** `20261105000500_void_income_single_subtraction.sql` goes first, as a standalone hotfix, before `20261105000000`. If that's already done, you don't need to run it again. Running it again is harmless, so run it whenever you're unsure.
-  - **`20261105000000` no longer defines `void_income_record`,** so running it after the hotfix doesn't bring the double subtraction back. It does make `income_records.user_id` nullable, so don't run it on a database without `000500`: with the older function, any member could void the income of someone deleted out of band.
-  - **`REVOKE TRUNCATE` may already have run on live.** `20261105000600_limit_anonymous_contact_form.sql` is fine on that state and safe to re-run: each statement sets the end state regardless of what came before.
-  - Order: `000500` if not already there, then `000000`, `000100`, `000200`, `000300`, `000400`, then `000600`, `000700`, `000800`, `000900`.
+- **Live has drifted from the migration chain.** Read-only checks on 2026-11-05 found no `cost_control_templates` table and neither `replace_household_category` nor `seed_household_default_taxonomy`, so at least `20261026120000` never ran there, and possibly others. Live runs Postgres 17.6; the local tests run on 16.
+  - **First, establish what live has.** Run section 5 of `docs/review/audit/account_deletion_preflight_checks.sql`, read-only. It lists, per `2026102*` to `202611*` migration, which of its objects exist. Then run section 4. Decide nothing about the batch until you have both.
+  - **Don't apply missing older migrations as part of this rollout.** Whether and how to bring live back in line is a separate decision for you, and it needs its own plan.
+- Apply the batch one file per run, in filename order, with these notes, because production has no migration history and nothing records what has run:
+  - **The void hotfix is on live** (verified 2026-11-05). `20261105000500_void_income_single_subtraction.sql` went first, as a standalone hotfix. Running it again is harmless.
+  - **`20261105000000` no longer defines `void_income_record`,** so running it after the hotfix doesn't bring the double subtraction back. It makes `income_records.user_id` nullable, so never run it on a database without `000500`: with the older function, any member could void the income of someone deleted out of band.
+  - **`REVOKE TRUNCATE` on `public.inquiries` is being run by hand.** `20261105000600_limit_anonymous_contact_form.sql` is fine before or after it. On a database without the templates table or the two functions, it skips those parts with a notice and still locks down `inquiries`.
+  - **`20261105000700_sub_categories_household_scope.sql`** creates its read policy only where `cost_control_sub_categories.household_id` exists, which `20261026120000` adds. Without that column it leaves the existing read policy alone, says so in a notice, and still removes client writes.
+  - `000600` and `000700` are safe to run again. A whole `supabase/tests/run_tests.py --rebuild` proves the batch on the full chain, in the hotfix-first order, and on a database built without `20261026120000`.
+  - Order: `000500` is done. Then `000000`, `000100`, `000200`, `000300`, `000400`, `000600`, `000700`, `000800`, `000900`, each only once the preflight has shown what it will run against.
 - Confirm the Magic Link email template includes `{{ .Token }}`. The app's forgotten-password fallback at re-auth asks for that code.
 - Drop `budgets_spent_backup_20261019` when ready. It exists only on live, and the purge does not touch it.
 

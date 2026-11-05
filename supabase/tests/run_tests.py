@@ -63,10 +63,17 @@ REPLAY_DEPENDENCIES = {
 # The rollout the account deletion batch gets. See rollout_order_check.
 ROLLOUT_BATCH = "20261105000000"
 ROLLOUT_HOTFIXES = ("20261105000500",)
+# Files an operator may run again while following the chain. Each must be harmless the second time.
+ROLLOUT_RERUN = ("20261105000500", "20261105000600", "20261105000700")
+# Run by hand on live (2026-11-05). Live has no cost_control_templates table.
 ROLLOUT_ALREADY_ON_LIVE = """
 REVOKE TRUNCATE ON public.inquiries FROM anon, authenticated;
-REVOKE TRUNCATE ON public.cost_control_templates FROM anon, authenticated;
 """
+# Live has drifted from the chain: read-only checks found no cost_control_templates table and
+# neither function of 20261026120000. The drift scenario builds the chain without that file.
+DRIFT_MISSING = ("20261026120000",)
+# Tests that do not need what the drifted database lacks (42 and 43 test that migration's objects).
+DRIFT_TESTS = ("36_", "37_", "38_", "39_", "40_", "41_", "44_", "45_", "46_", "47_")
 
 
 def migration_replay_order(migration_dir):
@@ -126,11 +133,12 @@ def run_sql_file(file_path, db_name="live_rebuilt_round5", use_psql=False, quiet
     return True
 
 
-def rebuild_database(db_name, stop_before=None):
+def rebuild_database(db_name, stop_before=None, skip=()):
     """Drop/recreate db_name and replay stubs + schema + migrations (psql mode only).
 
     ``stop_before``: replay only migrations whose filename sorts before this
     prefix (e.g. ``20261020`` rebuilds the chain as it was before that day).
+    ``skip``: filename prefixes left out, to model a database that drifted from the chain.
     """
     if not re.fullmatch(r"[A-Za-z0-9_]+", db_name):
         raise SystemExit(f"Refusing to rebuild database with unsafe name: {db_name!r}")
@@ -148,6 +156,8 @@ def rebuild_database(db_name, stop_before=None):
     migrations = migration_replay_order(os.path.join(SUPABASE_DIR, "migrations"))
     if stop_before:
         migrations = [m for m in migrations if os.path.basename(m) < stop_before]
+    if skip:
+        migrations = [m for m in migrations if not os.path.basename(m).startswith(tuple(skip))]
     steps += migrations
     print(f"Rebuilding {db_name}: {len(steps)} files (stubs, schema.sql, seed.sql, migrations)")
     for step in steps:
@@ -168,41 +178,53 @@ def run_sql_text(sql, db_name):
         raise SystemExit(f"Rollout SQL failed: {proc.stderr.decode('utf-8', errors='replace')}")
 
 
-def rollout_order_check(db_name, test_files):
-    """Builds the order production gets, and runs the tests against it. Returns the failed files.
+def rollout_order_check(db_name, test_files, suffix="rollout", skip=()):
+    """Builds the order production gets, and runs the tests against it. Returns what failed.
 
     Production has no migration history: files are run by hand. Some go out early as standalone
     hotfixes, so the chain later runs around them. A later file that redefines what a hotfix fixed
     would quietly undo it, and a filename-order rebuild can never see that, because the hotfix runs
-    after it there.
+    after it there. ``skip`` leaves older files out, for a database that drifted from the chain.
 
-    Order: everything before the batch; what has already run by hand on live; the hotfixes; the
-    batch in filename order WITHOUT the hotfixes; the tests. Then the hotfixes again, which must
-    be harmless, and the tests again.
+    Order: everything before the batch, less ``skip``; what has already run by hand on live; the
+    hotfixes; the batch in filename order WITHOUT the hotfixes; the tests. Then the files an
+    operator may run again, which must be harmless, and the tests again. A migration that fails is
+    reported as ``migration:<file>`` and ends the scenario.
     """
-    rollout_db = f"{db_name}_rollout"
-    print(f"\nRollout order check on {rollout_db}: hotfixes {', '.join(ROLLOUT_HOTFIXES)} before the batch")
-    rebuild_database(rollout_db, stop_before=ROLLOUT_BATCH)
+    rollout_db = f"{db_name}_{suffix}"
+    print(f"\nRollout order check on {rollout_db}: hotfixes {', '.join(ROLLOUT_HOTFIXES)} before the batch"
+          + (f", without {', '.join(skip)}" if skip else ""))
+    rebuild_database(rollout_db, stop_before=ROLLOUT_BATCH, skip=skip)
     run_sql_text(ROLLOUT_ALREADY_ON_LIVE, rollout_db)
 
+    def apply(paths, label):
+        for path in paths:
+            if not run_sql_file(path, db_name=rollout_db, use_psql=True, quiet=True):
+                print(f"  {label} failed: {os.path.basename(path)}")
+                return [f"migration:{os.path.basename(path)}"]
+        return []
+
+    def drop():
+        # Throwaway, like the rebuild: no second database left behind.
+        subprocess.run(["dropdb", "--if-exists", rollout_db], capture_output=True, text=True)
+
     hotfixes = migrations_of(ROLLOUT_HOTFIXES)
-    for path in hotfixes:
-        if not run_sql_file(path, db_name=rollout_db, use_psql=True, quiet=True):
-            raise SystemExit(f"Hotfix did not apply first: {os.path.basename(path)}")
-    for path in migrations_of([ROLLOUT_BATCH[:8]]):
-        if path not in hotfixes and not run_sql_file(path, db_name=rollout_db, use_psql=True, quiet=True):
-            raise SystemExit(f"Migration failed after the hotfixes: {os.path.basename(path)}")
+    failed = apply(hotfixes, "hotfix") or apply(
+        [p for p in migrations_of([ROLLOUT_BATCH[:8]]) if p not in hotfixes], "batch migration")
+    if failed:
+        drop()
+        return failed
 
     failed = [t for t in test_files if not run_sql_file(t, db_name=rollout_db, use_psql=True, quiet=True)]
 
-    print("Running the hotfixes again, as an operator following the chain would.")
-    for path in hotfixes:
-        if not run_sql_file(path, db_name=rollout_db, use_psql=True, quiet=True):
-            raise SystemExit(f"Re-running a hotfix failed: {os.path.basename(path)}")
+    print("Running " + ", ".join(ROLLOUT_RERUN) + " again, as an operator following the chain might.")
+    rerun_failed = apply(migrations_of(ROLLOUT_RERUN), "re-run")
+    if rerun_failed:
+        drop()
+        return sorted(set(failed)) + rerun_failed
     failed += [t for t in test_files if not run_sql_file(t, db_name=rollout_db, use_psql=True, quiet=True)]
 
-    # Throwaway, like the rebuild: no second database left behind.
-    subprocess.run(["dropdb", "--if-exists", rollout_db], capture_output=True, text=True)
+    drop()
     return sorted(set(failed))
 
 
@@ -269,10 +291,15 @@ def main():
     # A whole rebuild also proves the order production runs the files in.
     rollout_failed = []
     if args.rebuild and not args.stop_before and not args.tests:
-        rollout_failed = rollout_order_check(db_name, test_files)
-        print(f"Rollout order: {len(test_files) - len(rollout_failed)} passed, {len(rollout_failed)} failed")
-        for f in rollout_failed:
-            print(f"  - rollout order: {os.path.basename(f)}")
+        for suffix, skip, files in (
+            ("rollout", (), test_files),
+            ("drift", DRIFT_MISSING, [t for t in test_files if os.path.basename(t).startswith(DRIFT_TESTS)]),
+        ):
+            scenario_failed = rollout_order_check(db_name, files, suffix=suffix, skip=skip)
+            print(f"Rollout order ({suffix}): {len(files)} test files, {len(scenario_failed)} failed")
+            for f in scenario_failed:
+                print(f"  - {suffix}: {os.path.basename(f)}")
+            rollout_failed += [f"{suffix}:{os.path.basename(f)}" for f in scenario_failed]
         failed = sorted(set(failed) | set(rollout_failed))
         passed = [t for t in passed if t not in failed]
 
