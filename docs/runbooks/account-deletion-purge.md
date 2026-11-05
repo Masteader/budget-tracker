@@ -87,6 +87,44 @@ WHERE id = '<request id>' AND status = 'failed';
 
 A user whose job has failed stays blocked from joining households and cannot cancel, because their data may already be gone.
 
+## Requests from the public form
+
+The form at `/delete-account` only stores a row and emails the developer. Someone who can sign in should use the app or the page's signed-in path, which needs no help. This is for someone who cannot.
+
+**Verify first. Never act on the address typed in the form alone**, because anyone can type any address.
+
+1. Find the account's address yourself. Reply from the developer mailbox **to the address on the account**, and ask them to confirm by replying from it.
+2. If their reply comes from that address, go on.
+3. If they have lost access to that email, do not proceed without other identity evidence. Escalate to the owner, and do nothing until the owner decides.
+4. If they administer a household with other members, ask what should happen to it: hand it to a named member, or delete it. The choice is theirs, and the tool refuses to guess.
+
+Run the tool from `ai_service/`, with `SUPABASE_URL` and `SUPABASE_SECRET_KEY` set. Without `--execute` it changes nothing and prints what would happen:
+
+```bash
+python scripts/account_deletion_operator.py --email ADDRESS --inquiry-id REFERENCE --verified-by HANDLE
+```
+
+`REFERENCE` is the reference in the developer's email, or the inquiry's id. `HANDLE` is your own short name, never an address. It is stored on the request. When the dry run looks right, add `--execute`. For a household that needs a choice, add one of these for each:
+
+```bash
+--choice HOUSEHOLD_ID:delete
+--choice HOUSEHOLD_ID:transfer:SUCCESSOR_USER_ID
+```
+
+The tool prints only their own household ids and positions, so get the successor's user id with a read-only query once they have named the person. The database checks that the successor is a member and not pending deletion.
+
+To undo it, run the same command with `--cancel`, as a dry run first. They can also cancel in the app if they get back in, and the request behaves like any other: same 30 days, same status, same emails, same purge.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | Done, nothing to do, or a dry run |
+| 1 | The call failed. Check the status before retrying. |
+| 2 | Refused: no matching account or inquiry, a choice is missing, or the database refused. Nothing changed. |
+
+What is kept: `initiated_by = 'operator'`, the inquiry reference and your handle, on the request. The inquiry row is removed after 90 days as the page says, even if the job is still open, and the job does not need it. Completion removes the inquiry and the reference, and keeps `initiated_by` and your handle on the record with no identifiers.
+
+The address you pass with `--email` stays in your shell history, so clear it afterwards.
+
 ## Limits
 
 - After deletion a JWT stays valid until it expires, but with the row gone RLS and membership checks return nothing.

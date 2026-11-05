@@ -42,7 +42,8 @@ The following paths in the repository are classified as sensitive by default:
 ### Account Deletion
 - `ai_service/account_deletion_worker.py` (Permanently deletes accounts with the service-role key)
 - `ai_service/account_deletion_notices.py` (Deletion emails to account holders and household members)
-- `supabase/migrations/20261105000000_account_deletion_ledger_fks.sql`, `20261105000100_account_deletion_schema.sql`, `20261105000200_account_deletion_rpcs.sql`, `20261105000300_account_deletion_purge.sql`, `20261105000400_account_deletion_worker_support.sql` (Also covered by `supabase/migrations/**`)
+- `ai_service/scripts/account_deletion_operator.py` (Schedules a deletion for someone who cannot sign in)
+- `supabase/migrations/20261105000000_account_deletion_ledger_fks.sql`, `20261105000100_account_deletion_schema.sql`, `20261105000200_account_deletion_rpcs.sql`, `20261105000300_account_deletion_purge.sql`, `20261105000400_account_deletion_worker_support.sql`, `20261105000800_account_deletion_operator_request.sql` (Also covered by `supabase/migrations/**`)
 - `flutter_app/lib/services/account_deletion_service.dart` (Request, cancel and status RPC calls)
 - `flutter_app/lib/services/local_account_data_cleaner.dart` (Wipes a deleted user's data from the device)
 - `web_app/src/components/AccountDeletionPage.tsx` (Authenticated deletion path and public request form)

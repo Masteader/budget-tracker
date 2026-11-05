@@ -591,6 +591,106 @@ def test_user_already_gone_from_auth_counts_as_done(world, db, gateway, run_work
     assert tombstone == {"status": "completed", "user_id": None}
 
 
+# ── The operator path, for someone who cannot sign in ────────────────────────
+
+
+def _operator_cli():
+    """ai_service/scripts/account_deletion_operator.py, against the real PostgREST."""
+    import importlib.util
+    from pathlib import Path
+
+    from e2e_harness import config
+
+    path = Path(config.AI_SERVICE_DIR) / "scripts" / "account_deletion_operator.py"
+    spec = importlib.util.spec_from_file_location("account_deletion_operator", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _form_request(world, email):
+    res = world.anonymous_api().post("/public/inquiries", json={
+        "type": "account_deletion", "email": email, "message": "I cannot sign in", "locale": "en", "source": "web",
+    })
+    assert res.status_code == 200, res.text
+    return res
+
+
+def test_operator_path_from_form_to_purge(world, db, resend, run_worker, capsys):
+    from supabase_client import get_client
+
+    gateway = resend
+    flat = world.roommates("DELO", n_members=1)
+    admin, mate = flat.admin, flat.members[0]
+    pool = _account(admin, flat, "Pool", shared=True)
+    _income(mate, flat, pool, 800)
+    pools_before = _pool_balances(db, flat)
+
+    # The form stored a row. It looked up nothing and scheduled nothing.
+    _form_request(world, mate.email)
+    assert db.scalar("SELECT count(*) FROM public.account_deletion_requests WHERE user_id = %s", (mate.id,)) == 0
+    reference = db.scalar("SELECT reference FROM public.inquiries WHERE email = %s AND type = 'account_deletion'",
+                          (mate.email,))
+
+    operator = _operator_cli()
+    client = get_client()
+    base = ["--email", mate.email, "--inquiry-id", reference, "--verified-by", "dev_one"]
+
+    # Dry run: says what would happen, changes nothing.
+    assert operator.main(base, client=client) == 0
+    out = capsys.readouterr().out
+    assert "DRY RUN" in out and mate.email not in out and mate.id not in out
+    assert db.scalar("SELECT count(*) FROM public.account_deletion_requests WHERE user_id = %s", (mate.id,)) == 0
+
+    # An admin with other members is refused until someone says what happens to the household.
+    admin_base = ["--email", admin.email, "--inquiry-id", reference, "--verified-by", "dev_one"]
+    assert operator.main([*admin_base, "--execute"], client=client) == 2
+    out = capsys.readouterr().out
+    assert flat.id in out and "--choice" in out and mate.id not in out and mate.email not in out
+    assert db.scalar("SELECT count(*) FROM public.account_deletion_requests WHERE user_id = %s", (admin.id,)) == 0
+
+    # Nobody with that address: said plainly, with nothing else.
+    assert operator.main(["--email", "nobody@e2e.test", "--inquiry-id", reference, "--verified-by", "dev_one"],
+                         client=client) == 2
+
+    # Scheduled, and the ordinary status and cancel see it.
+    assert operator.main([*base, "--execute"], client=client) == 0
+    assert mate.rpc("get_account_deletion_status").json()["status"] == "scheduled"
+    assert mate.rpc("cancel_account_deletion").json()["cancelled"] is True
+
+    # Scheduled again, then cancelled by the operator, then scheduled for good.
+    assert operator.main([*base, "--execute"], client=client) == 0
+    assert operator.main([*base, "--execute"], client=client) == 0  # idempotent
+    assert db.scalar("SELECT count(*) FROM public.account_deletion_requests WHERE user_id = %s AND status = 'scheduled'",
+                     (mate.id,)) == 1
+    assert operator.main([*base, "--cancel", "--execute"], client=client) == 0
+    assert mate.rpc("get_account_deletion_status").json()["status"] == "none"
+    assert operator.main([*base, "--execute"], client=client) == 0
+    capsys.readouterr()
+
+    row = db.one("SELECT id::text, initiated_by, operator_inquiry_reference, operator_verified_by, reason "
+                 "FROM public.account_deletion_requests WHERE user_id = %s AND status = 'scheduled'", (mate.id,))
+    assert (row["initiated_by"], row["operator_inquiry_reference"], row["operator_verified_by"], row["reason"]) == (
+        "operator", reference, "dev_one", None)
+
+    # The 90-day removal takes the row, as the page says, and the job does not care.
+    db.query("UPDATE public.inquiries SET created_at = now() - interval '91 days' WHERE reference = %s", (reference,))
+    db.query("UPDATE public.account_deletion_requests SET notices_sent = '{}' WHERE id = %s", (row["id"],))
+    assert run_worker() == 0
+    assert db.scalar("SELECT count(*) FROM public.inquiries WHERE reference = %s", (reference,)) == 0
+    assert db.scalar("SELECT operator_inquiry_reference FROM public.account_deletion_requests WHERE id = %s",
+                     (row["id"],)) == reference
+
+    _pass_the_date(db, mate)
+    assert run_worker() == 0
+    tombstone = db.one("SELECT status, user_id, initiated_by, operator_inquiry_reference "
+                       "FROM public.account_deletion_requests WHERE id = %s", (row["id"],))
+    assert tombstone == {"status": "completed", "user_id": None, "initiated_by": "operator",
+                         "operator_inquiry_reference": None}
+    assert _pool_balances(db, flat) == pools_before
+    _assert_user_erased(db, mate)
+
+
 # ── What clients cannot do ───────────────────────────────────────────────────
 
 
@@ -605,6 +705,11 @@ SERVICE_ONLY = {
     "mark_account_deletion_notice_sent": {"p_request_id": "00000000-0000-0000-0000-000000000000", "p_notice": "holder_t7"},
     "record_account_deletion_worker_run": {"p_started_at": "2026-11-05T00:00:00Z", "p_claimed": 0, "p_completed": 0, "p_failed": 0},
     "get_account_deletion_queue_summary": {},
+    "get_account_deletion_operator_preview": {"p_email": "someone@example.com", "p_inquiry_reference": "x"},
+    "schedule_account_deletion_by_operator": {"p_user_id": "00000000-0000-0000-0000-000000000000",
+                                              "p_inquiry_reference": "x", "p_verified_by": "x"},
+    "cancel_account_deletion_by_operator": {"p_user_id": "00000000-0000-0000-0000-000000000000",
+                                            "p_inquiry_reference": "x", "p_verified_by": "x"},
     "list_account_deletion_alerts_due": {},
     "purge_expired_account_deletion_inquiries": {"p_days": 90},
 }

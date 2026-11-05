@@ -127,8 +127,8 @@ None of this is done, and nothing is deployed. Each step needs explicit approval
 - Confirm the Magic Link email template includes `{{ .Token }}`. The app's forgotten-password fallback at re-auth asks for that code.
 - Drop `budgets_spent_backup_20261019` when ready. It exists only on live, and the purge does not touch it.
 
-### Decide how form requests are handled
-The public form stores a row and emails the developer; nothing acts on it. `request_account_deletion` only works for the signed-in user, so there is no tool to schedule a deletion for someone else. Decide how a request is verified and carried out before the page goes live, because the page tells visitors that a person handles it. Rows are removed after 90 days whether or not anyone acted on them, and when mail is down the row is the only copy. This read-only query lists what is waiting:
+### Handle form requests
+The public form stores a row and emails the developer; nothing acts on it by itself. The developer verifies the person and schedules the ordinary 30-day deletion with `ai_service/scripts/account_deletion_operator.py`, following [the runbook](../runbooks/account-deletion-purge.md#requests-from-the-public-form). If someone has lost access to the account's email, the developer escalates to you, and nothing happens without other identity evidence. Rows are removed after 90 days whether or not anyone acted on them, and when mail is down the row is the only copy. This read-only query lists what is waiting:
 
 ```sql
 SELECT reference, email, locale, status, created_at
