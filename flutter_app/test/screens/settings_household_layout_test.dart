@@ -8,6 +8,8 @@ import 'package:budget_tracker/providers/theme_provider.dart';
 import 'package:budget_tracker/screens/settings/settings_screen.dart';
 import 'package:budget_tracker/services/api_service.dart';
 import 'package:budget_tracker/services/offline_sync_service.dart';
+import 'package:budget_tracker/services/salary_cycle_service.dart';
+
 import 'package:budget_tracker/theme/app_themes.dart';
 import 'package:budget_tracker/widgets/settings/payday_settings_card.dart';
 import 'package:budget_tracker/widgets/settings/settings_section.dart';
@@ -390,6 +392,19 @@ void main() {
       await tester.tap(find.text(l.get('export_csv')));
       await _settle(tester);
     }
+
+    testWidgets('monthly export queries current salary cycle and has no row limit', (tester) async {
+      _http.transactions = const [];
+      _http.lastTransactionRequest = null;
+      await _pump(tester, lang: 'en');
+      await tapExport(tester, 'en');
+      final expectedCycle = SalaryCycleService.cycleKeyForInstant(DateTime.now(), paydayDay: 27);
+      final query = _http.lastTransactionRequest?.url.query ?? '';
+      expect(query, contains('cycle_key=eq.$expectedCycle'));
+      expect(query, contains('household_id=eq.hh-1'));
+      expect(query, isNot(contains('limit=')));
+    });
+
 
     for (final lang in ['en', 'ar', 'ur']) {
       for (final scale in [1.0, 2.0]) {

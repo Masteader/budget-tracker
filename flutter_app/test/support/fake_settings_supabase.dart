@@ -77,6 +77,7 @@ class FakeSettingsHttpClient extends http.BaseClient {
 
   /// The members the household has; two or more shows partner settlement.
   int memberCount = 2;
+  http.BaseRequest? lastTransactionRequest;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
@@ -91,6 +92,7 @@ class FakeSettingsHttpClient extends http.BaseClient {
               {'household_id': fakeSettingsHouseholdId, 'display_name': 'Owner', 'role': 'admin'},
             ];
     } else if (url.path.endsWith('/rest/v1/transactions')) {
+      lastTransactionRequest = request;
       if (transactions == null) {
         status = 500;
         body = {'message': 'PostgrestException raw server detail', 'code': 'XX000'};

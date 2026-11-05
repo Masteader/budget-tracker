@@ -1010,12 +1010,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                         onPressed: () async {
                           if (_householdId == null) return;
                           try {
+                            final currentCycle = SalaryCycleService.currentCycle(paydayDay: _paydayDay);
                             final res = await supabase
                                 .from('transactions')
                                 .select()
                                 .eq('household_id', _householdId!)
-                                .order('timestamp', ascending: false)
-                                .limit(500);
+                                .eq('cycle_key', currentCycle.key)
+                                .order('timestamp', ascending: false);
                             if (!context.mounted) return;
                             CsvExportService.showExportDialog(context, List<Map<String, dynamic>>.from(res), monthLabel: context.tr('set_export_monthly_label'));
                           } catch (e) {
