@@ -19,8 +19,7 @@ load_dotenv()
 from dedup_engine import find_duplicate_candidate, enrich_transaction_items
 from nafaqah_service import resolve_expense_nafaqah
 from supabase_client import (
-    fetch_all_cost_control_codes,
-    fetch_household_cost_control_codes,
+    fetch_household_category_catalog,
     match_category,
     insert_transaction,
     fetch_budget,
@@ -430,6 +429,30 @@ def resolve_category_in_taxonomy(category_code: Optional[str], codes: list) -> s
         return code
     legacy = LEGACY_CATEGORY_FALLBACK.get(code, DEFAULT_CATEGORY_CODE)
     return legacy if legacy in known else DEFAULT_CATEGORY_CODE
+
+
+def choose_expense_category(merchant: str, parsed_code: Optional[str], active: list, inactive: list) -> str:
+    """
+    The category of a parsed expense (owner decision 2026-11-05: an expense is filed under its own
+    category even when that category is inactive for the household; it then counts in no budget).
+    ``active`` and ``inactive`` are the household's whole catalog (fetch_household_category_catalog).
+
+    1. A merchant keyword of an active category.
+    2. The parsed code when the household has it, active or inactive.
+    3. A merchant keyword of an inactive category.
+    4. resolve_category_in_taxonomy: the legacy code only for a code missing from the table
+       altogether (migration not applied), OPEX-MISC for a code nobody has.
+    """
+    catalog = list(active or []) + list(inactive or [])
+    matched = match_category(merchant, active or [])
+    if matched:
+        return matched.code
+    resolved = resolve_category_in_taxonomy(parsed_code, catalog)
+    parsed = (parsed_code or "").strip()
+    if parsed and resolved == parsed:
+        return resolved
+    matched = match_category(merchant, inactive or [])
+    return matched.code if matched else resolved
 
 
 # After the "ل" (for) prefix: pronoun suffixes and words that are never a dependent's name.
@@ -990,9 +1013,9 @@ def process_chat_transaction(
     # The merchant is shown and stored as text: no audit separator or tag keyword (FABLE-API-01).
     merchant = sanitize_audit_text(override_merchant or parsed.merchant, MAX_MERCHANT_LENGTH) or "Unknown Merchant"
 
-    # Match or fallback category
-    codes = fetch_household_cost_control_codes(household_id) if household_id else fetch_all_cost_control_codes()
-    matched = match_category(merchant, codes)
+    # The household's whole catalog: a category it keeps inactive still exists (owner decision
+    # 2026-11-05), so an expense in it is filed there and counts in no budget, never in a fallback.
+    active_codes, inactive_codes = fetch_household_category_catalog(household_id)
     if override_category_code is not None and override_category_code != "":
         # A client-chosen category must exist for this household (global or its own custom
         # code); otherwise the DB trigger refuses the insert. Answer 422, not 500 (E2E-03).
@@ -1004,8 +1027,10 @@ def process_chat_transaction(
         ):
             raise UnknownCategoryError()
         override_category_code = override_category_code.strip()
-    parsed_category = resolve_category_in_taxonomy(parsed.category_code, codes)
-    category_code = override_category_code or (matched.code if matched else parsed_category)
+    parsed_category = resolve_category_in_taxonomy(parsed.category_code, active_codes + inactive_codes)
+    category_code = override_category_code or choose_expense_category(
+        merchant, parsed.category_code, active_codes, inactive_codes
+    )
 
     # The parsed sub-category belongs to the parsed code only (not to a legacy fallback).
     parsed_sub = getattr(parsed, "sub_category", None) if parsed_category == parsed.category_code else None

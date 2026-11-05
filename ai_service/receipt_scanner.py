@@ -29,9 +29,7 @@ from supabase_client import (
     assert_account_debitable,
     resolve_default_debitable_account,
     get_client,
-    fetch_all_cost_control_codes,
-    fetch_household_cost_control_codes,
-    match_category,
+    fetch_household_category_catalog,
     insert_transaction,
     fetch_budget,
     fetch_flexible_budgets,
@@ -41,7 +39,7 @@ from supabase_client import (
     UnknownCategoryError,
 )
 
-from chat_parser import resolve_category_in_taxonomy  # noqa: E402
+from chat_parser import choose_expense_category  # noqa: E402
 from preview_token import (  # noqa: E402
     KIND_RECEIPT,
     InvalidPreviewToken,
@@ -943,30 +941,20 @@ def process_receipt_scan(
             ),
         }
 
-    # Match category with keyword taxonomy
-    codes = fetch_household_cost_control_codes(household_id) if household_id else fetch_all_cost_control_codes()
-    matched = match_category(merchant, codes)
-    if matched:
-        category_code = matched.code
-    else:
-        # A model code missing from the taxonomy (a new system code before its migration, or a made
-        # up one) becomes its legacy code / Misc instead of a refused insert (PRODUCT-R4).
-        category_code = resolve_category_in_taxonomy(category_code, codes)
+    # The household's whole catalog: a category it keeps inactive still exists, so the expense is
+    # filed there and counts in no budget (owner decision 2026-11-05). A model code missing from
+    # cost_control_codes (a new system code before its migration) becomes its legacy code, a made
+    # up one Misc, instead of a refused insert (PRODUCT-R4).
+    active_codes, inactive_codes = fetch_household_category_catalog(household_id)
+    category_code = choose_expense_category(merchant, category_code, active_codes, inactive_codes)
     if override_category_code is not None and override_category_code.strip():
         # A category the user chose in the review must exist for this household (as in chat).
         if category_code_in_taxonomy(household_id, override_category_code.strip()) is False:
             raise UnknownCategoryError()
         category_code = override_category_code.strip()
 
-    # Check if category is inactive for this household
-    is_inactive = False
-    try:
-        from salary_cycle import get_household_categories
-        hh_cats = get_household_categories(household_id)
-        inactive_codes = {c["code"] for c in hh_cats.get("inactive", [])}
-        is_inactive = category_code in inactive_codes
-    except Exception as exc:
-        logger.warning(f"Could not check category active status: {exc}")
+    # Inactive for this household: the app offers to activate it and give it a budget.
+    is_inactive = category_code in {c.code for c in inactive_codes}
 
     # If preview only (and no duplicate candidate found), return structured data before inserting
     if preview_only:

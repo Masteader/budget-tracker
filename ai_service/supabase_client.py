@@ -160,35 +160,48 @@ def fetch_all_cost_control_codes(force_refresh: bool = False) -> list[CostContro
     return _cached_cost_codes
 
 
+def _category_row_to_code(c: dict) -> CostControlCode:
+    return CostControlCode(
+        code=c.get("code") or "",
+        category=c.get("category") or "",
+        is_flexible=bool(c.get("is_flexible", False)),
+        keywords=list(c.get("keywords") or []),
+        is_system=bool(c.get("is_system", False)),
+        household_id=c.get("household_id"),
+    )
+
+
+def fetch_household_category_catalog(
+    household_id: str, force_refresh: bool = False
+) -> tuple[list[CostControlCode], list[CostControlCode]]:
+    """
+    The household's whole category catalog as ``(active, inactive)``: the system codes and the
+    household's own custom codes (never another household's), split by
+    salary_cycle.get_household_categories. A category exists for the household when it is in
+    either list: an expense in an inactive category is still filed under it (it then counts in no
+    budget, migration 20261105001000). Without a household, or when the lookup fails, the whole
+    table is returned as active (the previous behaviour).
+    """
+    if household_id:
+        try:
+            from salary_cycle import get_household_categories
+            cats = get_household_categories(household_id)
+            active = [_category_row_to_code(c) for c in cats.get("active", [])]
+            inactive = [_category_row_to_code(c) for c in cats.get("inactive", [])]
+            if active or inactive:
+                return active, inactive
+        except Exception as exc:
+            logger.warning("Could not fetch household-scoped categories for %s: %s", household_id, exc)
+    return fetch_all_cost_control_codes(force_refresh=force_refresh), []
+
+
 def fetch_household_cost_control_codes(household_id: str, force_refresh: bool = False) -> list[CostControlCode]:
     """
-    Load the cost control codes applicable to this household:
-    1. System/global codes + household's custom codes.
-    2. Filter out codes that are deactivated in household_category_settings.
+    The household's active codes (system and its own custom codes, less those deactivated in
+    household_category_settings); the whole table without a household or when that fails.
     """
-    if not household_id:
-        return fetch_all_cost_control_codes(force_refresh=force_refresh)
-
-    try:
-        from salary_cycle import get_household_categories
-        cats = get_household_categories(household_id)
-        active_list = cats.get("active", [])
-        if active_list:
-            res: list[CostControlCode] = []
-            for c in active_list:
-                res.append(CostControlCode(
-                    code=c.get("code") or "",
-                    category=c.get("category") or "",
-                    is_flexible=bool(c.get("is_flexible", False)),
-                    keywords=list(c.get("keywords") or []),
-                    is_system=bool(c.get("is_system", False)),
-                    household_id=c.get("household_id")
-                ))
-            return res
-    except Exception as exc:
-        logger.warning("Could not fetch household-scoped categories for %s: %s", household_id, exc)
-
-    return fetch_all_cost_control_codes(force_refresh=force_refresh)
+    active, _inactive = fetch_household_category_catalog(household_id, force_refresh=force_refresh)
+    return active or fetch_all_cost_control_codes(force_refresh=force_refresh)
 
 
 def match_category(merchant: str, codes: list[CostControlCode]) -> Optional[CostControlCode]:

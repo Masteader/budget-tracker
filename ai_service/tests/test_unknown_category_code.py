@@ -166,7 +166,7 @@ def test_receipt_model_code_outside_the_taxonomy_is_stored_as_misc(db, monkeypat
 def test_receipt_commit_maps_a_late_trigger_refusal_to_422(db, monkeypatch):
     # The taxonomy lookup was empty / stale: the DB refusal still becomes a 422, never a 500.
     _model_says(monkeypatch, "OPEX-INVENTED")
-    monkeypatch.setattr("receipt_scanner.resolve_category_in_taxonomy", lambda code, _codes: code)
+    monkeypatch.setattr("receipt_scanner.choose_expense_category", lambda _merchant, code, _active, _inactive: code)
     res = _receipt_with_model_code("OPEX-INVENTED")
     assert res.status_code == 422, res.text
     assert res.json()["detail"] == "Unknown category_code: choose one of your household's categories."
