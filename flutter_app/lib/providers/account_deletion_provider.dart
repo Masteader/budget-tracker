@@ -17,16 +17,19 @@ class AccountDeletionProvider extends ChangeNotifier {
     LocalAccountDataCleaner? cleaner,
     String? Function()? currentUserId,
     DateTime Function()? clock,
+    Future<void> Function()? signOut,
   })  : _service = service ?? AccountDeletionService(),
         _cleaner = cleaner ?? LocalAccountDataCleaner(),
         _clock = clock ?? DateTime.now {
     _currentUserId = currentUserId ?? () => _service.currentUserId;
+    _signOut = signOut ?? _service.signOut;
   }
 
   final AccountDeletionService _service;
   final LocalAccountDataCleaner _cleaner;
   final DateTime Function() _clock;
   late final String? Function() _currentUserId;
+  late final Future<void> Function() _signOut;
 
   AccountDeletionStatus _status = AccountDeletionStatus.none;
   bool _isLoaded = false;
@@ -127,8 +130,16 @@ class AccountDeletionProvider extends ChangeNotifier {
     }
     if (accountExists) {
       await _cleaner.clearFlag(userId);
-    } else {
-      await _cleaner.wipeForUser(userId, householdIds: flag.householdIds);
+      return;
+    }
+    // Purged. Their own data goes now; the flag stays so that the sign-out below
+    // makes [handleSignedOut] clear what the device shares too, once nobody is
+    // signed in. If the sign-out fails, the next launch comes back here.
+    await _cleaner.wipeUserData(userId, keepFlag: true);
+    try {
+      await _signOut();
+    } catch (e) {
+      logFailure('AccountDeletion.signOutPurged', e);
     }
   }
 
@@ -238,8 +249,10 @@ class AccountDeletionProvider extends ChangeNotifier {
     if (householdId != null) await loadHouseholdMark(householdId);
   }
 
-  /// [userId] has signed out. If they were pending, this device forgets them;
-  /// otherwise their data stays, because unsynced items wait for them.
+  /// [userId] has signed out, so nobody is signed in. If they were pending (or
+  /// purged: [load] signs them out), this device forgets them, including what it
+  /// shares between accounts; otherwise their data stays, because unsynced
+  /// items wait for them.
   Future<void> handleSignedOut(String userId) async {
     reset();
     try {
@@ -250,7 +263,8 @@ class AccountDeletionProvider extends ChangeNotifier {
     }
   }
 
-  /// Launch check for accounts that signed out or were purged while away.
+  /// Launch check for accounts that signed out or were purged while away. Only
+  /// their own data goes: the signed-in user's payday and reminders stay.
   Future<void> wipeDueUsers() async {
     try {
       await _cleaner.wipeDueUsers(now: _clock(), exceptUserId: _currentUserId());

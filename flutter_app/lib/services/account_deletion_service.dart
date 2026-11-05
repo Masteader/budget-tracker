@@ -94,6 +94,10 @@ class AccountDeletionService {
         return row != null;
       });
 
+  /// Ends this device's session. GoTrue drops it locally first, so the app signs
+  /// out even when the server cannot be told.
+  Future<void> signOut() => _client.auth.signOut();
+
   String _requireEmail() {
     final email = currentEmail;
     if (email == null || email.isEmpty) throw const AccountDeletionException(AccountDeletionException.unknown);
