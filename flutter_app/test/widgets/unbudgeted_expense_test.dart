@@ -53,6 +53,9 @@ final _coverage = BudgetCoverage.fromRows([
 
 const _roommates = NafaqahSummary(mode: 'roommates', callerRole: 'peer', callerUserId: 'u1');
 
+/// What an error message may carry and the log must not.
+const _secret = 'Insufficient funds: balance (1234.56) owner@example.com';
+
 void main() {
   group('feed', () {
     Future<void> pumpFeed(WidgetTester tester, List<Transaction> rows, {String lang = 'en'}) async {
@@ -118,6 +121,52 @@ void main() {
       ));
       await tester.pumpAndSettle();
       expect(find.text('Unbudgeted'), findsNothing);
+    });
+
+    testWidgets('a failed read logs its type, never its message', (tester) async {
+      tester.view.physicalSize = const Size(1170, 2532);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      final log = <String>[];
+      final original = debugPrint;
+      debugPrint = (String? message, {int? wrapWidth}) {
+        if (message != null) log.add(message);
+      };
+      addTearDown(() => debugPrint = original);
+      await tester.pumpWidget(MultiProvider(
+        providers: [
+          ChangeNotifierProvider<TransactionProvider>(create: (_) => _FakeTransactions([_tx('rent', 'OPEX-HOUSING', 2500)])),
+          ChangeNotifierProvider<BudgetProvider>(create: (_) => BudgetProvider()),
+          ChangeNotifierProvider<RecurringBillsProvider>(create: (_) => RecurringBillsProvider()),
+        ],
+        child: localizedApp(
+          TransactionFeedScreen(
+            householdId: 'h1',
+            loadNafaqah: (_) async => throw Exception(_secret),
+            loadBudgetCoverage: (_) async => throw Exception(_secret),
+            loadCycles: (_) async => throw Exception(_secret),
+            initialDatePeriod: 'ALL',
+          ),
+          lang: 'en',
+          scaffold: false,
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(localizedApp(
+        EditTransactionSheet(
+          transaction: _tx('rent', 'OPEX-HOUSING', 2500),
+          isAdmin: true,
+          loadBudgetCoverage: (_) async => throw Exception(_secret),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      debugPrint = original;
+
+      expect(log.where((l) => l.contains('TransactionFeed.budgetCoverage')), isNotEmpty);
+      expect(log.where((l) => l.contains('TransactionFeed.familyContext')), isNotEmpty);
+      expect(log.where((l) => l.contains('TransactionFeed.cycles')), isNotEmpty);
+      expect(log.where((l) => l.contains('EditTransactionSheet.budgetCoverage')), isNotEmpty);
+      expect(log.where((l) => l.contains('1234.56') || l.contains('owner@example.com')), isEmpty);
     });
   });
 

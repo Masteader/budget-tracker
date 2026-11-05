@@ -30,6 +30,7 @@ import '../../widgets/transaction_item_breakdown_card.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 import 'edit_transaction_sheet.dart';
+import '../../utils/failure_log.dart';
 import '../../models/category_catalog.dart';
 import '../../widgets/dashboard/salary_cycle_selector_bar.dart';
 
@@ -114,7 +115,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         }
       }
     }).catchError((Object e) {
-      debugPrint('[TransactionFeed] Cycles unavailable: $e');
+      logFailure('TransactionFeed.cycles', e);
     });
   }
 
@@ -139,7 +140,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         setState(() => _family = FeedFamilyContext.fromSummary(summary));
       }
     }).catchError((Object e) {
-      debugPrint('[TransactionFeed] Family context unavailable: $e');
+      logFailure('TransactionFeed.familyContext', e);
     });
   }
 
@@ -161,7 +162,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     Future<BudgetCoverage>.sync(() => loader(householdId)).then((coverage) {
       if (mounted && _coverageRequestedFor == householdId) setState(() => _coverage = coverage);
     }).catchError((Object e) {
-      debugPrint('[TransactionFeed] Budget coverage unavailable: $e');
+      logFailure('TransactionFeed.budgetCoverage', e);
     });
   }
 
@@ -838,7 +839,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
       await StatementPdfService().downloadAndShare(hid);
       if (context.mounted) ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
     } catch (e) {
-      debugPrint('[TransactionFeed] Statement PDF export failed: $e');
+      logFailure('TransactionFeed.statementPdf', e);
       if (context.mounted) {
         AppSnackBar.showError(
           context,
