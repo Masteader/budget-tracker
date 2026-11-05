@@ -36,6 +36,23 @@ final RegExp _uuidPattern =
 
 bool isMemberUuid(String value) => _uuidPattern.hasMatch(value.trim());
 
+/// Household role words a stored reference may hold when no roster was known
+/// at insert (server `_WIFE_TOKENS`, `_HUSBAND_TOKENS`): they name a member of
+/// the household, not someone relative to the creator.
+const Set<String> householdRoleTokens = {'wife', 'spouse', 'husband', 'provider'};
+
+/// What [ref] names on a row whose creator deleted their account. A member id
+/// (lowercased) names a living member, and with [keepRoles] so does a household
+/// role word; [HouseholdRoster.nameOf] gives the name. Everything else is the
+/// deleted member: 'me' and 'partner' were relative to them, an empty value
+/// names nobody, and the purge wrote [kDeletedMemberRef] where they were named.
+String deletedCreatorRef(String? ref, {bool keepRoles = false}) {
+  final value = (ref ?? '').trim().toLowerCase();
+  if (isMemberUuid(value)) return value;
+  if (keepRoles && householdRoleTokens.contains(value)) return value;
+  return kDeletedMemberRef;
+}
+
 /// A tail field: no separator or line break can shift the right-anchored match.
 String _tailField(String value) => value.replaceAll(RegExp(r'[|\r\n]'), ' ').trim();
 

@@ -215,7 +215,11 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     // An account flagged for deletion that is not signed in now and whose date has
-    // passed leaves nothing on this device, even if nobody ever signs in again.
+    // passed leaves none of its own data on this device, even if nobody ever signs
+    // in again. The signed-in user is already known here: `Supabase.initialize`
+    // awaits `setInitialSession` with the persisted session before `runApp`
+    // (supabase_flutter 2.17, `SupabaseAuth.initialize`), so `currentUser` is
+    // restored before this runs, and that user is spared.
     _accountDeletion()?.wipeDueUsers();
   }
 

@@ -72,7 +72,13 @@ class _HouseholdDeletionBannerState extends State<HouseholdDeletionBanner> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  context.tr('del_banner_export'),
+                  // The feed's All Records export covers the whole household;
+                  // the one in Settings is the current cycle only.
+                  context.trArgs('del_banner_export', {
+                    'transactions': context.tr('nav_transactions'),
+                    'export': context.tr('export_csv'),
+                    'all': context.tr('csv_export_all_records'),
+                  }),
                   style: TextStyle(fontSize: 12, color: context.textSecondary),
                 ),
               ],

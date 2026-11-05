@@ -26,9 +26,12 @@ class AccountDeletionFlag {
 /// the device's, not the account's, and stay. So does what another account queued.
 ///
 /// When, per the plan's device rules: a flag is set per user when the deletion is
-/// requested and removed on cancel. Signing out while flagged wipes. At launch any
-/// flagged user whose date has passed is wiped, except the signed-in one, for whom
-/// the server decides ([AccountDeletionProvider.load]).
+/// requested and removed on cancel. Signing out while flagged wipes everything
+/// ([wipeForUser]), and so does the sign-out that follows a purge. At launch any
+/// flagged user whose date has passed loses their own data ([wipeUserData]),
+/// except the signed-in one, for whom the server decides
+/// ([AccountDeletionProvider.load]); what the device shares between accounts is
+/// left to the next sign-out, because another account may be signed in.
 class LocalAccountDataCleaner {
   LocalAccountDataCleaner({
     OfflineQueueManager? queue,
@@ -85,21 +88,24 @@ class LocalAccountDataCleaner {
     }
   }
 
-  /// Removes this user's data, each step on its own so one failure cannot leave
-  /// the rest behind. The flag goes only when every step worked, so the launch
-  /// check can try again. Returns whether everything was removed.
-  Future<bool> wipeForUser(String userId, {Iterable<String> householdIds = const []}) async {
-    var complete = true;
-    Future<void> step(String name, Future<void> Function() action) async {
-      try {
-        await action();
-      } catch (e) {
-        complete = false;
-        logFailure('LocalAccountDataCleaner.$name', e);
-      }
+  /// Runs [action] as one step of a wipe: a failure is logged and reported as
+  /// false, and never stops the steps after it.
+  static Future<bool> _step(String name, Future<void> Function() action) async {
+    try {
+      await action();
+      return true;
+    } catch (e) {
+      logFailure('LocalAccountDataCleaner.$name', e);
+      return false;
     }
+  }
 
-    await step('queue', () async {
+  /// What only [userId] owns, so it is safe while another account is signed in:
+  /// their offline queue items and blobs and their cached active household. The
+  /// flag goes when both worked, unless [keepFlag]: then [wipeForUser] still has
+  /// to run once nobody is signed in. Returns whether both worked.
+  Future<bool> wipeUserData(String userId, {bool keepFlag = false}) async {
+    var complete = await _step('queue', () async {
       final queue = _queue;
       if (queue != null) {
         await queue.clearForUser(userId);
@@ -109,35 +115,66 @@ class LocalAccountDataCleaner {
         await sync.updatePendingCount();
       }
     });
-    await step('prefs', () => _removePrefs(userId, householdIds));
-    await step('reminders', _cancelReminders);
-    await step('statements', _deleteStatements);
-    await step('signedUrls', () async => _clearSignedUrls());
-    // The next account on this device must not inherit this household's payday.
-    SalaryCycleService.paydayDay = SalaryCycleService.defaultPaydayDay;
+    complete &= await _step('activeHousehold', () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(HouseholdResolver.cacheKeyFor(userId));
+    });
+    if (complete && !keepFlag) await clearFlag(userId);
+    return complete;
+  }
+
+  /// Removes everything this device kept for [userId]. Only when nobody is
+  /// signed in ([AccountDeletionProvider.handleSignedOut]): besides the user's
+  /// own data it clears what the device shares between accounts, namely the
+  /// checklist flags of the user's households, the cached payday, every
+  /// scheduled reminder, temporary statements and signed receipt URLs.
+  ///
+  /// Each step runs on its own so one failure cannot leave the rest behind. The
+  /// flag goes only when every step worked, so the launch check can try again.
+  /// Returns whether everything was removed.
+  Future<bool> wipeForUser(String userId, {Iterable<String> householdIds = const []}) async {
+    // Read before [wipeUserData] drops the cached active household.
+    final households = await _householdsOf(userId, householdIds);
+    var complete = await wipeUserData(userId, keepFlag: true);
+    complete &= await _step('householdPrefs', () async {
+      final prefs = await SharedPreferences.getInstance();
+      for (final household in households) {
+        await prefs.remove(HouseholdSetupPrefs.paydayConfirmedKey(household));
+        await prefs.remove(HouseholdSetupPrefs.hiddenKey(household));
+      }
+    });
+    complete &= await _step('payday', () async {
+      // The next account on this device must not inherit this household's payday.
+      SalaryCycleService.paydayDay = SalaryCycleService.defaultPaydayDay;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(SalaryCycleService.paydayPrefKey);
+    });
+    complete &= await _step('reminders', _cancelReminders);
+    complete &= await _step('statements', _deleteStatements);
+    complete &= await _step('signedUrls', () async => _clearSignedUrls());
 
     if (complete) await clearFlag(userId);
     return complete;
   }
 
-  Future<void> _removePrefs(String userId, Iterable<String> householdIds) async {
-    final prefs = await SharedPreferences.getInstance();
+  /// [householdIds], the households in the flag and the cached active one.
+  Future<Set<String>> _householdsOf(String userId, Iterable<String> householdIds) async {
     final households = <String>{...householdIds};
-    households.addAll(_parseFlag(prefs.getString(flagKey(userId)))?.householdIds ?? const []);
-    final activeKey = HouseholdResolver.cacheKeyFor(userId);
-    final active = prefs.getString(activeKey);
-    if (active != null) households.add(active);
-
-    for (final household in households) {
-      await prefs.remove(HouseholdSetupPrefs.paydayConfirmedKey(household));
-      await prefs.remove(HouseholdSetupPrefs.hiddenKey(household));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      households.addAll(_parseFlag(prefs.getString(flagKey(userId)))?.householdIds ?? const []);
+      final active = prefs.getString(HouseholdResolver.cacheKeyFor(userId));
+      if (active != null) households.add(active);
+    } catch (e) {
+      logFailure('LocalAccountDataCleaner.households', e);
     }
-    await prefs.remove(activeKey);
-    await prefs.remove(SalaryCycleService.paydayPrefKey);
+    return households;
   }
 
-  /// Wipes every flagged user whose date has passed, except [exceptUserId].
-  /// Returns who was wiped.
+  /// Wipes the own data ([wipeUserData]) of every flagged user whose date has
+  /// passed, except [exceptUserId]. Nothing the device shares between accounts:
+  /// someone else may be signed in, with their own payday and reminders, in a
+  /// household the flagged user also belonged to. Returns who was wiped.
   Future<List<String>> wipeDueUsers({required DateTime now, String? exceptUserId}) async {
     final prefs = await SharedPreferences.getInstance();
     final wiped = <String>[];
@@ -146,7 +183,7 @@ class LocalAccountDataCleaner {
       if (userId == exceptUserId) continue;
       final flag = _parseFlag(prefs.getString(key));
       if (flag == null || flag.scheduledFor.isAfter(now)) continue;
-      await wipeForUser(userId, householdIds: flag.householdIds);
+      await wipeUserData(userId);
       wiped.add(userId);
     }
     return wiped;

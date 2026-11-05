@@ -28,11 +28,17 @@ typedef SessionRefresher = Future<String?> Function();
 /// Error responses are always normalised to a map containing
 /// `status: 'error'`, `status_code` and a human readable `message`.
 class BaseApiClient {
-  /// Whether a failed request's URL, response body and error text reach the log.
-  /// Never in a release build: `debugPrint` is not stripped from one, and bodies
+  /// Whether a build logs a failed request's URL, response body and error text.
+  /// Never a release build: `debugPrint` is not stripped from one, and bodies
   /// can carry balances, names and invite codes (see `failure_log.dart`).
+  static bool defaultLogFailureDetail({required bool releaseMode}) => !releaseMode;
+
+  /// [logFailureDetail] as this build starts, whatever a test sets later.
+  static final bool initialLogFailureDetail = defaultLogFailureDetail(releaseMode: kReleaseMode);
+
+  /// Whether a failed request's URL, response body and error text reach the log.
   @visibleForTesting
-  static bool logFailureDetail = !kReleaseMode;
+  static bool logFailureDetail = initialLogFailureDetail;
 
   final http.Client _client;
   final AuthTokenProvider? _authTokenProvider;

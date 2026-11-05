@@ -231,12 +231,20 @@ class Transaction {
     }
 
     final creatorRemoved = map.containsKey('user_id') && (map['user_id']?.toString() ?? '').trim().isEmpty;
-    if (creatorRemoved || payerRef.trim().toLowerCase() == kDeletedMemberRef) {
-      detectedPaidBy = kDeletedMemberRef;
-    }
-    if (storedBenId?.trim().toLowerCase() == kDeletedMemberRef ||
-        (creatorRemoved && (detectedBeneficiary == 'me' || detectedBeneficiary == 'partner'))) {
-      detectedBeneficiary = kDeletedMemberRef;
+    if (creatorRemoved) {
+      // 'me' and 'partner' were relative to the departed creator, so they name
+      // nobody now. A member id names a living member, who stays named.
+      detectedPaidBy = deletedCreatorRef(payerRef);
+      final bid = (storedBenId ?? '').trim();
+      final type = (storedBenType ?? '').toLowerCase();
+      if (bid.isNotEmpty && type != 'dependent' && !kSharedBeneficiaryIds.contains(bid.toLowerCase())) {
+        detectedBeneficiary = deletedCreatorRef(bid, keepRoles: true);
+      } else if (detectedBeneficiary == 'me' || detectedBeneficiary == 'partner') {
+        detectedBeneficiary = kDeletedMemberRef;
+      }
+    } else {
+      if (payerRef.trim().toLowerCase() == kDeletedMemberRef) detectedPaidBy = kDeletedMemberRef;
+      if (storedBenId?.trim().toLowerCase() == kDeletedMemberRef) detectedBeneficiary = kDeletedMemberRef;
     }
 
     return Transaction(
@@ -276,8 +284,13 @@ class Transaction {
     );
   }
 
-  /// Who paid, for showing or filtering. [spentBy] stays the stored column.
-  String get attributedSpentBy => creatorRemoved && spentBy.toLowerCase() != 'both' ? kDeletedMemberRef : spentBy;
+  /// Who paid, for showing or filtering. [spentBy] stays the stored column. On a
+  /// row whose creator was deleted it is never 'me' or 'partner': the member id
+  /// of a living member who paid, or [kDeletedMemberRef].
+  String get attributedSpentBy {
+    if (!creatorRemoved || spentBy.toLowerCase() == 'both') return spentBy;
+    return isMemberUuid(paidBy) ? paidBy : kDeletedMemberRef;
+  }
 
   bool get isInstallment {
     final raw = notes ?? '';

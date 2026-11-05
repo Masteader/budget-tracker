@@ -29,6 +29,7 @@ import '../../services/salary_cycle_service.dart';
 import '../../widgets/transactions/expense_date_chips.dart';
 import '../../widgets/transactions/unbudgeted_badge.dart';
 import '../../models/budget_coverage.dart';
+import '../../utils/failure_log.dart';
 
 /// Reads the stored Nafaqah fields (`nafaqah_class`, `nafaqah_spouse_id`) of a transaction.
 typedef NafaqahFieldsLoader = Future<Map<String, dynamic>?> Function(String transactionId);
@@ -316,7 +317,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       final coverage = await (widget.loadBudgetCoverage ?? loadBudgetCoverage)(householdId);
       if (mounted) setState(() => _coverage = coverage);
     } catch (e) {
-      debugPrint('[EditTransactionSheet] Budget coverage unavailable: $e');
+      logFailure('EditTransactionSheet.budgetCoverage', e);
     }
   }
 
@@ -324,9 +325,13 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   /// for its cycle). Shown until the user picks another category.
   bool get _showUnbudgeted => _selectedCategory == _initialCategory && _coverage.isUnbudgeted(widget.transaction);
 
+  /// Only an expense of the open cycle can still be budgeted: the budget dialog
+  /// writes this cycle's row, and an older cycle keeps its history.
+  bool get _unbudgetedInOpenCycle => BudgetCoverage.isCurrentCycle(widget.transaction);
+
   Future<void> _activateCategoryBudget() async {
     final code = widget.transaction.categoryCode;
-    if (code == null || code.isEmpty) return;
+    if (code == null || code.isEmpty || !_unbudgetedInOpenCycle) return;
     final activate = widget.activateCategoryBudget ?? activateAndBudgetCategory;
     final saved = await activate(context, widget.transaction.householdId, code);
     if (saved && mounted) await _loadBudgetCoverage();
@@ -1083,7 +1088,13 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     );
   }
 
+  /// Who paid a row whose creator deleted their account: a living member named
+  /// in it (a member id), or the deleted member. Never "I paid".
   Widget _buildDeletedMemberPayer() {
+    final payer = widget.transaction.paidBy;
+    if (isMemberUuid(payer)) {
+      return _buildNamedMember(const ValueKey('edit_tx_member_payer'), payer);
+    }
     return Container(
       key: const ValueKey('edit_tx_deleted_member_payer'),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -1107,6 +1118,41 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     );
   }
 
+  /// A living member a row with no creator names ([ref]: a member id or a
+  /// household role), by their name in the roster, else "Member".
+  Widget _buildNamedMember(Key key, String ref) {
+    final name = _roster?.nameOf(ref) ?? context.tr('member');
+    return Container(
+      key: key,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: context.subtleCardBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.accentText),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.person_outline, size: 18, color: context.accentText),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              name,
+              style: TextStyle(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The stored beneficiary of a row with no creator names a living member
+  /// (not a dependent, not everyone, not the deleted member).
+  bool get _beneficiaryIsNamedMember {
+    if (!_creatorRemoved || _beneficiaryTouched) return false;
+    final ben = _selectedBeneficiary.toLowerCase();
+    return isMemberUuid(ben) || householdRoleTokens.contains(ben);
+  }
+
   Widget _buildSettlementPreviewBanner(double amount) {
     String text;
     IconData icon;
@@ -1126,7 +1172,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         icon = Icons.shield_outlined;
       }
       color = NafaqahClassSelector.colorFor(cls, context: context);
-    } else if (_selectedPaidBy == kDeletedMemberRef || _selectedBeneficiary == kDeletedMemberRef) {
+    } else if (_creatorRemoved || _selectedPaidBy == kDeletedMemberRef || _selectedBeneficiary == kDeletedMemberRef) {
       text = context.tr('del_member_row_note');
       icon = Icons.person_off_outlined;
       color = context.textSecondary;
@@ -1751,7 +1797,12 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             ),
             if (_showUnbudgeted) ...[
               const SizedBox(height: 8),
-              UnbudgetedNotice(onActivate: _isAdmin ? _activateCategoryBudget : null),
+              if (_unbudgetedInOpenCycle)
+                UnbudgetedNotice(onActivate: _isAdmin ? _activateCategoryBudget : null)
+              else
+                UnbudgetedNotice(
+                  pastCycleLabel: context.cycleLabel(BudgetCoverage.effectiveCycleKey(widget.transaction)),
+                ),
             ],
             const SizedBox(height: 12),
 
@@ -1852,6 +1903,12 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               ),
             ),
             const SizedBox(height: 8),
+            // A row with no creator for a living member: that member, by name. The
+            // choices below still change it.
+            if (_beneficiaryIsNamedMember) ...[
+              _buildNamedMember(const ValueKey('edit_tx_member_beneficiary'), _selectedBeneficiary),
+              const SizedBox(height: 8),
+            ],
             Row(
               children: [
                 _buildSegmentOption(

@@ -91,7 +91,15 @@ class _SpyCleaner extends LocalAccountDataCleaner {
 
   final wiped = <String>[];
   final wipedHouseholds = <Iterable<String>>[];
+  final userDataWiped = <({String userId, bool keepFlag})>[];
   ({DateTime now, String? except})? dueCall;
+
+  @override
+  Future<bool> wipeUserData(String userId, {bool keepFlag = false}) async {
+    userDataWiped.add((userId: userId, keepFlag: keepFlag));
+    if (!keepFlag) await clearFlag(userId);
+    return true;
+  }
 
   @override
   Future<bool> wipeForUser(String userId, {Iterable<String> householdIds = const []}) async {
@@ -113,6 +121,8 @@ void main() {
   late _SpyCleaner cleaner;
   late AccountDeletionProvider provider;
   late int notified;
+  late int signOuts;
+  Object? signOutError;
   String? userId;
 
   setUp(() {
@@ -120,7 +130,18 @@ void main() {
     service = _FakeService();
     cleaner = _SpyCleaner();
     userId = _me;
-    provider = AccountDeletionProvider(service: service, cleaner: cleaner, currentUserId: () => userId, clock: () => _now);
+    signOuts = 0;
+    signOutError = null;
+    provider = AccountDeletionProvider(
+      service: service,
+      cleaner: cleaner,
+      currentUserId: () => userId,
+      clock: () => _now,
+      signOut: () async {
+        signOuts++;
+        if (signOutError != null) throw signOutError!;
+      },
+    );
     notified = 0;
     provider.addListener(() => notified++);
   });
@@ -167,12 +188,37 @@ void main() {
       expect(cleaner.wiped, isEmpty);
     });
 
-    test('nothing pending after the date and the account is gone: the device is wiped', () async {
+    test('nothing pending after the date and the account is gone: their data goes and they are signed out', () async {
       await cleaner.setFlag(_me, _now.subtract(const Duration(hours: 1)), householdIds: const ['h-1']);
       service.accountExists = false;
       await provider.load();
+      expect(cleaner.userDataWiped.single, (userId: _me, keepFlag: true));
+      expect(signOuts, 1);
+      // Device-wide steps wait for the sign-out, when nobody is signed in.
+      expect(cleaner.wiped, isEmpty);
+      expect(await cleaner.readFlag(_me), isNotNull);
+
+      await provider.handleSignedOut(_me);
       expect(cleaner.wiped, [_me]);
       expect(cleaner.wipedHouseholds.single, ['h-1']);
+    });
+
+    test('a purged account whose sign-out fails is not left half-handled', () async {
+      await cleaner.setFlag(_me, _now.subtract(const Duration(hours: 1)));
+      service.accountExists = false;
+      signOutError = Exception('offline');
+      await provider.load();
+      expect(signOuts, 1);
+      expect(cleaner.userDataWiped, hasLength(1));
+      // The flag stays: the next launch tries again.
+      expect(await cleaner.readFlag(_me), isNotNull);
+    });
+
+    test('an account that lives is never signed out', () async {
+      await cleaner.setFlag(_me, _now.subtract(const Duration(hours: 1)));
+      await provider.load();
+      expect(signOuts, 0);
+      expect(cleaner.userDataWiped, isEmpty);
     });
 
     test('nothing pending after the date but the account lives: flag goes, nothing wiped', () async {

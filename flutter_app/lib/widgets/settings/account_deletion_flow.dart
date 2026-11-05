@@ -50,7 +50,13 @@ class AccountDeletionSection extends StatelessWidget {
             label: Text(context.tr('del_delete_account'), style: const TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () async {
               final requested = await AccountDeletionFlowScreen.open(context);
-              if (requested == true) onRequested?.call();
+              if (requested == true) {
+                onRequested?.call();
+              } else {
+                // Nothing was scheduled as far as the flow knows, but an answer may
+                // have been lost on the way: Settings shows what the server says.
+                await deletion.load();
+              }
             },
           ),
         const SizedBox(height: 4),
@@ -148,8 +154,22 @@ class _AccountDeletionPendingCardState extends State<AccountDeletionPendingCard>
               style: TextStyle(color: context.textSecondary, fontSize: 12.5),
             ),
           ],
-          const SizedBox(height: 8),
-          Text(context.tr('del_cancel_only_note'), style: TextStyle(color: context.textSecondary, fontSize: 12.5)),
+          // Cancel follows the server's can_cancel alone: it stays true for a
+          // deletion that is due, or failed, before any data was touched.
+          if (status.canCancel) ...[
+            const SizedBox(height: 8),
+            Text(context.tr('del_cancel_only_note'), style: TextStyle(color: context.textSecondary, fontSize: 12.5)),
+            if (status.state != AccountDeletionState.scheduled) ...[
+              const SizedBox(height: 8),
+              Text(
+                context.tr(status.state == AccountDeletionState.processing
+                    ? 'del_state_starting_cancellable'
+                    : 'del_state_stopped_cancellable'),
+                key: const ValueKey('account_deletion_due_cancellable'),
+                style: TextStyle(color: context.textPrimary, fontSize: 12.5),
+              ),
+            ],
+          ],
           if (deletion.isFromDevice) ...[
             const SizedBox(height: 8),
             Text(context.tr('del_pending_offline_note'), style: TextStyle(color: context.textSecondary, fontSize: 12)),
@@ -169,7 +189,11 @@ class _AccountDeletionPendingCardState extends State<AccountDeletionPendingCard>
             )
           else
             Text(
-              context.tr('del_err_in_progress'),
+              context.tr(switch (status.state) {
+                AccountDeletionState.processing => 'del_state_processing_locked',
+                AccountDeletionState.failed => 'del_state_failed_locked',
+                _ => 'del_err_in_progress',
+              }),
               key: const ValueKey('account_deletion_in_progress'),
               style: TextStyle(color: context.dangerColor, fontSize: 13, fontWeight: FontWeight.w600),
             ),
@@ -354,6 +378,8 @@ class _AccountDeletionFlowScreenState extends State<AccountDeletionFlowScreen> {
   // ── Re-authentication ──────────────────────────────────────────────────────
 
   Future<void> _runBusy(Future<void> Function() action) async {
+    // A second tap before the rebuild disables the button.
+    if (_busy) return;
     setState(() {
       _busy = true;
       _errorKey = null;
@@ -402,6 +428,8 @@ class _AccountDeletionFlowScreenState extends State<AccountDeletionFlowScreen> {
   // ── Typed word ─────────────────────────────────────────────────────────────
 
   Future<void> _submitWord() async {
+    // A second tap before the rebuild disables the button.
+    if (_busy) return;
     final typed = _wordCtrl.text;
     if (!confirmationWordMatches(typed)) {
       setState(() => _errorKey = 'del_err_confirmation_mismatch');
@@ -412,15 +440,23 @@ class _AccountDeletionFlowScreenState extends State<AccountDeletionFlowScreen> {
       _busy = true;
       _errorKey = null;
     });
+    final deletion = _deletion;
     try {
-      await _deletion.requestDeletion(confirmation: typed, choices: _buildChoices(), locale: locale);
+      await deletion.requestDeletion(confirmation: typed, choices: _buildChoices(), locale: locale);
       if (!mounted) return;
-      setState(() {
-        _requested = true;
-        _step = _Step.result;
-      });
+      _showResult();
     } on AccountDeletionException catch (e) {
       logFailure('AccountDeletion.request', e);
+      if (e.code == AccountDeletionException.network) {
+        // The request may have reached the server and only its answer been lost:
+        // what the server says now is the truth, here and in Settings.
+        await deletion.load();
+        if (!mounted) return;
+        if (deletion.isPending && !deletion.isFromDevice) {
+          _showResult();
+          return;
+        }
+      }
       if (!mounted) return;
       if (e.needsReauthentication) {
         _goTo(_Step.reauth, errorKey: e.messageKey);
@@ -432,6 +468,13 @@ class _AccountDeletionFlowScreenState extends State<AccountDeletionFlowScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  void _showResult() {
+    setState(() {
+      _requested = true;
+      _step = _Step.result;
+    });
   }
 
   /// The households changed under the flow, or a successor went pending: ask again

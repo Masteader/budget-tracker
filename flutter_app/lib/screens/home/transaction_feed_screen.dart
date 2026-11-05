@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../main.dart';
 import '../../models/models.dart';
 import '../../models/nafaqah.dart';
+import '../../models/transaction_attribution.dart' show isMemberUuid;
 import '../../services/api_service.dart';
 import '../../widgets/transactions/nafaqah_feed_badge.dart';
 import '../../widgets/transactions/unbudgeted_badge.dart';
@@ -30,6 +31,7 @@ import '../../widgets/transaction_item_breakdown_card.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 import 'edit_transaction_sheet.dart';
+import '../../utils/failure_log.dart';
 import '../../models/category_catalog.dart';
 import '../../widgets/dashboard/salary_cycle_selector_bar.dart';
 
@@ -47,6 +49,10 @@ class TransactionFeedScreen extends StatefulWidget {
   /// The household's budget rows, for the "Unbudgeted" badge (injectable for tests).
   final BudgetCoverageLoader? loadBudgetCoverage;
 
+  /// `GET /households/{id}/members`, read only to name a living member who paid
+  /// a row whose creator deleted their account (injectable for tests).
+  final HouseholdRosterLoader? loadRoster;
+
   final String initialDatePeriod;
 
   const TransactionFeedScreen({
@@ -55,6 +61,7 @@ class TransactionFeedScreen extends StatefulWidget {
     this.loadNafaqah,
     this.loadCycles,
     this.loadBudgetCoverage,
+    this.loadRoster,
     this.initialDatePeriod = 'CYCLE',
   });
 
@@ -114,7 +121,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         }
       }
     }).catchError((Object e) {
-      debugPrint('[TransactionFeed] Cycles unavailable: $e');
+      logFailure('TransactionFeed.cycles', e);
     });
   }
 
@@ -139,7 +146,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         setState(() => _family = FeedFamilyContext.fromSummary(summary));
       }
     }).catchError((Object e) {
-      debugPrint('[TransactionFeed] Family context unavailable: $e');
+      logFailure('TransactionFeed.familyContext', e);
     });
   }
 
@@ -161,9 +168,32 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     Future<BudgetCoverage>.sync(() => loader(householdId)).then((coverage) {
       if (mounted && _coverageRequestedFor == householdId) setState(() => _coverage = coverage);
     }).catchError((Object e) {
-      debugPrint('[TransactionFeed] Budget coverage unavailable: $e');
+      logFailure('TransactionFeed.budgetCoverage', e);
     });
   }
+
+  /// The members, to name a living member who paid a row whose creator deleted
+  /// their account. Read only when such a row is loaded.
+  HouseholdRoster? _roster;
+  String? _rosterRequestedFor;
+
+  void _ensureRoster(String? householdId, List<Transaction> rows) {
+    if (householdId == null || householdId.isEmpty || _rosterRequestedFor == householdId) return;
+    if (!rows.any((t) => t.creatorRemoved && isMemberUuid(t.attributedSpentBy))) return;
+    _rosterRequestedFor = householdId;
+    final loader = widget.loadRoster ?? ApiService.instance.getHouseholdMembers;
+    Future<HouseholdRoster>.sync(() => loader(householdId)).then((roster) {
+      if (mounted && _rosterRequestedFor == householdId) setState(() => _roster = roster);
+    }).catchError((Object e) {
+      logFailure('TransactionFeed.roster', e);
+    });
+  }
+
+  /// Member id (lowercase) to display name, from [_roster].
+  Map<String, String> get _memberNames => {
+        for (final m in _roster?.members ?? const <HouseholdMember>[])
+          if ((m.displayName ?? '').trim().isNotEmpty) m.userId.toLowerCase(): m.displayName!.trim(),
+      };
 
   Widget? _badgeFor(Transaction tx, bool isFamily) {
     final kind = nafaqahBadgeKind(tx, isFamily: isFamily);
@@ -757,21 +787,13 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   void _exportCsv(BuildContext context) {
     final rows = context.read<TransactionProvider>().transactions;
     if (rows.isEmpty) return;
-    final exportList = rows
-        .map((t) => {
-              'id': t.id,
-              'amount': t.amount,
-              'currency': t.currency,
-              'merchant': t.merchant,
-              'category_code': t.categoryCode,
-              'timestamp': t.timestamp.toIso8601String(),
-              'source': t.source,
-              'spent_by': t.spentBy,
-              if (t.creatorRemoved) 'user_id': null,
-              'notes': t.notes,
-            })
-        .toList();
-    CsvExportService.showExportDialog(context, exportList, monthLabel: context.tr('csv_export_all_records'));
+    final exportList = rows.map(CsvExportService.exportRowOf).toList();
+    CsvExportService.showExportDialog(
+      context,
+      exportList,
+      monthLabel: context.tr('csv_export_all_records'),
+      memberNames: _memberNames,
+    );
   }
 
   /// MOB-26: downloads the statement with the user's JWT and opens the system
@@ -838,7 +860,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
       await StatementPdfService().downloadAndShare(hid);
       if (context.mounted) ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
     } catch (e) {
-      debugPrint('[TransactionFeed] Statement PDF export failed: $e');
+      logFailure('TransactionFeed.statementPdf', e);
       if (context.mounted) {
         AppSnackBar.showError(
           context,
@@ -972,6 +994,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     _ensureFamilyContext(hid);
     _ensureCycles(hid);
     _ensureBudgetCoverage(hid);
+    _ensureRoster(hid, rows);
     return Scaffold(
       backgroundColor: context.scaffoldBg,
       appBar: AppBar(
@@ -1304,6 +1327,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           categoryCode: tx.categoryCode,
                                           source: tx.source,
                                           spentBy: tx.attributedSpentBy,
+                                          payerName: _memberNames[tx.attributedSpentBy],
                                           attributionBadge: _badgeFor(tx, family),
                                           budgetBadge: _coverage.isUnbudgeted(tx) ? const UnbudgetedBadge() : null,
                                           timestamp: tx.timestamp,

@@ -47,7 +47,12 @@ class SettingsScreen extends StatefulWidget {
   @visibleForTesting
   final DateTime Function()? clock;
 
-  const SettingsScreen({super.key, this.clock});
+  /// Where the app goes once the user has left the household; by default back
+  /// through [AuthGate]. A seam for tests.
+  @visibleForTesting
+  final void Function(BuildContext context)? onLeftHousehold;
+
+  const SettingsScreen({super.key, this.clock, this.onLeftHousehold});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -157,11 +162,13 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   /// A role change was confirmed by the server: refresh the signed-in user's
-  /// own role (badge, edit rights, shared-pool transfers).
+  /// own role (badge, edit rights, shared-pool transfers), and the deletion
+  /// status and household banner, which a handover changes.
   void _onRolesChanged() {
     try {
       context.read<HouseholdRoleProvider>().refresh();
     } catch (_) {}
+    context.read<AccountDeletionProvider?>()?.refreshOnResume();
     if (mounted) setState(() => _settlementRevision++);
     _loadUserInfo();
   }
@@ -183,7 +190,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       final membership = await ApiService.instance.getHouseholdMembership(hid);
       final membersData = await supabase
           .from('users')
-          .select('display_name, role')
+          .select('id, display_name, role')
           .eq('household_id', hid);
 
       // The user may have switched household while this was loading.
@@ -198,6 +205,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                     return {
                       'email': (map['display_name'] as String?) ?? context.tr('member'),
                       'role': map['role'] ?? 'member',
+                      if (map['id'] != null) 'id': map['id'].toString(),
+                      if ((map['display_name'] as String?)?.trim().isNotEmpty ?? false) 'display_name': map['display_name'],
                     };
                   })
                   .toList() ??
@@ -427,14 +436,22 @@ class _SettingsScreenState extends State<SettingsScreen>
           throw Exception(res['error']);
         }
 
+        // Leaving changes what a pending deletion takes with it.
+        if (mounted) context.read<AccountDeletionProvider?>()?.load();
+
         if (mounted) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            // Back through the gate: it re-resolves (now no household) and
-            // keeps sign-out handling at the root of the navigator.
-            MaterialPageRoute(builder: (_) => const AuthGate()),
-            (route) => false,
-          );
+          final onLeft = widget.onLeftHousehold;
+          if (onLeft != null) {
+            onLeft(context);
+          } else {
+            Navigator.pushAndRemoveUntil(
+              context,
+              // Back through the gate: it re-resolves (now no household) and
+              // keeps sign-out handling at the root of the navigator.
+              MaterialPageRoute(builder: (_) => const AuthGate()),
+              (route) => false,
+            );
+          }
         }
       } catch (e) {
         logFailure('Settings.leaveHousehold', e);
@@ -803,7 +820,16 @@ class _SettingsScreenState extends State<SettingsScreen>
         );
         return;
       }
-      CsvExportService.showExportDialog(context, export.rows, monthLabel: cycleLabel);
+      CsvExportService.showExportDialog(
+        context,
+        export.rows,
+        monthLabel: cycleLabel,
+        // Names a living member who paid a row whose creator deleted their account.
+        memberNames: {
+          for (final m in _members)
+            if (m['id'] != null && m['display_name'] != null) m['id'].toString().toLowerCase(): m['display_name'].toString().trim(),
+        },
+      );
     } catch (e) {
       logFailure('Settings.exportCycle', e);
       if (!mounted || _householdId != hid) return;

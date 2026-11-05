@@ -36,7 +36,19 @@ BaseApiClient _offline() => BaseApiClient(
     );
 
 void main() {
-  tearDown(() => BaseApiClient.logFailureDetail = !kReleaseMode);
+  tearDown(() => BaseApiClient.logFailureDetail = BaseApiClient.defaultLogFailureDetail(releaseMode: kReleaseMode));
+
+  group('the default', () {
+    test('a release build logs no detail; any other build does', () {
+      expect(BaseApiClient.defaultLogFailureDetail(releaseMode: true), isFalse);
+      expect(BaseApiClient.defaultLogFailureDetail(releaseMode: false), isTrue);
+    });
+
+    test('is what the client starts with in this build', () {
+      expect(BaseApiClient.initialLogFailureDetail, BaseApiClient.defaultLogFailureDetail(releaseMode: kReleaseMode));
+      expect(BaseApiClient.initialLogFailureDetail, !kReleaseMode);
+    });
+  });
 
   group('release builds', () {
     setUp(() => BaseApiClient.logFailureDetail = false);

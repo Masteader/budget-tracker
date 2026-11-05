@@ -67,9 +67,11 @@ class AccountDeletionService {
       });
 
   /// Emails a one-time code to the signed-in address, for a forgotten password.
+  /// No secret was typed, so a refusal is never "wrong password": it is
+  /// [AccountDeletionException.codeNotSent] (or rate limited, or no connection).
   Future<void> sendEmailCode() => _auth(() async {
         await _client.auth.signInWithOtp(email: _requireEmail(), shouldCreateUser: false);
-      });
+      }, wrongSecret: AccountDeletionException.codeNotSent, otherFailure: AccountDeletionException.codeNotSent);
 
   /// A fresh session from the emailed code.
   Future<void> verifyEmailCode(String code) => _auth(() async {
@@ -93,6 +95,10 @@ class AccountDeletionService {
         final row = await _client.from('users').select('id').eq('id', uid).maybeSingle();
         return row != null;
       });
+
+  /// Ends this device's session. GoTrue drops it locally first, so the app signs
+  /// out even when the server cannot be told.
+  Future<void> signOut() => _client.auth.signOut();
 
   String _requireEmail() {
     final email = currentEmail;
@@ -119,13 +125,20 @@ class AccountDeletionService {
     }
   }
 
-  Future<void> _auth(Future<void> Function() call, {String wrongSecret = AccountDeletionException.invalidCredentials}) async {
+  /// Runs an Auth call. [wrongSecret] is what a refusal of the typed secret
+  /// means; [otherFailure] any other refusal.
+  Future<void> _auth(
+    Future<void> Function() call, {
+    String wrongSecret = AccountDeletionException.invalidCredentials,
+    String otherFailure = AccountDeletionException.unknown,
+  }) async {
     try {
       await call();
     } on AccountDeletionException {
       rethrow;
-    } on AuthRetryableFetchException {
-      throw const AccountDeletionException(AccountDeletionException.network);
+    } on AuthRetryableFetchException catch (e) {
+      // A server error (5xx) carries its status; no answer at all does not.
+      throw AccountDeletionException(e.statusCode == null ? AccountDeletionException.network : otherFailure);
     } on AuthException catch (e) {
       final status = int.tryParse(e.statusCode ?? '');
       if (status == 429 || e.code == 'over_request_rate_limit' || e.code == 'over_email_send_rate_limit') {
@@ -134,9 +147,9 @@ class AccountDeletionService {
       if (e.code == 'invalid_credentials' || e.code == 'otp_expired' || status == 400 || status == 401 || status == 403) {
         throw AccountDeletionException(wrongSecret);
       }
-      throw const AccountDeletionException(AccountDeletionException.unknown);
+      throw AccountDeletionException(otherFailure);
     } catch (e) {
-      throw AccountDeletionException(_isNetwork(e) ? AccountDeletionException.network : AccountDeletionException.unknown);
+      throw AccountDeletionException(_isNetwork(e) ? AccountDeletionException.network : otherFailure);
     }
   }
 

@@ -63,12 +63,80 @@ void main() {
           reason: 'charged to her allowance, never a category budget');
       expect(coverage.isUnbudgeted(_tx('f', 'OPEX-HOUSING', 90, settlement: true)), isFalse);
       expect(coverage.isUnbudgeted(_tx('g', 'OPEX-HOUSING', 90, cls: 'wife_reimbursable')), isTrue);
-      expect(coverage.isUnbudgeted(_tx('h', 'OPEX-HOUSING', 90, cycle: null)), isFalse,
-          reason: 'no cycle yet (offline draft): unknown, so not marked');
     });
 
     test('empty coverage marks nothing until loaded', () {
       expect(BudgetCoverage.unknown.isUnbudgeted(_tx('a', 'OPEX-HOUSING', 2500)), isFalse);
+    });
+  });
+
+  group('edge rows agree with the hero total', () {
+    // The rule of totalCycleSpend and the server's reports: a row without a
+    // cycle key is in the cycle of its date, and a row without a category is in
+    // no category budget.
+    test('a row without a cycle key is in the cycle of its date', () {
+      final draft = _tx('h', 'OPEX-HOUSING', 90, cycle: null, at: DateTime.utc(2026, 11, 3, 9));
+      expect(coverage.isUnbudgeted(draft, paydayDay: 27, currentCycleKey: '2026-11'), isTrue);
+      final budgeted = _tx('i', 'OPEX-GROCERY', 90, cycle: null, at: DateTime.utc(2026, 11, 3, 9));
+      expect(coverage.isUnbudgeted(budgeted, paydayDay: 27, currentCycleKey: '2026-11'), isFalse);
+    });
+
+    test('a row without a category is in no budget', () {
+      expect(coverage.isUnbudgeted(_tx('j', null, 15), paydayDay: 27, currentCycleKey: '2026-11'), isTrue);
+      expect(coverage.isUnbudgeted(_tx('k', '', 15), paydayDay: 27, currentCycleKey: '2026-11'), isTrue);
+    });
+
+    test('the hero total of unbudgeted spending is the sum of the badged rows', () {
+      final rows = [
+        _tx('a', 'OPEX-HOUSING', 2500),
+        _tx('b', 'OPEX-CHARITY', 100),
+        _tx('c', 'OPEX-GROCERY', 120),
+        _tx('d', 'OPEX-HOUSING', 90, cls: 'wife_personal'),
+        _tx('e', 'OPEX-HOUSING', 70, settlement: true),
+        _tx('f', 'OPEX-HOUSING', 60, cls: 'wife_reimbursable'),
+        _tx('g', 'OPEX-HOUSING', 1000, cycle: '2026-10'),
+        _tx('h', null, 15),
+        _tx('i', null, 7, cycle: null),
+        _tx('j', 'OPEX-CHARITY', 33, cycle: null, at: DateTime.utc(2026, 11, 3, 9)),
+        _tx('k', 'OPEX-GROCERY', 44, cycle: null, at: DateTime.utc(2026, 11, 3, 9)),
+        _tx('l', 'OPEX-CHARITY', 500, cycle: null, at: DateTime.utc(2026, 10, 3, 9)),
+      ];
+      final hero = _FakeTransactions(rows).unbudgetedCycleSpend('2026-11', {'OPEX-GROCERY', 'OPEX-FUEL', 'OPEX-HEALTH'}, paydayDay: 27);
+      final badged = rows
+          .where((t) =>
+              BudgetCoverage.effectiveCycleKey(t, paydayDay: 27) == '2026-11' &&
+              coverage.isUnbudgeted(t, paydayDay: 27, currentCycleKey: '2026-11'))
+          .fold<double>(0, (sum, t) => sum + t.amount);
+      expect(badged, hero);
+      expect(hero, 2500 + 100 + 60 + 15 + 7 + 33);
+    });
+  });
+
+  group('past cycles', () {
+    test('a past cycle the household budgeted marks its other categories', () {
+      // 2026-10 had a Dining budget, so Housing that cycle was outside the budget.
+      expect(coverage.isUnbudgeted(_tx('a', 'OPEX-HOUSING', 50, cycle: '2026-10'), paydayDay: 27, currentCycleKey: '2026-11'), isTrue);
+      expect(coverage.isUnbudgeted(_tx('b', 'OPEX-DINING', 50, cycle: '2026-10'), paydayDay: 27, currentCycleKey: '2026-11'), isFalse);
+    });
+
+    test('a past cycle with no budget at all marks nothing: the household had not started budgeting', () {
+      expect(coverage.isUnbudgeted(_tx('a', 'OPEX-HOUSING', 50, cycle: '2026-08'), paydayDay: 27, currentCycleKey: '2026-11'), isFalse);
+      expect(coverage.isUnbudgeted(_tx('b', null, 50, cycle: '2026-08'), paydayDay: 27, currentCycleKey: '2026-11'), isFalse);
+    });
+
+    test('the current cycle is marked even before its first budget, as the hero counts it', () {
+      final none = BudgetCoverage.fromRows(const []);
+      expect(none.isUnbudgeted(_tx('a', 'OPEX-HOUSING', 50), paydayDay: 27, currentCycleKey: '2026-11'), isTrue);
+    });
+
+    test('isCurrentCycle tells rows of the open cycle from older ones', () {
+      expect(BudgetCoverage.isCurrentCycle(_tx('a', 'OPEX-HOUSING', 50), paydayDay: 27, currentCycleKey: '2026-11'), isTrue);
+      expect(BudgetCoverage.isCurrentCycle(_tx('b', 'OPEX-HOUSING', 50, cycle: '2026-10'), paydayDay: 27, currentCycleKey: '2026-11'), isFalse);
+      expect(
+        BudgetCoverage.isCurrentCycle(_tx('c', 'OPEX-HOUSING', 50, cycle: null, at: DateTime.utc(2026, 11, 3, 9)),
+            paydayDay: 27, currentCycleKey: '2026-11'),
+        isTrue,
+      );
     });
   });
 

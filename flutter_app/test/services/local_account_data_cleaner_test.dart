@@ -255,6 +255,111 @@ void main() {
       expect(await remainingIds(), [mine]);
       expect(await cleaner.readFlag(_me), isNotNull);
     });
+
+    test('with B signed in, removes only A\'s items, cached household and flag', () async {
+      // B is signed in with payday 10 and reminders scheduled. A, who shared B's
+      // household, was flagged and their date has passed.
+      const userA = 'user-a';
+      const userB = 'user-b';
+      SharedPreferences.setMockInitialValues({
+        HouseholdResolver.cacheKeyFor(userA): 'h-shared',
+        HouseholdResolver.cacheKeyFor(userB): 'h-shared',
+        HouseholdSetupPrefs.paydayConfirmedKey('h-shared'): true,
+        HouseholdSetupPrefs.hiddenKey('h-shared'): true,
+        SalaryCycleService.paydayPrefKey: 10,
+      });
+      SalaryCycleService.paydayDay = 10;
+      final remindersOfB = <String>['bill-rent', 'installment-car'];
+      var statementsOfB = 1;
+      var signedUrlsOfB = 3;
+      final shared = LocalAccountDataCleaner(
+        queue: queue,
+        cancelReminders: () async => remindersOfB.clear(),
+        deleteStatements: () async => statementsOfB = 0,
+        clearSignedUrls: () => signedUrlsOfB = 0,
+      );
+      await enqueue(userA, householdId: 'h-shared', images: ['aGVsbG8=']);
+      final itemOfB = await enqueue(userB, householdId: 'h-shared');
+      await shared.setFlag(userA, now.subtract(const Duration(days: 1)), householdIds: const ['h-shared']);
+
+      expect(await shared.wipeDueUsers(now: now, exceptUserId: userB), [userA]);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(await remainingIds(), [itemOfB]);
+      expect(prefs.containsKey(HouseholdResolver.cacheKeyFor(userA)), isFalse);
+      expect(await shared.readFlag(userA), isNull);
+      // Everything of B's, and of the household B is in, stays.
+      expect(prefs.getString(HouseholdResolver.cacheKeyFor(userB)), 'h-shared');
+      expect(prefs.getInt(SalaryCycleService.paydayPrefKey), 10);
+      expect(SalaryCycleService.paydayDay, 10);
+      expect(remindersOfB, ['bill-rent', 'installment-car']);
+      expect(statementsOfB, 1);
+      expect(signedUrlsOfB, 3);
+      expect(prefs.getBool(HouseholdSetupPrefs.paydayConfirmedKey('h-shared')), isTrue);
+      expect(prefs.getBool(HouseholdSetupPrefs.hiddenKey('h-shared')), isTrue);
+    });
+
+    test('with nobody signed in still touches nothing device-wide', () async {
+      SharedPreferences.setMockInitialValues({SalaryCycleService.paydayPrefKey: 10});
+      SalaryCycleService.paydayDay = 10;
+      await enqueue(_me);
+      await cleaner.setFlag(_me, now.subtract(const Duration(days: 1)));
+
+      expect(await cleaner.wipeDueUsers(now: now), [_me]);
+
+      expect(await remainingIds(), isEmpty);
+      expect(reminderCancels, 0);
+      expect(statementDeletes, 0);
+      expect(urlClears, 0);
+      expect(SalaryCycleService.paydayDay, 10);
+      expect((await SharedPreferences.getInstance()).getInt(SalaryCycleService.paydayPrefKey), 10);
+    });
+  });
+
+  group('wipeUserData', () {
+    test('removes the queue items, the cached household and the flag, and nothing device-wide', () async {
+      SharedPreferences.setMockInitialValues({
+        HouseholdResolver.cacheKeyFor(_me): 'h-active',
+        HouseholdSetupPrefs.hiddenKey('h-active'): true,
+        SalaryCycleService.paydayPrefKey: 15,
+      });
+      SalaryCycleService.paydayDay = 15;
+      await enqueue(_me);
+      final theirs = await enqueue(_other);
+      await cleaner.setFlag(_me, DateTime.utc(2026, 12, 5));
+
+      expect(await cleaner.wipeUserData(_me), isTrue);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(await remainingIds(), [theirs]);
+      expect(prefs.containsKey(HouseholdResolver.cacheKeyFor(_me)), isFalse);
+      expect(await cleaner.readFlag(_me), isNull);
+      expect(prefs.getBool(HouseholdSetupPrefs.hiddenKey('h-active')), isTrue);
+      expect(prefs.getInt(SalaryCycleService.paydayPrefKey), 15);
+      expect(SalaryCycleService.paydayDay, 15);
+      expect(reminderCancels, 0);
+      expect(statementDeletes, 0);
+      expect(urlClears, 0);
+    });
+
+    test('keepFlag leaves the flag for the signed-out wipe, which still finds the households', () async {
+      SharedPreferences.setMockInitialValues({
+        HouseholdResolver.cacheKeyFor(_me): 'h-active',
+        HouseholdSetupPrefs.hiddenKey('h-active'): true,
+        HouseholdSetupPrefs.hiddenKey('h-second'): true,
+      });
+      await cleaner.setFlag(_me, DateTime.utc(2026, 12, 5), householdIds: const ['h-active', 'h-second']);
+
+      await cleaner.wipeUserData(_me, keepFlag: true);
+      expect(await cleaner.readFlag(_me), isNotNull);
+
+      await cleaner.wipeForUser(_me);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.containsKey(HouseholdSetupPrefs.hiddenKey('h-active')), isFalse);
+      expect(prefs.containsKey(HouseholdSetupPrefs.hiddenKey('h-second')), isFalse);
+      expect(await cleaner.readFlag(_me), isNull);
+      expect(reminderCancels, 1);
+    });
   });
 
   group('temporary statements', () {
