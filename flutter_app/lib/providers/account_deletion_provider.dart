@@ -39,6 +39,9 @@ class AccountDeletionProvider extends ChangeNotifier {
   /// that has ended.
   int _generation = 0;
 
+  /// The flow's re-authentication calls.
+  AccountDeletionService get service => _service;
+
   AccountDeletionStatus get status => _status;
 
   /// The server answered at least once, or this device remembers a request.

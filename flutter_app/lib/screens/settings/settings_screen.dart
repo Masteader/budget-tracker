@@ -16,9 +16,11 @@ import '../../services/offline_sync_service.dart';
 import '../../widgets/dashboard/family_reimbursement_card.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import 'package:provider/provider.dart';
+import '../../providers/account_deletion_provider.dart';
 import '../../providers/household_role_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../widgets/settings/account_deletion_flow.dart';
 import '../../widgets/settings/household_management_card.dart';
 import '../../widgets/settings/settings_section.dart';
 import '../../widgets/settings/household_roles_card.dart';
@@ -739,6 +741,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
     if (!mounted) return;
     if (pending > 0) {
+      // A pending account's data leaves the device with the sign-out, so these
+      // items do not wait for anyone.
+      final deleting = context.read<AccountDeletionProvider?>()?.isPending ?? false;
       final shouldSignOut = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -749,7 +754,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             style: TextStyle(color: ctx.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
           ),
           content: Text(
-            ctx.trPlural('sign_out_unsynced_warning', pending),
+            deleting ? ctx.tr('del_sign_out_wipe_warning') : ctx.trPlural('sign_out_unsynced_warning', pending),
             style: TextStyle(color: ctx.textSecondary, fontSize: 13),
           ),
           actions: [
@@ -1292,6 +1297,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ],
                 ),
               ),
+              const SizedBox(height: 12),
+              AccountDeletionSection(onRequested: _onRolesChanged),
             ],
           ),
         ],

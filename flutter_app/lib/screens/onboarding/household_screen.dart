@@ -10,12 +10,14 @@ import 'package:provider/provider.dart';
 
 import '../../main.dart';
 import '../../models/models.dart';
+import '../../providers/account_deletion_provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/household_role_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/household_join.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/settings/account_deletion_flow.dart';
 import '../../widgets/settings/household_type_chooser.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -388,6 +390,24 @@ class _HouseholdScreenState extends State<HouseholdScreen>
                     ),
                   ],
                 ),
+              ),
+              // Settings is out of reach without a household, and deleting an
+              // account or cancelling a deletion must not depend on having one.
+              Builder(
+                builder: (context) {
+                  final deletion = context.watch<AccountDeletionProvider?>();
+                  if (deletion == null) return const SizedBox.shrink();
+                  return Center(
+                    child: TextButton(
+                      key: const ValueKey('household_account_deletion'),
+                      onPressed: () => AccountDeletionFlowScreen.open(context),
+                      child: Text(
+                        context.tr(deletion.isPending ? 'del_cancel_button' : 'del_delete_account'),
+                        style: TextStyle(color: context.dangerColor, fontSize: 12),
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),

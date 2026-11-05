@@ -386,6 +386,19 @@ class _SessionStorage extends LocalStorage {
   Future<void> persistSession(String persistSessionString) async {}
 }
 
+/// Keeps the PKCE verifier in memory: widget tests run on a fake clock, where the
+/// default storage's first read of SharedPreferences never completes.
+class _MemoryAsyncStorage extends GotrueAsyncStorage {
+  final Map<String, String> _items = {};
+
+  @override
+  Future<String?> getItem({required String key}) async => _items[key];
+  @override
+  Future<void> removeItem({required String key}) async => _items.remove(key);
+  @override
+  Future<void> setItem({required String key, required String value}) async => _items[key] = value;
+}
+
 String _fakeJwt() {
   String part(Map<String, Object?> m) => base64Url.encode(utf8.encode(jsonEncode(m))).replaceAll('=', '');
   const farFuture = 4102444800; // 2100-01-01
@@ -416,6 +429,7 @@ Future<void> initFakeSettingsSupabase(FakeSettingsHttpClient client) async {
     httpClient: client,
     authOptions: FlutterAuthClientOptions(
       localStorage: _SessionStorage(_sessionJson()),
+      pkceAsyncStorage: _MemoryAsyncStorage(),
       autoRefreshToken: false,
       detectSessionInUri: false,
     ),

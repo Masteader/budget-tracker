@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
+import '../models/account_deletion.dart' show AccountDeletionException;
 import '../services/api/base_api_client.dart' show ApiRequestException;
 import '../services/api/household_roles_api_client.dart' show HouseholdRolesApiException;
 import '../models/nafaqah.dart' show NafaqahApiException;
@@ -17,6 +18,7 @@ String describeFailure(Object error) => switch (error) {
       HouseholdRolesApiException e => 'HouseholdRolesApiException(status: ${e.statusCode}, code: ${e.code})',
       NafaqahApiException e => 'NafaqahApiException(code: ${e.code})',
       HouseholdJoinException e => 'HouseholdJoinException(code: ${e.code})',
+      AccountDeletionException e => e.toString(),
       _ => error.runtimeType.toString(),
     };
 
