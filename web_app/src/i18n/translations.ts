@@ -876,9 +876,9 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
     kept: {
       title: 'ما الذي يبقى دون اسمك',
       items: [
-        'ما أضفته في منزل ما زال قائماً يبقى فيه بمبلغه وتاريخه وتصنيفه ومتجره وبنوده، ويظهر باسم «عضو محذوف».',
+        'ما أضفته في منزل ما زال قائماً يبقى فيه بمبلغه وتاريخه وتصنيفه ومتجره وبنوده، ويظهر باسم «عضو محذوف». ويُزال اسمك وبريدك الإلكتروني من اسم المتجر وأسماء البنود.',
         'الدخل الذي سجلته في حساب مشترك والتحويلات من الحساب المشترك وإليه تبقى دون اسمك أو ملاحظاتك، فلا يتغير رصيد الحساب المشترك.',
-        'الحسابات المشتركة التي تملكها تنتقل إلى مشرف آخر، ويبقى رصيدها كما هو.',
+        'الحسابات المشتركة التي تملكها تنتقل إلى مشرف آخر، ويبقى رصيدها كما هو، ويُزال اسمك من أسمائها.',
         'قد تتغير التسويات في ذلك المنزل: لا تُحتسب المصروفات التي دفعتها أنت، وتُعاد قسمة المصروفات المتساوية في الدورة الحالية، فقد تتغير ديون الأعضاء الآخرين. أرصدة الحسابات ومصروف الميزانيات لا تتغير.',
         'سجل لا يحوي اسماً ولا بريداً ولا معرّف مستخدم، يبيّن أن عملية حذف قد اكتملت.',
       ],
@@ -886,8 +886,8 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
     notEdited: {
       title: 'ما الذي لا يُعدَّل',
       items: [
-        'النصوص التي كتبها الأعضاء الآخرون، مثل ملاحظة تذكرك بالاسم، تبقى كما كتبوها.',
-        'أسماء المنازل تبقى كما هي، حتى لو تضمن أحدها اسمك.',
+        'النصوص التي كتبها الأعضاء الآخرون، مثل ملاحظة تذكرك بالاسم، تبقى كما كتبوها، إلا أن بريدك الإلكتروني يُستبدل أينما ورد.',
+        'أسماء المنازل تبقى كما هي، حتى لو تضمن أحدها اسمك، إلا أن بريدك الإلكتروني يُستبدل فيها أيضاً.',
       ],
     },
     outOfReach: {
@@ -1043,9 +1043,9 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
     kept: {
       title: 'What stays, without your name',
       items: [
-        'What you added to a household that still exists stays there, with its amount, date, category, store and item lines, and the entries show as “Deleted member”.',
+        'What you added to a household that still exists stays there, with its amount, date, category, store and item lines, and the entries show as “Deleted member”. Your name and email address are removed from their store and item names.',
         'Income you recorded into a shared pool, and transfers to or from a shared pool, stay without your name or notes, so the pool’s balance does not change.',
-        'Shared pools you own pass to another admin, with their balance unchanged.',
+        'Shared pools you own pass to another admin, with their balance unchanged, and your name is removed from their names.',
         'Settlements in that household can change: entries you paid are no longer counted and equal splits in the current cycle are divided again, so other members’ debts can change. Account balances and budget spending do not change.',
         'A record with no name, email or user ID, showing that a deletion was completed.',
       ],
@@ -1053,8 +1053,8 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
     notEdited: {
       title: 'What is not edited',
       items: [
-        'Free text other members typed, such as a note mentioning you by name, stays as they wrote it.',
-        'Household names stay as they are, even if one includes your name.',
+        'Free text other members typed, such as a note mentioning you by name, stays as they wrote it, except that your email address is replaced wherever it appears.',
+        'Household names stay as they are, even if one includes your name, except that your email address is replaced there too.',
       ],
     },
     outOfReach: {
@@ -1210,9 +1210,9 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
     kept: {
       title: 'کیا آپ کے نام کے بغیر باقی رہتا ہے',
       items: [
-        'موجود گھرانوں میں آپ کے اندراجات رقم، تاریخ، زمرے، دکان اور تفصیلی سطروں سمیت باقی رہتے ہیں، اور «حذف شدہ رکن» کے نام سے دکھائی دیتے ہیں۔',
+        'موجود گھرانوں میں آپ کے اندراجات رقم، تاریخ، زمرے، دکان اور تفصیلی سطروں سمیت باقی رہتے ہیں، اور «حذف شدہ رکن» کے نام سے دکھائی دیتے ہیں۔ دکان اور سطروں کے ناموں سے آپ کا نام اور ای میل پتہ ہٹا دیا جاتا ہے۔',
         'مشترکہ پول میں آپ کی درج کردہ آمدنی اور مشترکہ پول سے آنے جانے والی منتقلیاں آپ کے نام یا نوٹس کے بغیر باقی رہتی ہیں، اس لیے پول کا بیلنس نہیں بدلتا۔',
-        'آپ کی ملکیت والے مشترکہ پول کسی دوسرے منتظم کو منتقل ہو جاتے ہیں، اور ان کا بیلنس نہیں بدلتا۔',
+        'آپ کی ملکیت والے مشترکہ پول کسی دوسرے منتظم کو منتقل ہو جاتے ہیں، ان کا بیلنس نہیں بدلتا، اور ان کے ناموں سے آپ کا نام ہٹا دیا جاتا ہے۔',
         'اس گھرانے میں تصفیے بدل سکتے ہیں: آپ کے ادا کردہ اندراجات شمار نہیں ہوتے اور موجودہ سائیکل کی برابر تقسیم دوبارہ ہوتی ہے، اس لیے دوسرے ارکان کے قرض بدل سکتے ہیں۔ اکاؤنٹس کے بیلنس اور بجٹ کے اخراجات نہیں بدلتے۔',
         'ایک ریکارڈ جس میں نہ نام ہے، نہ ای میل، نہ یوزر آئی ڈی، اور جو صرف یہ بتاتا ہے کہ ایک حذف مکمل ہوا۔',
       ],
@@ -1220,8 +1220,8 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
     notEdited: {
       title: 'کس چیز میں ترمیم نہیں ہوتی',
       items: [
-        'دوسرے ارکان کی لکھی ہوئی عبارت، جیسے آپ کا نام لینے والا نوٹ، ویسی ہی رہتی ہے۔',
-        'گھرانوں کے نام جوں کے توں رہتے ہیں، چاہے کسی میں آپ کا نام شامل ہو۔',
+        'دوسرے ارکان کی لکھی ہوئی عبارت، جیسے آپ کا نام لینے والا نوٹ، ویسی ہی رہتی ہے، البتہ آپ کا ای میل پتہ جہاں بھی ہو بدل دیا جاتا ہے۔',
+        'گھرانوں کے نام جوں کے توں رہتے ہیں، چاہے کسی میں آپ کا نام شامل ہو، البتہ ان میں بھی آپ کا ای میل پتہ بدل دیا جاتا ہے۔',
       ],
     },
     outOfReach: {

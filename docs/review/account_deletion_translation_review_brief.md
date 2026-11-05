@@ -15,7 +15,7 @@
 
 Tell us if you think one of these is wrong, and we'll change it everywhere at once.
 
-**Words that must not change without engineering.** People type a word to confirm a deletion, and the server checks for these exact characters: `DELETE`, `حذف` and `حذف کریں`. The Urdu one uses the Urdu letters ک and ی. If you think a word should change, say so in your notes and we'll change it in the code first. Otherwise deletion stops working for those people.
+**Words that must not change without engineering.** People type a word to confirm a deletion, and the server checks for these words: `DELETE`, `حذف` and `حذف کریں`. The Urdu one uses the Urdu letters ک and ی; the server also accepts it typed on an Arabic keyboard (ك, ي, ن), and with any kind of space between the words. If you think a word should change, say so in your notes and we'll change it in the code first. Otherwise deletion stops working for those people.
 
 **Don't change placeholders.** Anything in curly braces, such as `{date}` or `{email}`, is filled in by the app. Keep it exactly as written, with the same spelling in English letters. You can move it within the sentence.
 
@@ -24,5 +24,6 @@ Tell us if you think one of these is wrong, and we'll change it everywhere at on
 - `where_it_appears` says whether the text is in the app, on the website or in an email. The `key` is our name for the string. It may hint at where the string is used, and you can ignore it otherwise.
 - Keys ending in `.one`, `.two`, `.few`, `.many`, `.other` or `.zero` are plural forms of one sentence.
 - Dates appear as `{date}`. In emails they are written like 2026-12-06.
+- The emails to other members of a household (`email.member_*`) go out in all three languages in one email: Arabic, then English, then Urdu, because we don't know which language each member reads. The subjects are joined with " / ". So each language's text has to make sense on its own.
 - The Urdu column is blank for `web.landing.*`, because that page has no Urdu. Nothing is needed there.
 - Line breaks inside a cell are intentional, so please keep them.
