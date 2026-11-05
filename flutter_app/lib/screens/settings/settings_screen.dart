@@ -14,7 +14,6 @@ import '../../services/household_invite_share.dart';
 import '../../services/csv_export_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/dashboard/family_reimbursement_card.dart';
-import '../../widgets/dashboard/multi_roommate_settlement_card.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import 'package:provider/provider.dart';
 import '../../providers/household_role_provider.dart';
@@ -23,6 +22,7 @@ import '../../providers/theme_provider.dart';
 import '../../widgets/settings/household_management_card.dart';
 import '../../widgets/settings/settings_section.dart';
 import '../../widgets/settings/household_roles_card.dart';
+import '../../widgets/settings/household_settlement_panel.dart';
 import '../../widgets/settings/household_type_chooser.dart';
 import '../../widgets/settings/add_household_member_sheet.dart';
 import '../../widgets/settings/payday_settings_card.dart';
@@ -38,9 +38,14 @@ import '../accounts/accounts_overview_screen.dart';
 import 'help_support_screen.dart';
 import '../../services/salary_cycle_service.dart';
 import '../../services/household_setting_saver.dart';
+import '../../utils/failure_log.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  /// The time the export's current cycle is computed from; a seam for tests.
+  @visibleForTesting
+  final DateTime Function()? clock;
+
+  const SettingsScreen({super.key, this.clock});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -65,31 +70,11 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   /// Bumped when the Nafaqah provider changes so the family card reloads.
   int _nafaqahRevision = 0;
-  SettlementV2Summary? _settlement;
-  bool _settlementLoading = false;
-  bool _settlementFailed = false;
 
-  Future<void> _fetchSettlement(String hid) async {
-    setState(() {
-      _settlementLoading = true;
-      _settlementFailed = false;
-    });
-    try {
-      final summary = await ApiService.instance.getSettlementV2(hid);
-      if (!mounted) return;
-      setState(() {
-        _settlement = summary;
-        _settlementLoading = false;
-        _settlementFailed = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _settlementLoading = false;
-        _settlementFailed = true;
-      });
-    }
-  }
+  /// Bumped when roles or the provider change so the settlement panel refetches.
+  int _settlementRevision = 0;
+
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -175,16 +160,17 @@ class _SettingsScreenState extends State<SettingsScreen>
     try {
       context.read<HouseholdRoleProvider>().refresh();
     } catch (_) {}
+    if (mounted) setState(() => _settlementRevision++);
     _loadUserInfo();
   }
 
   /// A new Nafaqah provider was confirmed: reload the family Nafaqah card.
   void _onNafaqahProviderChanged(NafaqahSummary? _) {
     if (mounted) {
-      setState(() => _nafaqahRevision++);
-      if (_householdId != null && _members.length > 1) {
-        _fetchSettlement(_householdId!);
-      }
+      setState(() {
+        _nafaqahRevision++;
+        _settlementRevision++;
+      });
     }
   }
 
@@ -198,7 +184,8 @@ class _SettingsScreenState extends State<SettingsScreen>
           .select('display_name, role')
           .eq('household_id', hid);
 
-      if (mounted) {
+      // The user may have switched household while this was loading.
+      if (mounted && _householdId == hid) {
         setState(() {
           _householdName = membership?.householdName ?? context.tr('set_my_household');
           final code = membership?.inviteCode ?? '';
@@ -214,9 +201,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                   .toList() ??
               [];
         });
-        if (_members.length > 1) {
-          _fetchSettlement(hid);
-        }
       }
 
       // Load configured monthly payday
@@ -230,14 +214,14 @@ class _SettingsScreenState extends State<SettingsScreen>
           await prefs.setInt('payday_day', payday);
         }
       } catch (_) {}
-      if (mounted) {
+      if (mounted && _householdId == hid) {
         setState(() => _paydayDay = payday);
       }
 
       // Load household dependents
       try {
         final deps = await ApiService.instance.getDependents(hid);
-        if (mounted) {
+        if (mounted && _householdId == hid) {
           setState(() => _dependents = deps);
         }
       } catch (_) {}
@@ -278,6 +262,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       if (mounted) setState(() => _paydayDay = newDay);
       return true;
     } catch (e) {
+      logFailure('Settings.savePayday', e);
       if (mounted) {
         AppSnackBar.showError(
           context,
@@ -450,10 +435,11 @@ class _SettingsScreenState extends State<SettingsScreen>
           );
         }
       } catch (e) {
+        logFailure('Settings.leaveHousehold', e);
         if (mounted) {
           AppSnackBar.showError(
             context,
-            context.tr('set_failed_leave_household'),
+            context.tr(householdRefusalKey(e) ?? 'set_failed_leave_household'),
             title: context.tr('set_leave_household_error'),
           );
         }
@@ -527,6 +513,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   _loadUserInfo();
                 }
               } catch (e) {
+                logFailure('Settings.joinHousehold', e);
                 if (mounted) {
                   AppSnackBar.showError(
                     context,
@@ -617,10 +604,11 @@ class _SettingsScreenState extends State<SettingsScreen>
                   _loadUserInfo();
                 }
               } catch (e) {
+                logFailure('Settings.createHousehold', e);
                 if (mounted) {
                   AppSnackBar.showError(
                     context,
-                    context.tr('set_failed_create_household'),
+                    context.tr(householdRefusalKey(e) ?? 'set_failed_create_household'),
                     title: context.tr('set_creation_error'),
                   );
                 }
@@ -658,6 +646,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           }
         }
       } catch (e) {
+        logFailure('Settings.addDependent', e);
         if (mounted) {
           AppSnackBar.showError(
             context,
@@ -726,6 +715,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           }
         }
       } catch (e) {
+        logFailure('Settings.removeDependent', e);
         if (mounted) {
           AppSnackBar.showError(
             context,
@@ -738,7 +728,16 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Future<void> _confirmSignOut() async {
-    final pending = OfflineSyncService.instance.pendingCountNotifier.value;
+    final sync = OfflineSyncService.instance;
+    var pending = sync.pendingCountNotifier.value;
+    try {
+      // Scanners write to the queue directly, so the notifier can lag behind.
+      await sync.updatePendingCount();
+      pending = await sync.unsyncedCount();
+    } catch (e) {
+      logFailure('Settings.unsyncedCount', e);
+    }
+    if (!mounted) return;
     if (pending > 0) {
       final shouldSignOut = await showDialog<bool>(
         context: context,
@@ -770,11 +769,47 @@ class _SettingsScreenState extends State<SettingsScreen>
         ),
       );
       if (shouldSignOut != true) return;
+      try {
+        // The dialog promises they wait for this account: legacy items without
+        // an owner would otherwise replay under whoever signs in next.
+        await sync.claimOwnerlessItems();
+      } catch (e) {
+        logFailure('Settings.claimOwnerlessItems', e);
+      }
     }
     await supabase.auth.signOut();
-    _settlement = null;
-    _settlementFailed = false;
-    _settlementLoading = false;
+  }
+
+  /// Exports this household's current cycle, with its own payday read fresh.
+  Future<void> _exportCycle() async {
+    final hid = _householdId;
+    if (hid == null || _exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final export = await CsvExportService.loadCurrentCycle(supabase, householdId: hid, now: widget.clock?.call());
+      // A switch while this loaded: these rows belong to the previous household.
+      if (!mounted || _householdId != hid) return;
+      final cycleLabel = context.cycleRange(export.cycle.start, export.cycle.end);
+      if (export.rows.isEmpty) {
+        AppSnackBar.showInfo(
+          context,
+          context.trArgs('set_export_empty_cycle', {'cycle': cycleLabel}),
+          title: context.tr('set_export_monthly_report'),
+        );
+        return;
+      }
+      CsvExportService.showExportDialog(context, export.rows, monthLabel: cycleLabel);
+    } catch (e) {
+      logFailure('Settings.exportCycle', e);
+      if (!mounted || _householdId != hid) return;
+      AppSnackBar.showError(
+        context,
+        context.tr('load_error_generic'),
+        title: context.tr('set_export_failed'),
+      );
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   @override
@@ -939,50 +974,16 @@ class _SettingsScreenState extends State<SettingsScreen>
               subtitle: context.tr('partner_settlement_desc'),
               icon: Icons.handshake_outlined,
               children: [
-                if (_settlementLoading && _settlement == null)
-                  Container(
-                    height: 90,
-                    alignment: Alignment.center,
-                    child: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: context.accentText),
-                    ),
-                  )
-                else if (_settlementFailed && _settlement == null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            context.tr('load_error_generic'),
-                            style: TextStyle(color: context.dangerColor, fontSize: 12),
-                          ),
-                        ),
-                        TextButton(
-                          style: TextButton.styleFrom(foregroundColor: context.accentText),
-                          onPressed: () {
-                            if (_householdId != null) {
-                              _fetchSettlement(_householdId!);
-                            }
-                          },
-                          child: Text(context.tr('roles_retry')),
-                        ),
-                      ],
-                    ),
-                  )
-                else if (_settlement != null && _settlement!.isRoommateMode)
-                  MultiRoommateSettlementCard(
-                    householdId: _householdId!,
-                    summary: _settlement,
-                  )
-                else
-                  FamilyReimbursementCard(
-                    key: ValueKey('family-nafaqah-$_nafaqahRevision'),
+                HouseholdSettlementPanel(
+                  key: ValueKey('settlement-panel-$_householdId'),
+                  householdId: _householdId!,
+                  refreshToken: _settlementRevision,
+                  familyBuilder: (context) => FamilyReimbursementCard(
+                    key: ValueKey('family-nafaqah-$_householdId-$_nafaqahRevision'),
                     householdId: _householdId!,
                     emptyPlaceholder: _buildNoWifeSettlementPlaceholder(context),
                   ),
+                ),
               ],
             ),
 
@@ -1097,28 +1098,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           foregroundColor: context.primaryButtonFg,
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         ),
-                        onPressed: () async {
-                          if (_householdId == null) return;
-                          try {
-                            final currentCycle = SalaryCycleService.currentCycle(paydayDay: _paydayDay);
-                            final res = await supabase
-                                .from('transactions')
-                                .select()
-                                .eq('household_id', _householdId!)
-                                .eq('cycle_key', currentCycle.key)
-                                .order('timestamp', ascending: false);
-                            if (!context.mounted) return;
-                            CsvExportService.showExportDialog(context, List<Map<String, dynamic>>.from(res), monthLabel: context.tr('set_export_monthly_label'));
-                          } catch (e) {
-                            debugPrint('Transaction export failed: $e');
-                            if (!context.mounted) return;
-                            AppSnackBar.showError(
-                              context,
-                              context.tr('load_error_generic'),
-                              title: context.tr('set_export_failed'),
-                            );
-                          }
-                        },
+                        onPressed: _exporting ? null : _exportCycle,
                         child: Text(context.tr('export_csv'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
                     ),

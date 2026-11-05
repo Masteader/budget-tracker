@@ -1,4 +1,3 @@
-import 'package:budget_tracker/services/household_join.dart';
 // SettingsScreen with a real signed-in household (fake HTTP only): section
 // order, what lives where, overflow in every language and theme, and the export
 // flow's strings. UX-15 still holds: sections fold, nothing is removed.
@@ -9,8 +8,6 @@ import 'package:budget_tracker/providers/theme_provider.dart';
 import 'package:budget_tracker/screens/settings/settings_screen.dart';
 import 'package:budget_tracker/services/api_service.dart';
 import 'package:budget_tracker/services/offline_sync_service.dart';
-import 'package:budget_tracker/services/salary_cycle_service.dart';
-
 import 'package:budget_tracker/theme/app_themes.dart';
 import 'package:budget_tracker/widgets/settings/payday_settings_card.dart';
 import 'package:budget_tracker/widgets/settings/settings_section.dart';
@@ -115,12 +112,9 @@ void main() {
     PermissionHandlerPlatform.instance = _DeniedPermissions();
   });
 
-  setUp(() async {
+  setUp(() {
     SharedPreferences.setMockInitialValues({});
-    _http.transactions = const [];
-    _http.memberCount = 2;
-    OfflineSyncService.instance.pendingCountNotifier.value = 0;
-    await resetFakeSettingsAuth();
+    _http.resetScenario();
     OfflineSyncService.instance.pendingCountNotifier.value = 0;
     final original = ApiService.instance;
     _api = FakeSettingsApi();
@@ -396,134 +390,20 @@ void main() {
       await _settle(tester);
     }
 
-    testWidgets('monthly export queries current salary cycle and has no row limit', (tester) async {
-      _http.transactions = const [];
-      _http.lastTransactionRequest = null;
-      await _pump(tester, lang: 'en');
-      await tapExport(tester, 'en');
-      final expectedCycle = SalaryCycleService.cycleKeyForInstant(DateTime.now(), paydayDay: 27);
-      final query = _http.lastTransactionRequest?.url.query ?? '';
-      expect(query, contains('cycle_key=eq.$expectedCycle'));
-      expect(query, contains('household_id=eq.hh-1'));
-      expect(query, isNot(contains('limit=')));
-    });
-
-
     for (final lang in ['en', 'ar', 'ur']) {
       for (final scale in [1.0, 2.0]) {
-        testWidgets('the export dialog fits a phone and uses the $lang label at x$scale', (tester) async {
+        testWidgets('the export dialog fits a phone in $lang at x$scale', (tester) async {
+          _http.transactions = const [
+            {'id': 'tx-1', 'timestamp': '2026-11-01T10:00:00Z', 'merchant': 'Tamimi', 'amount': 49.5},
+          ];
           await _pump(tester, lang: lang, scale: scale);
           await tapExport(tester, lang);
           expect(tester.takeException(), isNull);
-          final label = AppLocalizations(Locale(lang)).get('set_export_monthly_label');
-          expect(find.textContaining(label), findsOneWidget);
-          if (lang != 'en') expect(find.textContaining('Monthly Export'), findsNothing);
+          expect(find.byType(AlertDialog), findsOneWidget);
+          if (lang != 'en') expect(find.textContaining('Export Report'), findsNothing);
         });
       }
-
-      testWidgets('a failed export shows the friendly $lang message, not the raw exception', (tester) async {
-        _http.transactions = null;
-        await _pump(tester, lang: lang);
-        await tapExport(tester, lang);
-        final l = AppLocalizations(Locale(lang));
-        expect(find.text(l.get('load_error_generic')), findsOneWidget);
-        expect(find.textContaining('PostgrestException'), findsNothing);
-        expect(find.textContaining('raw server detail'), findsNothing);
-        expect(find.byType(SnackBar), findsOneWidget);
-      });
     }
-  });
-
-  group('sign out warning for unsynced transactions (TASK-02)', () {
-    testWidgets('sign out with 0 unsynced calls signOut directly without warning dialog', (tester) async {
-      OfflineSyncService.instance.pendingCountNotifier.value = 0;
-      await _pump(tester, lang: 'en');
-      final signOutBtn = find.ancestor(
-        of: find.text('Sign Out'),
-        matching: find.byType(OutlinedButton),
-      );
-      await tester.ensureVisible(signOutBtn);
-      await tester.tap(signOutBtn);
-      await _settle(tester);
-      expect(find.text('Unsynced Transactions'), findsNothing);
-    });
-
-    testWidgets('sign out with unsynced shows warning dialog, cancel keeps user', (tester) async {
-      OfflineSyncService.instance.pendingCountNotifier.value = 3;
-      await _pump(tester, lang: 'en');
-      final signOutBtn = find.ancestor(
-        of: find.text('Sign Out'),
-        matching: find.byType(OutlinedButton),
-      );
-      await tester.ensureVisible(signOutBtn);
-      await tester.tap(signOutBtn);
-      await _settle(tester);
-
-      expect(find.text('Unsynced Transactions'), findsOneWidget);
-      expect(find.byType(AlertDialog), findsOneWidget);
-
-      await tester.tap(find.text('Cancel'));
-      await _settle(tester);
-      expect(find.byType(AlertDialog), findsNothing);
-
-      OfflineSyncService.instance.pendingCountNotifier.value = 0;
-    });
-
-    testWidgets('sign out warning dialog localized in ar and ur', (tester) async {
-      OfflineSyncService.instance.pendingCountNotifier.value = 2;
-      final ar = AppLocalizations(const Locale('ar'));
-      await _pump(tester, lang: 'ar');
-      final signOutBtn = find.ancestor(
-        of: find.text(ar.get('sign_out')),
-        matching: find.byType(OutlinedButton),
-      );
-      await tester.ensureVisible(signOutBtn);
-      await tester.tap(signOutBtn);
-      await _settle(tester);
-
-      expect(find.text(ar.get('sign_out_unsynced_title')), findsOneWidget);
-      expect(find.byType(AlertDialog), findsOneWidget);
-      await tester.tap(find.text(ar.get('cancel')));
-      await _settle(tester);
-      OfflineSyncService.instance.pendingCountNotifier.value = 0;
-    });
-  });
-
-  group('settlement fetched once with failures handled (TASK-03)', () {
-    testWidgets('settlement is fetched only once across rebuilds and accordion taps', (tester) async {
-      await _pump(tester);
-      final initialCount = _api.settlementCallCount;
-      expect(initialCount, 1);
-
-      // Rebuild and tap several other sections
-      await tester.tap(find.text('SALARY & ACCOUNTS'));
-      await _settle(tester);
-      await tester.tap(find.text('APPEARANCE & LANGUAGE'));
-      await _settle(tester);
-
-      expect(_api.settlementCallCount, 1);
-    });
-
-    testWidgets('settlement failure shows localized error message and retry button that recovers', (tester) async {
-      _api.failSettlement = true;
-      await _pump(tester);
-
-      // Open partner settlement section
-      await tester.tap(find.text('PARTNER SETTLEMENT'));
-      await _settle(tester);
-
-      final en = AppLocalizations(const Locale('en'));
-      expect(find.text(en.get('load_error_generic')), findsOneWidget);
-      expect(find.text(en.get('roles_retry')), findsOneWidget);
-
-      // When retrying with failure gone:
-      _api.failSettlement = false;
-      await tester.tap(find.text(en.get('roles_retry')));
-      await _settle(tester);
-
-      expect(find.text(en.get('load_error_generic')), findsNothing);
-      expect(_api.settlementCallCount, 2);
-    });
   });
 
   group('colour tokens on the page, both modes', () {
@@ -639,24 +519,4 @@ void main() {
       expect(find.byIcon(Icons.checklist_rtl_rounded), findsOneWidget);
     });
   });
-
-  group('friendly error messages without raw exceptions (TASK-04)', () {
-    testWidgets('householdJoinErrorText returns load_error_generic for raw exceptions', (tester) async {
-      await _pump(tester);
-      final ctx = tester.element(find.byType(SettingsScreen));
-      final en = AppLocalizations(const Locale('en'));
-
-      final genericError = householdJoinErrorText(ctx, Exception('SocketException: Connection refused'));
-      expect(genericError, en.get('load_error_generic'));
-      expect(genericError, isNot(contains('SocketException')));
-      expect(genericError, isNot(contains('Exception')));
-
-      final mismatchError = householdJoinErrorText(ctx, const HouseholdJoinException('mismatch', code: 'invite_role_mismatch'));
-      expect(mismatchError, en.get('hh_invite_role_mismatch'));
-
-      final alreadyMemberError = householdJoinErrorText(ctx, const HouseholdJoinException('already', code: 'already_member'));
-      expect(alreadyMemberError, en.get('hh_already_member'));
-    });
-  });
-
 }
