@@ -10,6 +10,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _admin = 'aaaaaaaa-0000-4000-8000-00000000000a';
+const _salem = 'bbbbbbbb-0000-4000-8000-00000000000b';
 
 Map<String, dynamic> _row(Map<String, dynamic> fields) => {
       'id': 'tx-1',
@@ -166,6 +167,76 @@ void main() {
     expect(writes.single['beneficiary_type'], 'individual');
     expect(writes.single['beneficiary_id'], _admin);
     expect(writes.single['spent_by'], 'me');
+  });
+
+  group('a living member on a row with no creator', () {
+    Map<String, dynamic> paidBySalem() => _row({
+          'source': 'manual',
+          'spent_by': 'partner',
+          'beneficiary_type': 'individual',
+          'beneficiary_id': _salem,
+          'notes': 'Manual: Dinner | PaidBy: $_salem | Beneficiary: $_salem | SpentBy: partner',
+        });
+
+    for (final lang in const ['en', 'ar', 'ur']) {
+      testWidgets('$lang: who paid and for whom name them, never the deleted member or "me"', (tester) async {
+        final l = AppLocalizations(Locale(lang));
+        await _pumpSheet(tester, paidBySalem(), lang: lang);
+
+        final payer = find.byKey(const ValueKey('edit_tx_member_payer'));
+        final beneficiary = find.byKey(const ValueKey('edit_tx_member_beneficiary'));
+        expect(find.descendant(of: payer, matching: find.text('Salem')), findsOneWidget);
+        expect(find.descendant(of: beneficiary, matching: find.text('Salem')), findsOneWidget);
+        expect(find.byKey(const ValueKey('edit_tx_deleted_member_payer')), findsNothing);
+        expect(find.text(l.get('deleted_member')), findsNothing);
+        expect(find.text(l.get('i_paid')), findsNothing);
+        expect(find.text(l.get('settle_personal_me')), findsNothing);
+        expect(find.text(l.get('settle_personal_partner')), findsNothing);
+        // The creator did delete their account: the row says so.
+        expect(find.text(l.get('del_member_row_note')), findsOneWidget);
+      });
+    }
+
+    testWidgets('the viewer as beneficiary is named too, not offered as "me"', (tester) async {
+      await _pumpSheet(tester, _row({'spent_by': 'me', 'beneficiary_type': 'individual', 'beneficiary_id': _admin}));
+      final beneficiary = find.byKey(const ValueKey('edit_tx_member_beneficiary'));
+      expect(find.descendant(of: beneficiary, matching: find.text('Admin')), findsOneWidget);
+      // spent_by 'me' was the departed creator.
+      expect(find.byKey(const ValueKey('edit_tx_deleted_member_payer')), findsOneWidget);
+    });
+
+    testWidgets('a merchant-only edit keeps who paid and for whom', (tester) async {
+      final writes = await _pumpSheet(tester, paidBySalem());
+      await tester.enterText(find.byType(TextField).first, 'Renamed');
+      await _save(tester, 'en');
+      expect(writes.single['merchant'], 'Renamed');
+      expect(writes.single.containsKey('spent_by'), isFalse);
+      expect(writes.single.containsKey('beneficiary_id'), isFalse);
+      expect(writes.single.containsKey('notes'), isFalse);
+    });
+
+    testWidgets('changing for whom keeps the living payer in the note tail', (tester) async {
+      final l = AppLocalizations(const Locale('en'));
+      final writes = await _pumpSheet(tester, paidBySalem());
+      final both = find.text(l.get('both_shared'));
+      await tester.ensureVisible(both);
+      await tester.tap(both);
+      await tester.pump();
+      await _save(tester, 'en');
+      expect(writes.single['notes'], contains('PaidBy: $_salem'));
+      expect(writes.single['spent_by'], 'partner');
+      expect(writes.single['beneficiary_id'], 'household');
+    });
+
+    testWidgets('fits at 320px and x2.0 text', (tester) async {
+      await _pumpSheet(tester, paidBySalem(), lang: 'ar', width: 320, scale: 2.0);
+      expect(tester.takeException(), isNull);
+      for (final key in const ['edit_tx_member_payer', 'edit_tx_member_beneficiary']) {
+        final rect = tester.getRect(find.byKey(ValueKey(key)));
+        expect(rect.left, greaterThanOrEqualTo(0), reason: key);
+        expect(rect.right, lessThanOrEqualTo(320), reason: key);
+      }
+    });
   });
 
   testWidgets('the new row fits at 320px and x2.0 text', (tester) async {

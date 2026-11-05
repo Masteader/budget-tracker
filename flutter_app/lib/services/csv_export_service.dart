@@ -7,7 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' show DateFormat;
 import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
 import '../l10n/app_localizations.dart';
-import '../models/transaction_attribution.dart' show kDeletedMemberRef;
+import '../models/models.dart' show Transaction;
+import '../models/transaction_attribution.dart' show kDeletedMemberRef, deletedCreatorRef, storedPayerRef;
 import '../theme/app_themes.dart';
 import '../widgets/app_snackbar.dart';
 import 'salary_cycle_service.dart';
@@ -102,13 +103,38 @@ class CsvExportService {
         l.get('csv_col_items'),
       ];
 
+  /// The row the export reads for [tx], as the feed holds it: the columns of the
+  /// file, plus what [storedPayerRef] needs to tell who paid a row whose
+  /// creator deleted their account.
+  static Map<String, dynamic> exportRowOf(Transaction tx) => {
+        'id': tx.id,
+        'amount': tx.amount,
+        'currency': tx.currency,
+        'merchant': tx.merchant,
+        'category_code': tx.categoryCode,
+        'timestamp': tx.timestamp.toIso8601String(),
+        'source': tx.source,
+        'spent_by': tx.spentBy,
+        if (tx.creatorRemoved) 'user_id': null,
+        if (tx.beneficiaryType != null) 'beneficiary_type': tx.beneficiaryType,
+        if (tx.beneficiaryId != null) 'beneficiary_id': tx.beneficiaryId,
+        'notes': tx.notes,
+      };
+
+  /// [deletedMemberLabel] stands for a departed creator; a living member who
+  /// paid such a row is named from [memberNames] (member id to display name),
+  /// or [memberLabel] when the name is not known. A member id never reaches the
+  /// file.
   static String generateTransactionsCsv(
     List<Map<String, dynamic>> transactions, {
     required List<String> headers,
     String deletedMemberLabel = kDeletedMemberRef,
+    String memberLabel = 'member',
+    Map<String, String> memberNames = const {},
   }) {
+    final labels = _PayerLabels(deletedMemberLabel, memberLabel, memberNames);
     final buffer = StringBuffer();
-    for (final row in _csvRows(transactions, headers, deletedMemberLabel)) {
+    for (final row in _csvRows(transactions, headers, labels)) {
       buffer.writeln(row.join(','));
     }
     return buffer.toString();
@@ -123,19 +149,28 @@ class CsvExportService {
     List<Map<String, dynamic>> transactions, {
     required List<String> headers,
     String deletedMemberLabel = kDeletedMemberRef,
+    String memberLabel = 'member',
+    Map<String, String> memberNames = const {},
   }) {
-    return _csvRows(transactions, headers, deletedMemberLabel).map((row) => row.map((field) => '\u2066$field\u2069').join(',')).join('\n');
+    final labels = _PayerLabels(deletedMemberLabel, memberLabel, memberNames);
+    return _csvRows(transactions, headers, labels).map((row) => row.map((field) => '\u2066$field\u2069').join(',')).join('\n');
   }
 
-  /// `spent_by` is relative to the row's creator. With no creator left, 'me' is the
-  /// deleted member and must not read as whoever exports the file.
-  static String _spentByCell(Map<String, dynamic> tx, String deletedMemberLabel) {
+  /// `spent_by` is relative to the row's creator. With no creator left, 'me' and
+  /// 'partner' name nobody and must not read as whoever exports the file; a
+  /// living member who paid (a member id in a manual row's note) stays named,
+  /// as [Transaction.attributedSpentBy] does in the feed.
+  static String _spentByCell(Map<String, dynamic> tx, _PayerLabels labels) {
     final spentBy = tx['spent_by']?.toString() ?? 'both';
     final creatorRemoved = tx.containsKey('user_id') && (tx['user_id']?.toString() ?? '').trim().isEmpty;
-    return creatorRemoved && spentBy.toLowerCase() != 'both' ? deletedMemberLabel : spentBy;
+    if (!creatorRemoved || spentBy.toLowerCase() == 'both') return spentBy;
+    final payer = deletedCreatorRef(storedPayerRef(tx));
+    if (payer == kDeletedMemberRef) return labels.deletedMember;
+    final name = labels.names[payer] ?? labels.names.entries.where((e) => e.key.toLowerCase() == payer).firstOrNull?.value;
+    return (name == null || name.trim().isEmpty) ? labels.member : name.trim();
   }
 
-  static List<List<String>> _csvRows(List<Map<String, dynamic>> transactions, List<String> headers, String deletedMemberLabel) {
+  static List<List<String>> _csvRows(List<Map<String, dynamic>> transactions, List<String> headers, _PayerLabels labels) {
     final rows = <List<String>>[headers.map(_escapeCsv).toList()];
     final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
 
@@ -159,7 +194,7 @@ class CsvExportService {
       final total = (tx['amount'] as num?)?.toDouble() ?? 0.0;
       final vatStr = (total > 0 ? (total * 0.15 / 1.15) : 0.0).toStringAsFixed(2);
 
-      final spentBy = _escapeCsv(_spentByCell(tx, deletedMemberLabel));
+      final spentBy = _escapeCsv(_spentByCell(tx, labels));
       final source = _escapeCsv(tx['source']?.toString() ?? 'manual');
 
       // Line items
@@ -192,12 +227,22 @@ class CsvExportService {
   }
 
   /// Shows an export dialog with preview and copy options.
-  static void showExportDialog(BuildContext context, List<Map<String, dynamic>> transactions, {String? monthLabel}) {
+  /// [memberNames] (member id to display name) names a living member who paid a
+  /// row whose creator deleted their account.
+  static void showExportDialog(
+    BuildContext context,
+    List<Map<String, dynamic>> transactions, {
+    String? monthLabel,
+    Map<String, String> memberNames = const {},
+  }) {
     final l = AppLocalizations.of(context);
     final headers = headersFor(l);
     final deletedMember = l.get('deleted_member');
-    final csvContent = generateTransactionsCsv(transactions, headers: headers, deletedMemberLabel: deletedMember);
-    final csvPreview = previewTransactionsCsv(transactions, headers: headers, deletedMemberLabel: deletedMember);
+    final member = l.get('member');
+    final csvContent = generateTransactionsCsv(transactions,
+        headers: headers, deletedMemberLabel: deletedMember, memberLabel: member, memberNames: memberNames);
+    final csvPreview = previewTransactionsCsv(transactions,
+        headers: headers, deletedMemberLabel: deletedMember, memberLabel: member, memberNames: memberNames);
     final count = transactions.length;
     final totalSum = transactions.fold<double>(
       0.0,
@@ -286,4 +331,13 @@ class CsvExportService {
       ),
     );
   }
+}
+
+/// How the "spent by" column names who paid a row whose creator is gone.
+class _PayerLabels {
+  final String deletedMember;
+  final String member;
+  final Map<String, String> names;
+
+  const _PayerLabels(this.deletedMember, this.member, this.names);
 }

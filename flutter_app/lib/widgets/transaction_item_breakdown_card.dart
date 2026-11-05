@@ -18,6 +18,10 @@ class TransactionItemBreakdownCard extends StatelessWidget {
   final String? categoryCode;
   final String source;
   final String spentBy;
+
+  /// The name of the member [spentBy] names when it is a member id (a living
+  /// member paid a row whose creator deleted their account).
+  final String? payerName;
   final List<Map<String, dynamic>> items;
   final bool isReallocated;
   final bool initiallyExpanded;
@@ -52,6 +56,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
     this.categoryCode,
     this.source = 'chat',
     this.spentBy = 'both',
+    this.payerName,
     this.items = const [],
     this.isReallocated = false,
     this.initiallyExpanded = false,
@@ -102,6 +107,16 @@ class TransactionItemBreakdownCard extends StatelessWidget {
     IconData icon;
     String label;
 
+    // A member id: a living member paid a row whose creator deleted their account.
+    if (isMemberUuid(who)) {
+      final name = (payerName ?? '').trim();
+      bg = context.subtleCardBg;
+      fg = context.textSecondary;
+      icon = Icons.person_outline;
+      label = name.isNotEmpty ? name : context.tr('member');
+      return _badge(context, bg, fg, icon, label, detailed: detailed);
+    }
+
     switch (who.toLowerCase()) {
       case 'partner':
         bg = context.accentSubtleBg;
@@ -129,7 +144,10 @@ class TransactionItemBreakdownCard extends StatelessWidget {
         label = detailed ? context.tr('both_shared') : context.tr('both');
         break;
     }
+    return _badge(context, bg, fg, icon, label, detailed: detailed);
+  }
 
+  Widget _badge(BuildContext context, Color bg, Color fg, IconData icon, String label, {required bool detailed}) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: detailed ? 10 : 6, vertical: detailed ? 4 : 2),
       decoration: BoxDecoration(

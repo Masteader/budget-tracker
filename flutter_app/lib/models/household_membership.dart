@@ -173,6 +173,27 @@ class HouseholdRoster {
   /// Family (Nafaqah) household: a member is a wife.
   bool get isFamily => members.any((m) => m.isSpouse);
 
+  /// The display name of the member [ref] names: a member id in any case, or a
+  /// household role word ('wife' or 'spouse' when there is one wife, 'husband'
+  /// or 'provider' for the Nafaqah provider). Null when it names nobody here
+  /// (or only creator-relative words such as 'me'), or the member has no name.
+  String? nameOf(String ref) {
+    final r = ref.trim().toLowerCase();
+    if (r.isEmpty) return null;
+    HouseholdMember? member;
+    if (r == 'wife' || r == 'spouse') {
+      final wives = members.where((m) => m.isSpouse).toList();
+      if (wives.length == 1) member = wives.single;
+    } else if (r == 'husband' || r == 'provider') {
+      final provider = (nafaqahProviderUserId ?? '').toLowerCase();
+      member = members.where((m) => m.isNafaqahProvider || (provider.isNotEmpty && m.userId.toLowerCase() == provider)).firstOrNull;
+    } else {
+      member = members.where((m) => m.userId.toLowerCase() == r).firstOrNull;
+    }
+    final name = member?.displayName?.trim();
+    return (name == null || name.isEmpty) ? null : name;
+  }
+
   /// Roommates (peers, no wife): the Nafaqah provider does not apply.
   bool get isRoommateHousehold => !isFamily && members.any((m) => m.isPeer);
 

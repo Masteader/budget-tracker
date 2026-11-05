@@ -1088,7 +1088,13 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     );
   }
 
+  /// Who paid a row whose creator deleted their account: a living member named
+  /// in it (a member id), or the deleted member. Never "I paid".
   Widget _buildDeletedMemberPayer() {
+    final payer = widget.transaction.paidBy;
+    if (isMemberUuid(payer)) {
+      return _buildNamedMember(const ValueKey('edit_tx_member_payer'), payer);
+    }
     return Container(
       key: const ValueKey('edit_tx_deleted_member_payer'),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -1112,6 +1118,41 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     );
   }
 
+  /// A living member a row with no creator names ([ref]: a member id or a
+  /// household role), by their name in the roster, else "Member".
+  Widget _buildNamedMember(Key key, String ref) {
+    final name = _roster?.nameOf(ref) ?? context.tr('member');
+    return Container(
+      key: key,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: context.subtleCardBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.accentText),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.person_outline, size: 18, color: context.accentText),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              name,
+              style: TextStyle(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The stored beneficiary of a row with no creator names a living member
+  /// (not a dependent, not everyone, not the deleted member).
+  bool get _beneficiaryIsNamedMember {
+    if (!_creatorRemoved || _beneficiaryTouched) return false;
+    final ben = _selectedBeneficiary.toLowerCase();
+    return isMemberUuid(ben) || householdRoleTokens.contains(ben);
+  }
+
   Widget _buildSettlementPreviewBanner(double amount) {
     String text;
     IconData icon;
@@ -1131,7 +1172,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         icon = Icons.shield_outlined;
       }
       color = NafaqahClassSelector.colorFor(cls, context: context);
-    } else if (_selectedPaidBy == kDeletedMemberRef || _selectedBeneficiary == kDeletedMemberRef) {
+    } else if (_creatorRemoved || _selectedPaidBy == kDeletedMemberRef || _selectedBeneficiary == kDeletedMemberRef) {
       text = context.tr('del_member_row_note');
       icon = Icons.person_off_outlined;
       color = context.textSecondary;
@@ -1862,6 +1903,12 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               ),
             ),
             const SizedBox(height: 8),
+            // A row with no creator for a living member: that member, by name. The
+            // choices below still change it.
+            if (_beneficiaryIsNamedMember) ...[
+              _buildNamedMember(const ValueKey('edit_tx_member_beneficiary'), _selectedBeneficiary),
+              const SizedBox(height: 8),
+            ],
             Row(
               children: [
                 _buildSegmentOption(
