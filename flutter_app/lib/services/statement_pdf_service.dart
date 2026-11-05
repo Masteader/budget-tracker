@@ -40,6 +40,12 @@ class StatementPdfService {
     return Directory(p.join(tmp.path, folderName));
   }
 
+  /// Removes every statement left in the cache folder.
+  static Future<void> deleteTemporaryStatements({StatementDirectoryProvider? directory}) async {
+    final dir = await (directory ?? _defaultDirectory)();
+    if (await dir.exists()) await dir.delete(recursive: true);
+  }
+
   static Future<void> _shareWithSystemSheet(String path, String fileName) async {
     await SharePlus.instance.share(
       ShareParams(

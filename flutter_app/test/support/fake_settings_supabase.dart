@@ -145,6 +145,25 @@ class FakeSettingsApi extends ApiService {
 const fakeSettingsUserId = 'user-1';
 const fakeSettingsHouseholdId = 'hh-1';
 const fakeSettingsEmail = 'owner@example.com';
+const fakeSettingsPassword = 'correct-password';
+const fakeSettingsEmailCode = '123456';
+
+/// One RPC the client called.
+class FakeRpcCall {
+  final String function;
+  final Map<String, dynamic> params;
+  const FakeRpcCall(this.function, this.params);
+}
+
+/// A refusal raised with a machine hint. A hint under SQLSTATE 42501 reaches the
+/// client as HTTP 403, under 22023 as HTTP 400.
+class FakeRpcRefusal {
+  final String hint;
+  final String code;
+  final int status;
+  final String message;
+  const FakeRpcRefusal(this.hint, {this.code = '22023', this.status = 400, this.message = 'raw server text'});
+}
 
 /// Answers the PostgREST calls SettingsScreen makes; every other path is `[]`.
 class FakeSettingsHttpClient extends http.BaseClient {
@@ -179,6 +198,35 @@ class FakeSettingsHttpClient extends http.BaseClient {
   /// Answers of RPCs that do not fail, by function name.
   final Map<String, Object?> rpcResults = {};
 
+  /// RPCs that fail the way PostgREST reports a `RAISE EXCEPTION ... USING HINT`.
+  final Map<String, FakeRpcRefusal> rpcRefusals = {};
+
+  /// RPCs that never get an answer: the request itself fails.
+  final Set<String> rpcOffline = {};
+
+  /// Every RPC called, in order, with its decoded parameters.
+  final List<FakeRpcCall> rpcCalls = [];
+
+  /// `households.deletion_scheduled_for` per household, as the server sends it.
+  final Map<String, String?> householdDeletionDates = {};
+
+  /// Households the signed-in user can no longer read: RLS answers no row.
+  final Set<String> unreadableHouseholds = {};
+
+  /// False when the `users` row of the signed-in user is gone (purged).
+  bool userRowExists = true;
+
+  /// The password `signInWithPassword` accepts, and the code `verifyOTP` accepts.
+  String validPassword = fakeSettingsPassword;
+  String validEmailCode = fakeSettingsEmailCode;
+
+  /// Every Auth call: `password:<email>`, `otp:<email>:<shouldCreateUser>`,
+  /// `verify:<email>:<type>`.
+  final List<String> authCalls = [];
+
+  /// When set, every Auth call fails with this status and error code.
+  ({int status, String code})? authFailure;
+
   void resetScenario() {
     transactions = const [];
     memberCount = 2;
@@ -192,6 +240,16 @@ class FakeSettingsHttpClient extends http.BaseClient {
     householdReads = 0;
     rpcErrors.clear();
     rpcResults.clear();
+    rpcRefusals.clear();
+    rpcOffline.clear();
+    rpcCalls.clear();
+    householdDeletionDates.clear();
+    unreadableHouseholds.clear();
+    userRowExists = true;
+    validPassword = fakeSettingsPassword;
+    validEmailCode = fakeSettingsEmailCode;
+    authCalls.clear();
+    authFailure = null;
   }
 
   @override
@@ -200,12 +258,19 @@ class FakeSettingsHttpClient extends http.BaseClient {
     final query = url.query;
     Object? body = const <Object>[];
     var status = 200;
+    if (url.path.contains('/auth/v1/')) {
+      return _answerAuth(request);
+    }
     if (url.path.endsWith('/rest/v1/users')) {
-      body = query.contains('household_id=eq.') && !query.contains('id=eq.$fakeSettingsUserId')
-          ? List.generate(memberCount, (i) => {'display_name': 'Member $i', 'role': i == 0 ? 'admin' : 'member'})
-          : [
-              {'household_id': activeHouseholdId, 'display_name': 'Owner', 'role': 'admin'},
-            ];
+      if (query.contains('household_id=eq.') && !query.contains('id=eq.$fakeSettingsUserId')) {
+        body = List.generate(memberCount, (i) => {'display_name': 'Member $i', 'role': i == 0 ? 'admin' : 'member'});
+      } else {
+        body = userRowExists
+            ? [
+                {'id': fakeSettingsUserId, 'household_id': activeHouseholdId, 'display_name': 'Owner', 'role': 'admin'},
+              ]
+            : const <Object>[];
+      }
     } else if (url.path.endsWith('/rest/v1/households') && request.method == 'GET') {
       householdReads++;
       if (failPaydayRead) {
@@ -213,9 +278,11 @@ class FakeSettingsHttpClient extends http.BaseClient {
         body = {'message': 'raw payday failure', 'code': 'XX000'};
       } else {
         final hid = url.queryParameters['id']?.replaceFirst('eq.', '');
-        body = [
-          {'payday_day': paydayByHousehold[hid] ?? 27},
-        ];
+        body = unreadableHouseholds.contains(hid)
+            ? const <Object>[]
+            : [
+                {'payday_day': paydayByHousehold[hid] ?? 27, 'deletion_scheduled_for': householdDeletionDates[hid]},
+              ];
       }
     } else if (url.path.endsWith('/rest/v1/transactions')) {
       lastTransactionRequest = request;
@@ -229,8 +296,15 @@ class FakeSettingsHttpClient extends http.BaseClient {
       }
     } else if (url.path.contains('/rest/v1/rpc/')) {
       final fn = url.pathSegments.last;
+      final sent = request is http.Request && request.body.isNotEmpty ? jsonDecode(request.body) : null;
+      rpcCalls.add(FakeRpcCall(fn, sent is Map ? Map<String, dynamic>.from(sent) : const {}));
+      if (rpcOffline.contains(fn)) throw http.ClientException('Connection refused', url);
       final error = rpcErrors[fn];
-      if (error != null) {
+      final refusal = rpcRefusals[fn];
+      if (refusal != null) {
+        status = refusal.status;
+        body = {'message': refusal.message, 'code': refusal.code, 'hint': refusal.hint, 'details': null};
+      } else if (error != null) {
         status = 400;
         body = {'message': error, 'code': 'P0001'};
       } else {
@@ -244,6 +318,42 @@ class FakeSettingsHttpClient extends http.BaseClient {
       request: request,
       headers: {'content-type': 'application/json; charset=utf-8'},
     );
+  }
+
+  /// What GoTrue would answer. A wrong password is a 400, a wrong code a 403; a
+  /// failed call leaves the session as it was.
+  http.StreamedResponse _answerAuth(http.BaseRequest request) {
+    http.StreamedResponse answer(int status, Object body) => http.StreamedResponse(
+          Stream.value(utf8.encode(jsonEncode(body))),
+          status,
+          request: request,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+    http.StreamedResponse refuse(int status, String code) =>
+        answer(status, {'code': status, 'error_code': code, 'msg': 'raw auth server text'});
+
+    final sent = request is http.Request && request.body.isNotEmpty
+        ? Map<String, dynamic>.from(jsonDecode(request.body) as Map)
+        : const <String, dynamic>{};
+    final path = request.url.path;
+    if (path.endsWith('/token')) {
+      authCalls.add('password:${sent['email']}');
+      if (authFailure != null) return refuse(authFailure!.status, authFailure!.code);
+      if (sent['password'] != validPassword) return refuse(400, 'invalid_credentials');
+      return answer(200, jsonDecode(_sessionJson()) as Object);
+    }
+    if (path.endsWith('/otp')) {
+      authCalls.add('otp:${sent['email']}:${sent['create_user']}');
+      if (authFailure != null) return refuse(authFailure!.status, authFailure!.code);
+      return answer(200, const <String, Object?>{});
+    }
+    if (path.endsWith('/verify')) {
+      authCalls.add('verify:${sent['email']}:${sent['type']}');
+      if (authFailure != null) return refuse(authFailure!.status, authFailure!.code);
+      if (sent['token'] != validEmailCode) return refuse(403, 'otp_expired');
+      return answer(200, jsonDecode(_sessionJson()) as Object);
+    }
+    return answer(200, const <String, Object?>{});
   }
 
   /// What PostgREST would answer: this household and cycle, by `offset` and

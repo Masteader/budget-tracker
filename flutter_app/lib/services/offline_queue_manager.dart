@@ -466,6 +466,22 @@ class OfflineQueueManager {
     );
   }
 
+  /// Removes the items (and image blobs) [userId] queued, whatever their status.
+  /// Items of another account stay. So do ownerless and unreadable ones: nothing
+  /// says they are this user's, and they may be someone else's unsynced expense.
+  /// Returns how many were removed.
+  Future<int> clearForUser(String userId) async {
+    final db = await database;
+    var removed = 0;
+    await _forEachRow(const ['pending', 'syncing', 'failed'], (id, item) async {
+      if (item?.ownerId != userId) return;
+      await db.delete(tableName, where: 'id = ?', whereArgs: [id]);
+      await _deleteBlobs(id);
+      removed++;
+    });
+    return removed;
+  }
+
   /// Clears all entries (and image blobs) from the queue.
   Future<void> clearQueue() async {
     final db = await database;

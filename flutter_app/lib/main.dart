@@ -13,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
+import 'providers/account_deletion_provider.dart';
 import 'providers/account_provider.dart';
 import 'providers/budget_provider.dart';
 import 'providers/household_role_provider.dart';
@@ -113,6 +114,7 @@ class BudgetTrackerApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => RecurringBillsProvider()),
         ChangeNotifierProvider(create: (_) => InstallmentProvider()),
         ChangeNotifierProvider(create: (_) => HouseholdRoleProvider()),
+        ChangeNotifierProvider(create: (_) => AccountDeletionProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()..init()),
         ChangeNotifierProvider(create: (_) => LocaleProvider()..init()),
       ],
@@ -184,7 +186,7 @@ class AuthGate extends StatefulWidget {
   State<AuthGate> createState() => _AuthGateState();
 }
 
-class _AuthGateState extends State<AuthGate> {
+class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   // Errors are dropped here rather than in the builder: StreamBuilder's error
   // snapshot has no data, and it can replace a session event of the same frame.
   late final Stream<AuthState> _authStates = (widget.authStates ?? supabase.auth.onAuthStateChange).transform(
@@ -208,6 +210,47 @@ class _AuthGateState extends State<AuthGate> {
   bool _hasSession = false;
   Object? _reportedAuthError;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // An account flagged for deletion that is not signed in now and whose date has
+    // passed leaves nothing on this device, even if nobody ever signs in again.
+    _accountDeletion()?.wipeDueUsers();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshAccountDeletion();
+  }
+
+  /// Null in the tests that pump the gate on its own.
+  AccountDeletionProvider? _accountDeletion() {
+    try {
+      return context.read<AccountDeletionProvider>();
+    } on ProviderNotFoundException {
+      return null;
+    }
+  }
+
+  /// Back in the foreground: the deletion date, Cancel and the household banner are
+  /// read again, because `households` has no realtime feed. A household that has
+  /// vanished (deleted, or left while away) sends the app to the active one.
+  Future<void> _refreshAccountDeletion() async {
+    final deletion = _accountDeletion();
+    if (deletion == null || _userId == null) return;
+    final vanished = await deletion.refreshOnResume();
+    if (!vanished || !mounted || _userId == null) return;
+    _initializedHouseholdId = null;
+    _retry();
+  }
+
   void _reportAuthError(BuildContext context, Object error) {
     if (identical(error, _reportedAuthError)) return;
     _reportedAuthError = error;
@@ -225,6 +268,10 @@ class _AuthGateState extends State<AuthGate> {
     if (_userId == userId && _householdFuture != null) return;
     _userId = userId;
     _householdFuture = _resolver.resolve(userId);
+    // Also for a user with no household, who can be pending too.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _accountDeletion()?.load();
+    });
   }
 
   void _retry() {
@@ -238,11 +285,13 @@ class _AuthGateState extends State<AuthGate> {
 
   void _handleSignedOut(BuildContext context) {
     if (_userId == null && _initializedHouseholdId == null) return;
+    final signedOutUserId = _userId;
     _userId = null;
     _householdFuture = null;
     _initializedHouseholdId = null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) return;
+      if (signedOutUserId != null) _accountDeletion()?.handleSignedOut(signedOutUserId);
       final onSignedOut = widget.onSignedOut;
       if (onSignedOut != null) {
         onSignedOut(context);
@@ -265,6 +314,7 @@ class _AuthGateState extends State<AuthGate> {
     _initializedHouseholdId = householdId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) return;
+      _accountDeletion()?.loadHouseholdMark(householdId);
       final onReady = widget.onHouseholdReady;
       if (onReady != null) {
         onReady(context, householdId);
