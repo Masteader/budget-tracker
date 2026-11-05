@@ -11,6 +11,7 @@ import { EarlyAccess } from './components/EarlyAccess';
 import { Footer } from './components/Footer';
 import { AuthModal } from './components/auth/AuthModal';
 import { PortalShell } from './components/portal/PortalShell';
+import { AccountDeletionPage } from './components/AccountDeletionPage';
 
 /** Arabic by default; `?lang=en` opens the English page (handy for sharing). */
 function initialLanguage(): Language {
@@ -21,7 +22,7 @@ function initialLanguage(): Language {
   }
 }
 
-export const App: React.FC = () => {
+const Site: React.FC = () => {
   const { session } = useAuth();
   const [lang, setLang] = useState<Language>(initialLanguage);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -78,5 +79,9 @@ export const App: React.FC = () => {
     </div>
   );
 };
+
+/** Checked before the session split in Site: signed-in and signed-out visitors both reach the page. */
+export const App: React.FC = () =>
+  window.location.pathname === '/delete-account' ? <AccountDeletionPage /> : <Site />;
 
 export default App;
