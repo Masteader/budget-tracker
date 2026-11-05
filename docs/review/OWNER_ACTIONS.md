@@ -103,3 +103,40 @@ For automated transactional and password reset emails sent from `budget.fmsco.co
 
 - **Apply `supabase/migrations/20261020600000_e2e_helper_rpcs_and_sub_category_visibility.sql (✅ applied to live 2026-10-21 and recorded)` to live** (SQL editor, one transaction, idempotent, no data or schema change). Not applied yet. It (a) revokes client EXECUTE on the internal helpers `household_primary_admin_id`, `nafaqah_husband_id`, `nafaqah_is_spouse_member` (E2E-04; their SECURITY DEFINER callers keep working, and a guard block aborts the migration if any policy or invoker function on live depends on them), and (b) limits `cost_control_sub_categories` reads to rows whose parent category the caller can see, revoking client writes and anon access (E2E-05). The deployed app keeps working: it reads that table only for its own categories and never writes it. Deploy the backend from this branch for the API half (E2E-03 422 and E2E-05 listing); the order does not matter. Rollback statements are at the end of the migration file.
 - Residual (product decision, not a bug fix): sub-category definitions under **system** categories stay shared by every household, so an admin who adds one under e.g. `OPEX-DINING` makes it visible to all households, and two households that create the same custom code share its definitions. Removing that needs a `household_id` on `cost_control_sub_categories` (breaking schema change).
+
+## In-app account deletion (2026-11-05)
+
+None of this is done, and nothing is deployed. Each step needs explicit approval, in the order in section 6 of [the plan](../superpowers/plans/2026-11-05-account-deletion-corrected.md): migrations, then `ai_service` and the worker, then the app build.
+
+> [!IMPORTANT]
+> Enable the worker in the same release as the page and the app. The page states the 30-day deletion and the 90-day removal of form requests, and only the worker makes those true.
+
+### Stores
+- **Play Console:** set the Data safety account deletion URL. The candidate is `https://budget.fmsco.com.sa/delete-account`; confirm the domain. Keep the Data safety answers in line with the page.
+- **App Store Connect:** review notes with a test account, App Privacy answers, privacy URL.
+- **AppGallery:** the requirement is unconfirmed, because Huawei's policy page timed out when this was planned. Check the User Privacy chapter of its Review Guidelines.
+
+### Railway
+- Create the Cron service as in [the runbook](../runbooks/account-deletion-purge.md): same image, start command `python account_deletion_worker.py`, schedule `17 * * * *`, `SUPABASE_URL` and `SUPABASE_SECRET_KEY` as on the API. Run it first with `ACCOUNT_DELETION_PURGE_ENABLED` unset, then set it to `1` once approved.
+- Confirm `RESEND_API_KEY` or the `SMTP_*` variables, with `MAIL_FROM` and `CONTACT_RECIPIENT_EMAIL`. The page says "we may email", so it stays true without them, and purges still run.
+- The one switch turns on purges and emails together. If mail variables are on the Cron service, enabling it sends reminders to real users and alerts to the developer. To enable purges before approving reminders, leave them off that service, which also means no failure alerts: check the runbook's health queries instead.
+
+### Supabase
+- Run the read-only checks in `docs/review/audit/account_deletion_preflight_checks.sql`, section 4 before the migrations.
+- Apply the migrations one per run, in filename order.
+- Confirm the Magic Link email template includes `{{ .Token }}`. The app's forgotten-password fallback at re-auth asks for that code.
+- Drop `budgets_spent_backup_20261019` when ready. It exists only on live, and the purge does not touch it.
+
+### Decide how form requests are handled
+The public form stores a row and emails the developer; nothing acts on it. `request_account_deletion` only works for the signed-in user, so there is no tool to schedule a deletion for someone else. Decide how a request is verified and carried out before the page goes live, because the page tells visitors that a person handles it. Rows are removed after 90 days whether or not anyone acted on them, and when mail is down the row is the only copy. This read-only query lists what is waiting:
+
+```sql
+SELECT reference, email, locale, status, created_at
+FROM public.inquiries
+WHERE type = 'account_deletion'
+ORDER BY created_at;
+```
+
+### Review
+- **Legal:** confirm the position on retained rows ("Deleted member") under PDPL and store policy.
+- **Native speakers:** review the Arabic and Urdu in `ai_service/account_deletion_notices.py` and in `deleteAccountTranslations` (`web_app/src/i18n/translations.ts`).
