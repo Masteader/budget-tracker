@@ -149,8 +149,48 @@ None of this is done, and nothing is deployed. Each step needs explicit approval
   - **`REVOKE TRUNCATE` on `public.inquiries` has been run by hand.** `20261105000600_limit_anonymous_contact_form.sql` is fine after it, and removes the anonymous insert policy still on `inquiries`. On a database without the templates table or the two functions, it skips those parts with a notice and still locks down `inquiries`.
   - **`20261105000700_sub_categories_household_scope.sql`** creates its read policy only where `cost_control_sub_categories.household_id` exists, which `20261026120000` adds. Without that column it leaves the existing read policy alone, says so in a notice, and still removes client writes.
   - `000600` and `000700` are safe to run again. A whole `supabase/tests/run_tests.py --rebuild` proves the batch on the full chain, in the hotfix-first order, on a database built without `20261026120000`, and on live's measured state.
+- **Running a batch file a second time.** Checked on a throwaway Postgres 17 copy of the built chain (2026-11-06). Exiting cleanly does not make a re-run harmless. Some files put back their own older version of a function that a later file replaced:
+
+| File | Second run | What it changes | To put it right |
+|---|---|---|---|
+| `000000` | Runs cleanly | Puts back its own `handover_households_on_user_delete`, losing `000100`'s | Run that function's `CREATE OR REPLACE FUNCTION` statement from `000100` |
+| `000100` | Refused at its first DDL (`account_deletion_requests` already exists); nothing changes | Nothing | Nothing |
+| `000200` | Runs cleanly | Puts back its own `cancel_account_deletion` and `request_account_deletion`, losing `000800`'s (cancel while processing, the server's word fold) | Run those two functions' statements from `000800` |
+| `000300` | Runs cleanly | Puts back its own `complete_account_purge`, `list_account_deletion_notices_due` and `mark_account_deletion_notice_sent` | Run `000400`, then `000900`, then the `complete_account_purge` statement from `000800` |
+| `000400` | Runs cleanly | Puts back its own `list_account_deletion_notices_due`, losing `000900`'s 2-day window | Run `000900` |
+| `000800` | Refused at its first DDL (`initiated_by` already exists); nothing changes | Nothing | Nothing |
+| `000500`, `000600`, `000700`, `000900`, `001000`, `001100` | Run cleanly | Nothing | Nothing |
+
+  So re-run `000000`, `000200`, `000300` or `000400` only before the next file has run. Each fix in the last column was checked: afterwards every function, trigger, table, column, policy, constraint, index and privilege matches the built chain. The later files' own post-checks in the table above confirm it as well.
 - Confirm the Magic Link email template includes `{{ .Token }}`. The app's forgotten-password fallback at re-auth asks for that code.
 - Drop `budgets_spent_backup_20261019` when ready. It exists only on live, and the purge does not touch it.
+
+#### Rolling back
+Everything here is inert until the app and the worker ship: no client reaches the new tables except through the new RPCs, and only the new app, the delete-account page and the worker call those RPCs. Roll back the app, the page and the worker first, then the database.
+
+- **`20261105000000` (ledger FKs): leave it.** Restoring `ON DELETE CASCADE` on `income_records.user_id` would bring back the bug where deleting a member's account lowered a shared pool. Its nullable columns and `SET NULL` keys are harmless without the rest.
+- **`000100` to `000900` (the account deletion files `000100`, `000200`, `000300`, `000400`, `000800` and `000900`):** run [`account_deletion_rollback.sql`](account_deletion_rollback.sql), one transaction.
+  - It puts back the three existing functions `000100` replaced (`handover_households_on_user_delete`, `maintain_household_primary_admin`, `transfer_primary_admin`), as `000000` left them. Their new versions read what is dropped next.
+  - Then it drops the four triggers, the 40 functions, the three tables (`account_deletion_requests`, `account_deletion_storage_queue`, `account_deletion_worker_runs`) and the three `households.deletion_*` columns.
+  - It leaves `000500`, `000600`, `000700`, `001000` and `001100`, which use none of it. It also leaves the `inquiries` type check allowing `account_deletion`, because rows of that type may exist.
+  - **Checked on a throwaway Postgres 17 copy of the built chain.** Afterwards the schema is the chain built without those six files, except that `inquiries` check. That covers functions and their privileges, triggers, tables, columns, policies, constraints and indexes. Every database test except the ten that test account deletion (37–40, 44, 45, 50–53) passes on it, including 16 (sole-admin account deletion) and 36 (the ledger FKs).
+  - **Data lost:** every deletion request (open, cancelled and completed tombstones), the storage queue, the worker's run log and the households' deletion marks.
+- **Pre-checks (read-only), with `ACCOUNT_DELETION_PURGE_ENABLED` unset first:**
+  - `SELECT status, stage, count(*) FROM public.account_deletion_requests GROUP BY 1, 2;` shows no row with `stage` other than `none`. Such a job has already deleted data; finish it with the worker first, or it is left half done.
+  - `SELECT count(*) FROM public.account_deletion_storage_queue;` is 0.
+  - Note `SELECT count(*) FROM public.households WHERE deletion_requested_by IS NOT NULL;`. Those households lose their marks and are not deleted.
+- **Post-check (read-only):** this returns `0|0|0|0|0`. Before the rollback it returns `40|3|4|3|3`.
+
+```sql
+SELECT
+ (SELECT count(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace AND proname ~ '(account_deletion|account_purge)') AS deletion_functions,
+ (SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' AND relname LIKE 'account_deletion%') AS deletion_tables,
+ (SELECT count(*) FROM pg_trigger WHERE tgname LIKE 'trg_account_deletion%') AS deletion_triggers,
+ (SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'households' AND column_name LIKE 'deletion_%') AS household_mark_columns,
+ (SELECT count(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace AND proname IN ('handover_households_on_user_delete', 'maintain_household_primary_admin', 'transfer_primary_admin') AND prosrc ~ '(account_deletion|deletion_requested)') AS restored_functions_still_new;
+```
+
+- `001000` and `001100` have their own rollback statements in their headers, independent of this.
 
 ### Handle form requests
 The public form stores a row and emails the developer; nothing acts on it by itself. The developer verifies the person and schedules the ordinary 30-day deletion with `ai_service/scripts/account_deletion_operator.py`, following [the runbook](../runbooks/account-deletion-purge.md#requests-from-the-public-form). If someone has lost access to the account's email, the developer escalates to you, and nothing happens without other identity evidence. Rows are removed after 90 days whether or not anyone acted on them, and when mail is down the row is the only copy. This read-only query lists what is waiting:
