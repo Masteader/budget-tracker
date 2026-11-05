@@ -87,3 +87,33 @@ SELECT source, type, count(*), min(created_at) AS first_seen, max(created_at) AS
 FROM public.inquiries
 WHERE reference !~ '^[0-9a-f]{12}$' OR source NOT IN ('web', 'landing', 'app')
 GROUP BY 1, 2;
+
+
+-- ── 3. Cross-household sub-category reads and client writes (fixed by 20261105000700) ──
+
+-- 3a. Does the bug exist? It does when this returns the _select_autonomous policy, or any
+-- policy that is not for SELECT.
+SELECT policyname, cmd, roles, qual
+FROM pg_policies
+WHERE schemaname = 'public' AND tablename = 'cost_control_sub_categories';
+
+-- 3b. What clients can do. After the fix: anon nothing, authenticated select only.
+SELECT r.rolname AS role,
+       has_table_privilege(r.rolname, 'public.cost_control_sub_categories', 'SELECT') AS can_select,
+       has_table_privilege(r.rolname, 'public.cost_control_sub_categories', 'INSERT') AS can_insert,
+       has_table_privilege(r.rolname, 'public.cost_control_sub_categories', 'UPDATE') AS can_update,
+       has_table_privilege(r.rolname, 'public.cost_control_sub_categories', 'DELETE') AS can_delete
+FROM (VALUES ('anon'), ('authenticated')) AS r(rolname);
+
+-- 3c. How many names were exposed. Counts only, because the names are private:
+--   custom_parent: NULL-household rows under another household's custom category.
+--   old_api_name: NULL-household 'sub-' rows under a system category. The fix hides these
+--     from clients. Check the code before relying on the count: a row may be seeded on live
+--     under a 'sub-' code that the repo does not have, which would then be hidden too.
+SELECT
+    count(*) FILTER (WHERE c.household_id IS NOT NULL) AS custom_parent,
+    count(*) FILTER (WHERE c.household_id IS NULL AND s.sub_code LIKE 'sub-%') AS old_api_name,
+    count(*) FILTER (WHERE c.household_id IS NULL AND s.sub_code NOT LIKE 'sub-%') AS catalog
+FROM public.cost_control_sub_categories s
+LEFT JOIN public.cost_control_codes c ON c.code = s.parent_code
+WHERE s.household_id IS NULL;
