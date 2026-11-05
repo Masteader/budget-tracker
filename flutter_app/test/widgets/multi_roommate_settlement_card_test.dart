@@ -152,7 +152,7 @@ void main() {
 
     expect(callbackCalled, isTrue);
     expect(capturedRequest, isNotNull);
-    expect(capturedRequest!.notes, 'Tariq \u2192 Ahmed \u00B7 stc_pay');
+    expect(capturedRequest!.notes, roommateSettlementNote(from: 'Tariq', to: 'Ahmed', method: 'stc_pay'));
   });
 
   testWidgets('MultiRoommateSettlementCard stores a language-neutral note from an Arabic screen', (tester) async {
@@ -197,7 +197,7 @@ void main() {
 
     expect(capturedRequest, isNotNull);
     // The same note whatever language the payer uses: it is read by everyone.
-    expect(capturedRequest!.notes, 'Tariq \u2192 Ahmed \u00B7 stc_pay');
+    expect(capturedRequest!.notes, roommateSettlementNote(from: 'Tariq', to: 'Ahmed', method: 'stc_pay'));
   });
 
   group('the stored note (S10)', () {
@@ -244,14 +244,15 @@ void main() {
     for (final lang in ['en', 'ar', 'ur']) {
       testWidgets('$lang: names and the method code, the same in every language', (tester) async {
         final req = await settle(tester, 'Omar', 'Sami', lang: lang, chip: 'pay_method_cash');
-        expect(req!.notes, 'Omar \u2192 Sami \u00B7 cash');
+        expect(req!.notes, roommateSettlementNote(from: 'Omar', to: 'Sami', method: 'cash'));
         expect(req.paymentMethod, 'cash');
       });
     }
 
     testWidgets('a name that looks like a placeholder is stored as written', (tester) async {
       final req = await settle(tester, '{to}', 'Omar');
-      expect(req!.notes, '{to} \u2192 Omar \u00B7 stc_pay');
+      expect(req!.notes, roommateSettlementNote(from: '{to}', to: 'Omar', method: 'stc_pay'));
+      expect(req.notes, contains('{to}'));
     });
 
     testWidgets('Arabic names stay searchable in the note', (tester) async {

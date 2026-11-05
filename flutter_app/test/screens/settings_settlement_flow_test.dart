@@ -8,6 +8,7 @@ import 'package:budget_tracker/models/models.dart';
 import 'package:budget_tracker/providers/locale_provider.dart';
 import 'package:budget_tracker/providers/theme_provider.dart';
 import 'package:budget_tracker/screens/settings/settings_screen.dart';
+import 'package:budget_tracker/services/api/base_api_client.dart';
 import 'package:budget_tracker/services/api_service.dart';
 import 'package:budget_tracker/theme/app_themes.dart';
 import 'package:budget_tracker/widgets/dashboard/multi_roommate_settlement_card.dart';
@@ -189,6 +190,29 @@ void main() {
       hold.complete();
       await _settle(tester);
       expect(find.text(_en.get('settle_all_settled')), findsOneWidget);
+    });
+
+    testWidgets('a timeout after the server committed: reloaded, nothing left to tap twice', (tester) async {
+      var recorded = 0;
+      _api.onRecordPayment = (_) async {
+        // The server stores the row; its answer is lost on the way back.
+        recorded++;
+        _api.byHousehold[_a] = _settled;
+        throw const ApiRequestException('timed out', noResponse: true);
+      };
+      await _pump(tester);
+      await _openSettlement(tester);
+      final before = _api.settlementCallCount;
+
+      await _recordSettlement(tester);
+
+      expect(recorded, 1);
+      expect(find.text(_en.get('settle_unconfirmed_msg')), findsOneWidget);
+      expect(find.text(_en.get('settle_record_failed_msg')), findsNothing);
+      expect(find.widgetWithText(ElevatedButton, _en.get('settle_record_payment')), findsNothing);
+      expect(_api.settlementCallCount, before + 2, reason: 'the card and the section both reload');
+      expect(find.text(_en.get('settle_all_settled')), findsOneWidget);
+      expect(_settleButton, findsNothing);
     });
 
     testWidgets('a failed refetch offers Retry, not the debt that was just settled', (tester) async {

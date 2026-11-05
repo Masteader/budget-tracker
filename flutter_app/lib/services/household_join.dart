@@ -89,14 +89,18 @@ void checkInviteClaimResponse(Map<String, dynamic> response) {
 
 /// The server's English refusals (`RAISE EXCEPTION` and `{success: false,
 /// error}` in `join_household_by_code`, `claim_household_role_invite`,
-/// `create_household_and_claim`, `leave_household` and the last-admin trigger)
-/// and the key that says the same in the user's language.
+/// `create_household_and_claim`, `leave_household` and the last-admin trigger,
+/// and `supabase_client.claim_household_role_invite`, whose route re-raises only
+/// the text) and the key that says the same in the user's language.
 const Map<String, String> _refusalKeys = {
   'too many failed join attempts': 'hh_join_rate_limited',
   'invite code has expired': 'hh_invite_expired',
   'invite code has already been used': 'hh_invite_used',
   'invalid, expired, or already used invite code': 'hh_invite_invalid',
   'invalid invite code': 'hh_invite_invalid',
+  'invite code is invalid': 'hh_invite_invalid',
+  'already a member of this household': 'hh_already_member',
+  'does not fit this household type': 'hh_invite_role_mismatch',
   'household creation limit reached': 'set_household_limit_reached',
   'sole admin cannot leave': 'set_leave_promote_admin_first',
   'cannot remove the sole admin': 'set_leave_promote_admin_first',

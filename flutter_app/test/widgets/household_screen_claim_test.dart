@@ -1,3 +1,4 @@
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -231,6 +232,42 @@ void main() {
       expect(find.text('You are already a member of this household.'), findsOneWidget);
       expect(find.text('Joined Dashboard Test'), findsNothing);
       expect(find.textContaining('Exception'), findsNothing);
+    });
+
+    testWidgets('a claim that does not fit the household type gives the localized reason', (tester) async {
+      var joinCalls = 0;
+      await pumpJoin(
+        tester,
+        client: inviteClient(
+          onClaim: (_) => http.Response(jsonEncode({'detail': 'This invite does not fit this household type; ask the admin for a new invite'}), 400),
+        ),
+        joinHandler: (_) async {
+          joinCalls++;
+          return {'id': 'hh-123', 'name': 'Household'};
+        },
+      );
+      expect(joinCalls, 0);
+      expect(find.text(AppLocalizations(const Locale('en')).get('hh_invite_role_mismatch')), findsOneWidget);
+      expect(find.textContaining('ask the admin'), findsNothing);
+    });
+
+    testWidgets('a join refused with a raised error gives the localized reason, not its text', (tester) async {
+      await pumpJoin(
+        tester,
+        client: inviteClient(onClaim: (_) => http.Response('{}', 500)),
+        joinHandler: (_) async => throw const PostgrestException(message: 'Too many failed join attempts. Please try again in 15 minutes.'),
+      );
+      expect(find.text(AppLocalizations(const Locale('en')).get('hh_join_rate_limited')), findsOneWidget);
+      expect(find.textContaining('Too many failed join'), findsNothing);
+    });
+
+    testWidgets('a join failing with unknown server text shows the generic failure', (tester) async {
+      await pumpJoin(
+        tester,
+        client: inviteClient(onClaim: (_) => http.Response('{}', 500)),
+        joinHandler: (_) async => throw const PostgrestException(message: 'RAW_SERVER_DETAIL'),
+      );
+      expect(find.textContaining('RAW_SERVER_DETAIL'), findsNothing);
     });
 
     testWidgets('a claim refused with 400 shows the server reason and stops before joining', (tester) async {

@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 Widget _app(Widget child, {String lang = 'en'}) => MaterialApp(
       locale: Locale(lang),
@@ -203,7 +204,7 @@ void main() {
   });
 
   group('onboarding: create asks Family vs Roommates', () {
-    Future<List<Map<String, dynamic>>> create(WidgetTester tester, {String? type}) async {
+    Future<List<Map<String, dynamic>>> create(WidgetTester tester, {String? type, Object? createError}) async {
       final calls = <Map<String, dynamic>>[];
       await tester.binding.setSurfaceSize(const Size(800, 1600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -220,6 +221,7 @@ void main() {
             destinationBuilder: (_) => const Text('home-screen'),
             createRpc: (fn, params) async {
               calls.add(params);
+              if (createError != null) throw createError;
               return {'id': 'hh-new', 'name': params['p_name'], 'invite_code': 'ABCD1234'};
             },
           ),
@@ -240,6 +242,25 @@ void main() {
       final calls = await create(tester);
       expect(calls, isEmpty);
       expect(find.text('Choose Family or Roommates first.'), findsOneWidget);
+    });
+
+    testWidgets('a refused creation gives the localized reason, not the server text', (tester) async {
+      await create(
+        tester,
+        type: 'family',
+        createError: const PostgrestException(message: 'Household creation limit reached (maximum 5 households per user)'),
+      );
+      await tester.pump();
+      expect(find.text(AppLocalizations(const Locale('en')).get('set_household_limit_reached')), findsOneWidget);
+      expect(find.textContaining('creation limit'), findsNothing);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('a creation failing with unknown text shows no server text', (tester) async {
+      await create(tester, type: 'family', createError: Exception('RAW_SERVER_DETAIL'));
+      await tester.pump();
+      expect(find.textContaining('RAW_SERVER_DETAIL'), findsNothing);
+      await tester.pump(const Duration(seconds: 5));
     });
 
     testWidgets('the chosen type is sent with the name', (tester) async {

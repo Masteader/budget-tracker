@@ -2,10 +2,11 @@
 library;
 
 import 'package:flutter/material.dart';
+
+import '../../utils/failure_log.dart';
 import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../main.dart';
 import '../../models/models.dart';
@@ -131,10 +132,9 @@ class _HouseholdScreenState extends State<HouseholdScreen>
           (route) => false,
         );
       }
-    } on PostgrestException catch (e) {
-      _showError(e.message);
     } catch (e) {
-      _showError(e.toString());
+      logFailure('HouseholdScreen.create', e);
+      if (mounted) _showError(householdJoinErrorText(context, e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -203,9 +203,8 @@ class _HouseholdScreenState extends State<HouseholdScreen>
           (route) => false,
         );
       }
-    } on PostgrestException catch (e) {
-      _showError(e.message);
     } catch (e) {
+      logFailure('HouseholdScreen.join', e);
       if (mounted) _showError(householdJoinErrorText(context, e));
     } finally {
       if (mounted) setState(() => _loading = false);
