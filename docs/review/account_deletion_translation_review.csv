@@ -1,0 +1,308 @@
+﻿key,where_it_appears,english,arabic,urdu,reviewer_notes
+app_title_short,app,Qawam Money,قوام المال,Qawam Money,
+sign_out_unsynced_title,app,Unsynced Transactions,معاملات غير متزامنة,غیر مطابقت پذیر لین دین,
+auth_sign_in_unverified,app,We could not verify your sign-in. Please sign in again or request a new link.,تعذر التحقق من تسجيل دخولك. سجّل الدخول مرة أخرى أو اطلب رابطًا جديدًا.,آپ کے سائن ان کی تصدیق نہیں ہو سکی۔ براہ کرم دوبارہ سائن ان کریں یا نیا لنک طلب کریں۔,
+settle_unconfirmed_title,app,Not Confirmed,تعذّر التأكيد,تصدیق نہیں ہو سکی,
+settle_unconfirmed_msg,app,We couldn't confirm this payment. Check the balance before recording it again.,تعذّر علينا تأكيد هذه الدفعة. راجع الرصيد قبل تسجيلها مرة أخرى.,ہم اس ادائیگی کی تصدیق نہیں کر سکے۔ دوبارہ درج کرنے سے پہلے بیلنس چیک کریں۔,
+set_export_empty_cycle,app,No transactions to export for {cycle}.,لا توجد معاملات للتصدير في الفترة {cycle}.,{cycle} کے لیے ایکسپورٹ کرنے کو کوئی لین دین نہیں۔,
+hh_join_rate_limited,app,Too many failed attempts. Please try again in 15 minutes.,محاولات فاشلة كثيرة. أعد المحاولة بعد 15 دقيقة.,بہت زیادہ ناکام کوششیں۔ براہ کرم 15 منٹ بعد دوبارہ کوشش کریں۔,
+hh_invite_expired,app,This invite code has expired. Ask for a new one.,انتهت صلاحية رمز الدعوة. اطلب رمزًا جديدًا.,اس دعوتی کوڈ کی میعاد ختم ہو چکی ہے۔ نیا کوڈ مانگیں۔,
+hh_invite_used,app,This invite code has already been used. Ask for a new one.,تم استخدام رمز الدعوة هذا من قبل. اطلب رمزًا جديدًا.,یہ دعوتی کوڈ پہلے ہی استعمال ہو چکا ہے۔ نیا کوڈ مانگیں۔,
+hh_invite_invalid,app,This invite code isn't valid. Check it or ask for a new one.,رمز الدعوة غير صالح. تحقق منه أو اطلب رمزًا جديدًا.,یہ دعوتی کوڈ درست نہیں۔ اسے چیک کریں یا نیا کوڈ مانگیں۔,
+set_household_limit_reached,app,You can manage up to 5 households. Leave one or hand it to another admin before creating a new one.,يمكنك إدارة 5 منازل كحد أقصى. غادر أحدها أو سلّمه لمشرف آخر قبل إنشاء منزل جديد.,آپ زیادہ سے زیادہ 5 گھرانے سنبھال سکتے ہیں۔ نیا بنانے سے پہلے کوئی ایک چھوڑ دیں یا کسی دوسرے ایڈمن کے حوالے کریں۔,
+set_leave_promote_admin_first,app,"You are this household's only admin. Make another member an admin, then leave.",أنت المشرف الوحيد لهذا المنزل. عيّن عضوًا آخر مشرفًا ثم غادر.,آپ اس گھرانے کے واحد ایڈمن ہیں۔ پہلے کسی اور رکن کو ایڈمن بنائیں، پھر گھرانہ چھوڑیں۔,
+deleted_member,app,Deleted member,عضو محذوف,حذف شدہ رکن,
+del_banner_title,app,This household is scheduled for deletion,حذف هذا المنزل مجدول,یہ گھرانہ حذف ہونے والا ہے,
+del_banner_date,app,"Everything in it, including your account entries here, will be deleted on {date}.",سيُحذف كل ما فيه، بما في ذلك قيود حساباتك هنا، بتاريخ {date}.,{date} کو اس کی ہر چیز حذف ہو جائے گی، بشمول یہاں آپ کے اکاؤنٹ اندراجات۔,
+del_banner_export,app,Export what you want to keep from Settings before then.,صدّر ما تريد الاحتفاظ به من الإعدادات قبل ذلك.,جو رکھنا چاہیں اسے اس سے پہلے سیٹنگز سے ایکسپورٹ کر لیں۔,
+del_member_row_note,app,Involves a member who has deleted their account.,يتعلق بعضو حذف حسابه.,اس میں وہ رکن شامل ہے جس نے اپنا اکاؤنٹ حذف کر دیا ہے۔,
+del_delete_account,app,Delete account,حذف الحساب,اکاؤنٹ حذف کریں,
+del_step_of,app,Step {current} of {total},الخطوة {current} من {total},مرحلہ {current} از {total},
+del_continue,app,Continue,متابعة,جاری رکھیں,
+del_consequences_title,app,What deleting your account means,ماذا يعني حذف حسابك,اکاؤنٹ حذف کرنے کا مطلب,
+del_grace_body,app,"Your account is deleted for good 30 days after you confirm. Until then it works as usual, and you can cancel at any time.",يُحذف حسابك نهائيًا بعد 30 يومًا من تأكيدك. حتى ذلك الحين يعمل كالمعتاد، ويمكنك الإلغاء في أي وقت.,آپ کی تصدیق کے 30 دن بعد اکاؤنٹ ہمیشہ کے لیے حذف ہو جائے گا۔ تب تک یہ معمول کے مطابق چلے گا اور آپ کسی بھی وقت منسوخ کر سکتے ہیں۔,
+del_cancel_only_note,app,Signing in does not cancel the deletion. Only the Cancel button does.,تسجيل الدخول لا يلغي الحذف. وحده زر الإلغاء يفعل ذلك.,لاگ ان کرنے سے حذف منسوخ نہیں ہوتا۔ صرف منسوخ کا بٹن ہی ایسا کرتا ہے۔,
+del_personal_data,app,"Your profile, your personal accounts and their entries are deleted.",يُحذف ملفك الشخصي وحساباتك الشخصية وقيودها.,آپ کا پروفائل، ذاتی اکاؤنٹس اور ان کے اندراجات حذف ہو جائیں گے۔,
+del_shared_rows,app,"Expenses you recorded in a household that stays are kept for its members and shown as ""Deleted member"". Your notes on them are removed and their receipt images are deleted.","تبقى المصروفات التي سجلتها في منزل مستمر لأعضائه وتظهر باسم ""عضو محذوف"". تُزال ملاحظاتك عليها وتُحذف صور إيصالاتها.","جو گھرانہ باقی رہے گا اس میں آپ کے درج کردہ اخراجات اس کے ارکان کے لیے رہیں گے اور ""حذف شدہ رکن"" کے نام سے دکھیں گے۔ ان پر آپ کے نوٹس ہٹا دیے جائیں گے اور رسید کی تصاویر حذف ہو جائیں گی۔",
+del_settlement_warning,app,"Debts between the people who stay can change: what you paid stops counting in their settlements, and roommates' equal shares for this cycle are worked out again. Account balances and budget spending do not change.",قد تتغير الديون بين من يبقون: لا يعود ما دفعته محسوبًا في تسوياتهم، وتُعاد حساب الحصص المتساوية بين شركاء السكن لهذه الدورة. لا تتغير أرصدة الحسابات ولا إنفاق الميزانيات.,باقی رہنے والوں کے درمیان قرض بدل سکتے ہیں: آپ کی ادائیگی ان کے حساب میں شمار نہیں رہے گی، اور روم میٹس کے برابر حصے اس سائیکل کے لیے دوبارہ نکالے جائیں گے۔ اکاؤنٹ بیلنس اور بجٹ کے اخراجات نہیں بدلیں گے۔,
+del_wife_ledger_member,app,"If you are the wife in a family household, your allowance and reimbursement records there are deleted.",إن كنتِ الزوجة في منزل عائلي، تُحذف سجلات مصروفك ومستحقاتك فيه.,اگر آپ کسی خاندانی گھرانے میں بیوی ہیں تو وہاں آپ کے الاؤنس اور واپسی کے ریکارڈ حذف ہو جائیں گے۔,
+del_household_delete_warning,app,"Deleting a household removes everything in it for everyone: shared accounts, all members' account entries in it, budgets, and the wife's allowance and reimbursement ledger. Members keep their logins but no longer belong to it. Export what you need first.",حذف المنزل يزيل كل ما فيه للجميع: الحسابات المشتركة، وقيود حسابات جميع الأعضاء فيه، والميزانيات، وسجل مصروف الزوجة ومستحقاتها. يحتفظ الأعضاء بحساباتهم لكنهم لا يعودون ينتمون إليه. صدّر ما تحتاجه أولًا.,گھرانہ حذف کرنے سے اس کی ہر چیز سب کے لیے ختم ہو جاتی ہے: مشترکہ اکاؤنٹس، اس میں تمام ارکان کے اکاؤنٹ اندراجات، بجٹ، اور بیوی کا الاؤنس اور واپسی کا کھاتہ۔ ارکان کا لاگ ان باقی رہے گا لیکن وہ اس کا حصہ نہیں رہیں گے۔ پہلے جو ضروری ہو ایکسپورٹ کر لیں۔,
+del_your_households,app,Your households,منازلك,آپ کے گھرانے,
+del_pos_member,app,{name}: you leave this household. It stays for the other members.,{name}: تغادر هذا المنزل، ويبقى لبقية الأعضاء.,{name}: آپ یہ گھرانہ چھوڑ دیں گے۔ یہ باقی ارکان کے لیے رہے گا۔,
+del_pos_sole,app,"{name}: you are its only member, so the household and everything in it are deleted.",{name}: أنت عضوه الوحيد، لذا يُحذف المنزل وكل ما فيه.,{name}: آپ اس کے واحد رکن ہیں، اس لیے گھرانہ اور اس کی ہر چیز حذف ہو جائے گی۔,
+del_pos_primary,app,"{name}: you administer it, so you choose next: hand it over to a member, or delete it.",{name}: أنت تشرف عليه، لذا ستختار تاليًا: تسليمه لعضو أو حذفه.,{name}: آپ اس کے ایڈمن ہیں، اس لیے آگے آپ انتخاب کریں گے: کسی رکن کو سونپیں یا حذف کریں۔,
+del_pos_coadmin,app,{name}: you leave as co-admin. The household stays with its primary admin.,{name}: تغادر بصفتك مشرفًا مساعدًا، ويبقى المنزل مع مشرفه الرئيسي.,{name}: آپ معاون ایڈمن کے طور پر چھوڑ دیں گے۔ گھرانہ اپنے مرکزی ایڈمن کے پاس رہے گا۔,
+del_sync_first_title,app,Items waiting to sync,عناصر بانتظار المزامنة,سنک کے منتظر آئٹمز,
+del_sync_first_body,app,Some entries on this device have not reached the server. Sync them first if you want them included in your export and your household.,بعض القيود على هذا الجهاز لم تصل إلى الخادم. زامنها أولًا إن أردت أن تكون ضمن تصديرك ومنزلك.,اس ڈیوائس پر کچھ اندراجات سرور تک نہیں پہنچے۔ اگر آپ انہیں اپنی ایکسپورٹ اور گھرانے میں شامل چاہتے ہیں تو پہلے سنک کر لیں۔,
+del_sync_first_done,app,Everything is synced.,تمت مزامنة كل شيء.,سب کچھ سنک ہو گیا۔,
+del_sync_first_still,app,Some items could not sync yet. You can try again or continue without them.,تعذرت مزامنة بعض العناصر حتى الآن. يمكنك المحاولة مرة أخرى أو المتابعة بدونها.,کچھ آئٹمز ابھی سنک نہیں ہو سکے۔ آپ دوبارہ کوشش کر سکتے ہیں یا ان کے بغیر جاری رکھ سکتے ہیں۔,
+del_choice_title,app,Choose for each household,اختر لكل منزل,ہر گھرانے کے لیے انتخاب کریں,
+del_choice_transfer,app,Hand over to a member and leave,التسليم لعضو ثم المغادرة,کسی رکن کو سونپ کر چھوڑ دیں,
+del_choice_transfer_note,app,"The handover happens as soon as you confirm. You stay a co-admin until your account is deleted. If you cancel later, the new primary admin keeps the role.",يتم التسليم فور تأكيدك. تبقى مشرفًا مساعدًا حتى يُحذف حسابك. وإذا ألغيت لاحقًا يحتفظ المشرف الرئيسي الجديد بالدور.,تصدیق کرتے ہی ذمہ داری منتقل ہو جائے گی۔ اکاؤنٹ حذف ہونے تک آپ معاون ایڈمن رہیں گے۔ اگر بعد میں منسوخ کریں تو نیا مرکزی ایڈمن اپنا عہدہ برقرار رکھے گا۔,
+del_choice_delete,app,Delete this household,حذف هذا المنزل,یہ گھرانہ حذف کریں,
+del_choice_pick_member,app,Who takes over?,من يتولى الإشراف؟,ذمہ داری کون سنبھالے گا؟,
+del_choice_pending_label,app,Scheduled for deletion,حذف الحساب مجدول,حذف ہونے والا ہے,
+del_choice_no_successor,app,"Every other member is scheduled for deletion, so this household can only be deleted.",حذف حساب جميع الأعضاء الآخرين مجدول، لذا لا يمكن إلا حذف هذا المنزل.,باقی تمام ارکان حذف ہونے والے ہیں، اس لیے یہ گھرانہ صرف حذف ہی ہو سکتا ہے۔,
+del_reauth_title,app,Confirm it is you,أكّد هويتك,تصدیق کریں کہ یہ آپ ہیں,
+del_reauth_body,app,Enter the password for {email}.,أدخل كلمة المرور الخاصة بـ {email}.,{email} کا پاس ورڈ درج کریں۔,
+del_reauth_password,app,Password,كلمة المرور,پاس ورڈ,
+del_reauth_forgot,app,Forgot your password? Email me a code,نسيت كلمة المرور؟ أرسل لي رمزًا بالبريد,پاس ورڈ بھول گئے؟ مجھے ای میل پر کوڈ بھیجیں,
+del_reauth_code_sent,app,We sent a code to {email}. Enter it here.,أرسلنا رمزًا إلى {email}. أدخله هنا.,ہم نے {email} پر کوڈ بھیجا ہے۔ اسے یہاں درج کریں۔,
+del_reauth_code,app,Code from your email,الرمز من بريدك,آپ کی ای میل کا کوڈ,
+del_reauth_resend,app,Send the code again,إعادة إرسال الرمز,کوڈ دوبارہ بھیجیں,
+del_reauth_use_password,app,Use my password instead,استخدام كلمة المرور بدلًا من ذلك,اس کے بجائے پاس ورڈ استعمال کریں,
+del_typed_title,app,One last step,خطوة أخيرة,آخری مرحلہ,
+del_confirm_word,app,DELETE,حذف,حذف کریں,
+del_typed_body,app,"To confirm, type {word} below.",للتأكيد، اكتب {word} في الأسفل.,تصدیق کے لیے نیچے {word} لکھیں۔,
+del_typed_hint,app,Type the word here,اكتب الكلمة هنا,لفظ یہاں لکھیں,
+del_confirm_button,app,Delete my account,احذف حسابي,میرا اکاؤنٹ حذف کریں,
+del_result_title,app,Your account is scheduled for deletion,حذف حسابك مجدول,آپ کا اکاؤنٹ حذف ہونے کے لیے طے ہو گیا ہے,
+del_pending_date,app,It will be deleted on {date}.,سيُحذف بتاريخ {date}.,یہ {date} کو حذف ہو جائے گا۔,
+del_pending_marked,app,Also deleted on that date: {names},يُحذف أيضًا في ذلك التاريخ: {names},اسی تاریخ کو یہ بھی حذف ہوں گے: {names},
+del_cancel_button,app,Cancel the deletion,إلغاء الحذف,حذف منسوخ کریں,
+del_cancelled,app,Deletion cancelled. Your account stays. Any handover you already made stays in place.,أُلغي الحذف. يبقى حسابك، وتبقى أي عملية تسليم قمت بها كما هي.,حذف منسوخ ہو گیا۔ آپ کا اکاؤنٹ برقرار ہے۔ جو ذمہ داری آپ سونپ چکے ہیں وہ برقرار رہے گی۔,
+del_pending_offline_note,app,Shown from this device. Connect to the internet to see the latest.,معروض من هذا الجهاز. اتصل بالإنترنت لرؤية أحدث البيانات.,یہ اس ڈیوائس سے دکھایا گیا ہے۔ تازہ ترین دیکھنے کے لیے انٹرنیٹ سے جڑیں۔,
+del_sign_out_wipe_warning,app,"Your account is scheduled for deletion, so signing out also removes its data from this device, including entries that have not synced. They will be lost.",حذف حسابك مجدول، لذا فإن تسجيل الخروج يزيل بياناته من هذا الجهاز أيضًا، بما فيها القيود غير المتزامنة. ستُفقد هذه القيود.,آپ کا اکاؤنٹ حذف ہونے والا ہے، اس لیے لاگ آؤٹ کرنے سے اس کا ڈیٹا اس ڈیوائس سے بھی ہٹ جائے گا، بشمول وہ اندراجات جو سنک نہیں ہوئے۔ وہ ضائع ہو جائیں گے۔,
+del_link_delete_page,app,Account deletion page,صفحة حذف الحساب,اکاؤنٹ حذف کرنے کا صفحہ,
+del_link_privacy,app,Privacy policy,سياسة الخصوصية,پرائیویسی پالیسی,
+del_link_failed,app,Could not open the page.,تعذر فتح الصفحة.,صفحہ نہیں کھل سکا۔,
+del_err_reauth_required,app,Please confirm your identity again. For your security this has to happen within 15 minutes of confirming.,يرجى تأكيد هويتك مرة أخرى. لحمايتك يجب أن يتم ذلك خلال 15 دقيقة من التأكيد.,براہ کرم اپنی شناخت کی دوبارہ تصدیق کریں۔ آپ کی حفاظت کے لیے یہ تصدیق سے 15 منٹ کے اندر ہونا ضروری ہے۔,
+del_err_confirmation_mismatch,app,That word does not match. Type it exactly as shown.,الكلمة غير مطابقة. اكتبها كما هي معروضة تمامًا.,یہ لفظ میل نہیں کھاتا۔ اسے بالکل ویسے ہی لکھیں جیسے دکھایا گیا ہے۔,
+del_err_choice_missing,app,Choose what happens to each household you administer.,اختر ما سيحدث لكل منزل تشرف عليه.,ہر اس گھرانے کے لیے انتخاب کریں جس کے آپ ایڈمن ہیں۔,
+del_err_choice_invalid,app,Your households have changed. Please review your choices again.,تغيّرت منازلك. يرجى مراجعة اختياراتك مرة أخرى.,آپ کے گھرانوں میں تبدیلی ہوئی ہے۔ براہ کرم اپنے انتخاب دوبارہ دیکھیں۔,
+del_err_successor_invalid,app,Choose another current member of this household.,اختر عضوًا آخر حاليًا في هذا المنزل.,اس گھرانے کا کوئی دوسرا موجودہ رکن منتخب کریں۔,
+del_err_successor_pending,app,This member is scheduled for deletion and cannot take over. Choose someone else.,حذف حساب هذا العضو مجدول، ولا يمكنه تولي الإشراف. اختر شخصًا آخر.,اس رکن کا اکاؤنٹ حذف ہونے والا ہے، اس لیے وہ ذمہ داری نہیں لے سکتا۔ کسی اور کو منتخب کریں۔,
+del_err_account_pending,app,"This account is scheduled for deletion, so this cannot be done unless the deletion is cancelled.",حذف هذا الحساب مجدول، لذا لا يمكن إتمام هذا الإجراء ما لم يُلغَ الحذف.,یہ اکاؤنٹ حذف ہونے والا ہے، اس لیے یہ کام اس وقت تک نہیں ہو سکتا جب تک حذف منسوخ نہ ہو۔,
+del_err_household_pending,app,This household is scheduled for deletion and takes no new members or invites.,حذف هذا المنزل مجدول، ولا يقبل أعضاء أو دعوات جديدة.,یہ گھرانہ حذف ہونے والا ہے اور نئے ارکان یا دعوت نامے قبول نہیں کرتا۔,
+del_err_in_progress,app,Your deletion is already in progress and can no longer be cancelled.,عملية الحذف جارية بالفعل ولا يمكن إلغاؤها الآن.,آپ کا حذف پہلے ہی جاری ہے اور اب منسوخ نہیں ہو سکتا۔,
+del_err_wrong_password,app,That password is not correct.,كلمة المرور غير صحيحة.,یہ پاس ورڈ درست نہیں ہے۔,
+del_err_wrong_code,app,That code is not correct or has expired.,الرمز غير صحيح أو منتهي الصلاحية.,یہ کوڈ درست نہیں یا اس کی میعاد ختم ہو چکی ہے۔,
+del_err_rate_limited,app,Too many attempts. Wait a few minutes and try again.,محاولات كثيرة جدًا. انتظر بضع دقائق ثم حاول مرة أخرى.,بہت زیادہ کوششیں۔ چند منٹ انتظار کریں اور دوبارہ کوشش کریں۔,
+del_err_network,app,No connection. Check your internet and try again.,لا يوجد اتصال. تحقق من الإنترنت وحاول مرة أخرى.,کنکشن نہیں ہے۔ اپنا انٹرنیٹ چیک کریں اور دوبارہ کوشش کریں۔,
+del_err_generic,app,Something went wrong. Please try again.,حدث خطأ ما. يرجى المحاولة مرة أخرى.,کچھ غلط ہو گیا۔ براہ کرم دوبارہ کوشش کریں۔,
+csv_export_all_records,app,All Records,جميع السجلات,تمام ریکارڈز,
+csv_col_date,app,Date,التاريخ,تاریخ,
+csv_col_merchant,app,Merchant,المتجر,دکان,
+csv_col_category,app,Category,التصنيف,کیٹیگری,
+csv_col_amount,app,Amount (SAR),المبلغ (ريال),رقم (ریال),
+csv_col_vat,app,VAT (SAR),ضريبة القيمة المضافة (ريال),سیلز ٹیکس (ریال),
+csv_col_spent_by,app,Spent By,بواسطة,خرچ کنندہ,
+csv_col_source,app,Source,المصدر,ذریعہ,
+csv_col_items,app,Items Breakdown,تفاصيل البنود,اشیاء کی تفصیل,
+sign_out_unsynced_warning.one,app,"You have 1 unsynced offline transaction. If you sign out now, it will remain stored locally until you sign back in. Do you want to sign out anyway?",لديك معاملة واحدة غير متزامنة دون اتصال. إذا قمت بتسجيل الخروج الآن، ستبقى محفوظة محلياً حتى تسجل الدخول مجدداً. هل ترغب في تسجيل الخروج على أي حال؟,آپ کا 1 لین دین ابھی تک سنک نہیں ہوا ہے۔ اگر آپ ابھی لاگ آؤٹ کرتے ہیں تو یہ دوبارہ لاگ ان ہونے تک محفوظ رہے گا۔ کیا آپ پھر بھی لاگ آؤٹ کرنا چاہتے ہیں؟,
+sign_out_unsynced_warning.other,app,"You have {count} unsynced offline transactions. If you sign out now, they will remain stored locally until you sign back in. Do you want to sign out anyway?",لديك {count} معاملة غير متزامنة دون اتصال. إذا قمت بتسجيل الخروج الآن، ستبقى محفوظة محلياً حتى تسجل الدخول مجدداً. هل ترغب في تسجيل الخروج على أي حال؟,آپ کے {count} لین دین ابھی تک سنک نہیں ہوئے ہیں۔ اگر آپ ابھی لاگ آؤٹ کرتے ہیں تو یہ دوبارہ لاگ ان ہونے تک محفوظ رہیں گے۔ کیا آپ پھر بھی لاگ آؤٹ کرنا چاہتے ہیں؟,
+sign_out_unsynced_warning.zero,app,,لا توجد معاملات مسجلة دون اتصال.,,
+sign_out_unsynced_warning.two,app,,لديك معاملتان غير متزامنتين دون اتصال. إذا قمت بتسجيل الخروج الآن، ستبقيان محفوظتين محلياً حتى تسجل الدخول مجدداً. هل ترغب في تسجيل الخروج على أي حال؟,,
+sign_out_unsynced_warning.few,app,,لديك {count} معاملات غير متزامنة دون اتصال. إذا قمت بتسجيل الخروج الآن، ستبقى محفوظة محلياً حتى تسجل الدخول مجدداً. هل ترغب في تسجيل الخروج على أي حال؟,,
+sign_out_unsynced_warning.many,app,,لديك {count} معاملة غير متزامنة دون اتصال. إذا قمت بتسجيل الخروج الآن، ستبقى محفوظة محلياً حتى تسجل الدخول مجدداً. هل ترغب في تسجيل الخروج على أي حال؟,,
+web.delete_account.languageName,web,English,العربية,اردو,
+web.delete_account.confirmationWord,web,DELETE,حذف,حذف کریں,
+web.delete_account.pageTitle,web,Delete your account | Qawam Money قوام المال,حذف الحساب | قوام المال Qawam Money,اکاؤنٹ حذف کریں | قوام المال Qawam Money,
+web.delete_account.skipToContent,web,Skip to main content,تخطَّ إلى المحتوى الرئيسي,مرکزی مواد پر جائیں,
+web.delete_account.home,web,Home,الصفحة الرئيسية,ہوم پیج,
+web.delete_account.languageNav,web,Language,اللغة,زبان,
+web.delete_account.appName,web,Qawam Money · قوام المال,قوام المال · Qawam Money,قوام المال · Qawam Money,
+web.delete_account.title,web,Delete your Qawam Money account,حذف حسابك في قوام المال,قوام المال میں اپنا اکاؤنٹ حذف کریں,
+web.delete_account.intro,web,"This page explains how to delete your account in the Qawam Money (قوام المال) app, what is removed, what stays, and how to change your mind. It does not happen at once: your account is deleted 30 days after you confirm.",توضح هذه الصفحة كيف تحذف حسابك في تطبيق قوام المال (Qawam Money)، وما الذي يُحذف، وما الذي يبقى، وكيف تتراجع. لا يتم الحذف فوراً: يُحذف حسابك بعد 30 يوماً من تأكيدك.,یہ صفحہ بتاتا ہے کہ قوام المال (Qawam Money) ایپ میں اپنا اکاؤنٹ کیسے حذف کریں، کیا ہٹایا جاتا ہے، کیا باقی رہتا ہے اور ارادہ کیسے بدلیں۔ حذف فوراً نہیں ہوتا: آپ کا اکاؤنٹ تصدیق کے 30 دن بعد حذف ہوتا ہے۔,
+web.delete_account.how.title,web,How to delete your account,كيف تحذف حسابك,اپنا اکاؤنٹ کیسے حذف کریں,
+web.delete_account.how.items.0,web,In the app: open Settings and choose to delete your account.,من التطبيق: افتح الإعدادات واختر حذف الحساب.,ایپ سے: سیٹنگز کھولیں اور اکاؤنٹ حذف کرنے کا انتخاب کریں۔,
+web.delete_account.how.items.1,web,"On this page: sign in below, confirm your password and type the confirmation word.",من هذه الصفحة: سجّل الدخول أدناه، وأكّد كلمة المرور، واكتب كلمة التأكيد.,اس صفحے سے: نیچے سائن ان کریں، پاس ورڈ کی تصدیق کریں اور تصدیقی لفظ لکھیں۔,
+web.delete_account.how.items.2,web,"If you can’t sign in: send the request form below. A person handles it, and the form deletes nothing by itself.",إذا لم تستطع تسجيل الدخول: أرسل نموذج الطلب أدناه. يتولاه شخص، ولا يحذف النموذج شيئاً بنفسه.,اگر سائن ان نہیں کر سکتے: نیچے درخواست فارم بھیجیں۔ اسے ایک شخص دیکھتا ہے، اور فارم خود کچھ حذف نہیں کرتا۔,
+web.delete_account.window.title,web,The 30-day window and how to cancel,مهلة الثلاثين يوماً وكيف تلغي الحذف,30 دن کی مہلت اور منسوخی کا طریقہ,
+web.delete_account.window.items.0,web,"After you confirm, your account is scheduled for deletion 30 days later, and you can see the date in the app and on this page.",بعد تأكيدك يُجدول حسابك للحذف بعد 30 يوماً، ويظهر لك التاريخ في التطبيق وفي هذه الصفحة.,تصدیق کے بعد آپ کا اکاؤنٹ 30 دن بعد حذف ہونے کے لیے طے ہو جاتا ہے، اور تاریخ آپ کو ایپ اور اس صفحے پر نظر آتی ہے۔,
+web.delete_account.window.items.1,web,"During those 30 days your account keeps working, including exports, but you cannot join or create a household or be made an admin.",خلال هذه المدة يبقى حسابك عاملاً، بما في ذلك التصدير، لكن لا يمكنك الانضمام إلى منزل أو إنشاء منزل أو أن تصبح مشرفاً.,ان 30 دنوں میں آپ کا اکاؤنٹ چلتا رہتا ہے، ایکسپورٹ سمیت، لیکن آپ کسی گھرانے میں شامل نہیں ہو سکتے، نیا گھرانہ نہیں بنا سکتے اور منتظم نہیں بن سکتے۔,
+web.delete_account.window.items.2,web,"Signing in alone does not cancel the deletion. To cancel, choose Cancel in the app’s Settings, or sign in on this page and choose Cancel.",تسجيل الدخول وحده لا يلغي الحذف. لإلغائه اختر الإلغاء من إعدادات التطبيق، أو سجّل الدخول في هذه الصفحة واختر الإلغاء.,صرف سائن ان کرنے سے حذف منسوخ نہیں ہوتا۔ منسوخ کرنے کے لیے ایپ کی سیٹنگز میں منسوخی کا انتخاب کریں، یا اس صفحے پر سائن ان کر کے منسوخ کریں۔,
+web.delete_account.window.items.3,web,"When the date comes, deletion starts and can no longer be cancelled. It can finish after the date if a step has to be retried.",عندما يحين التاريخ يبدأ الحذف، ولا يمكن إلغاؤه بعد ذلك. وقد ينتهي بعد التاريخ إذا احتاجت إحدى خطواته إلى إعادة المحاولة.,تاریخ آنے پر حذف شروع ہو جاتا ہے اور پھر منسوخ نہیں ہو سکتا۔ اگر کوئی مرحلہ دوبارہ چلانا پڑے تو یہ تاریخ کے بعد مکمل ہو سکتا ہے۔,
+web.delete_account.window.items.4,web,"If during the window you become the primary or only admin of a household with other members, that household gets 7 days’ notice of its deletion, and your own deletion moves to the end of that notice.",إذا أصبحت خلال المهلة المشرف الأساسي أو الوحيد لمنزل فيه أعضاء آخرون، يُبلَّغ ذلك المنزل بحذفه قبل 7 أيام، ويتأخر موعد حذف حسابك إلى نهايتها.,اگر مہلت کے دوران آپ کسی ایسے گھرانے کے بنیادی یا واحد منتظم بن جائیں جس میں دوسرے ارکان ہوں تو اس گھرانے کو حذف سے 7 دن پہلے اطلاع دی جاتی ہے، اور آپ کا اپنا حذف اس مدت کے اختتام تک مؤخر ہو جاتا ہے۔,
+web.delete_account.window.items.5,web,"We may email you about 7 days and 1 day before the date and when deletion is done, and may email a household’s members when it is being deleted. This depends on our email service being available, so don’t rely on it: the date in the app and on this page is what counts.",قد نراسلك بالبريد قبل التاريخ بنحو 7 أيام وبيوم واحد وعند اكتمال الحذف، وقد نراسل أعضاء المنزل عند حذف منزلهم. يتوقف ذلك على توفر خدمة البريد لدينا، فلا تعتمد عليه: العبرة بالتاريخ الظاهر في التطبيق وفي هذه الصفحة.,ہم آپ کو ای میل کر سکتے ہیں: تاریخ سے تقریباً 7 دن اور 1 دن پہلے اور حذف مکمل ہونے پر، اور گھرانہ حذف ہونے پر اس کے ارکان کو بھی۔ یہ ہماری ای میل سروس کی دستیابی پر منحصر ہے، اس لیے اس پر انحصار نہ کریں: اصل وہی تاریخ ہے جو ایپ اور اس صفحے پر نظر آتی ہے۔,
+web.delete_account.deleted.title,web,What is deleted,ما الذي يُحذف,کیا حذف ہوتا ہے,
+web.delete_account.deleted.items.0,web,"Your login, email address and display name.",بيانات دخولك وبريدك الإلكتروني واسمك الظاهر.,آپ کا لاگ اِن، ای میل پتہ اور ظاہری نام۔,
+web.delete_account.deleted.items.1,web,"Your personal accounts, the income recorded into them, and transfers between them.",حساباتك الشخصية، والدخل المسجل فيها، والتحويلات بينها.,آپ کے ذاتی اکاؤنٹس، ان میں درج آمدنی اور ان کے درمیان منتقلیاں۔,
+web.delete_account.deleted.items.2,web,"The notes you wrote on your entries, income and transfers.",الملاحظات التي كتبتها على مصروفاتك ودخلك وتحويلاتك.,آپ کے اندراجات، آمدنی اور منتقلیوں پر آپ کے لکھے ہوئے نوٹس۔,
+web.delete_account.deleted.items.3,web,Receipt images attached to your entries.,صور الفواتير المرفقة بمصروفاتك.,آپ کے اندراجات سے منسلک رسیدوں کی تصاویر۔,
+web.delete_account.deleted.items.4,web,"Your membership of every household, and any dependent entry linked to you.",عضويتك في كل المنازل، وأي تابع مرتبط بك.,ہر گھرانے میں آپ کی رکنیت، اور آپ سے منسلک کوئی زیرِ کفالت اندراج۔,
+web.delete_account.deleted.items.5,web,"If you are the wife in a family household: your personal expense entries, your set allowance and the ledger of what you are owed.",إذا كنتِ الزوجة في منزل أسرة: مصروفاتك الشخصية ومصروفك الشخصي المحدد ودفتر المستحق لك.,اگر آپ کسی خاندانی گھرانے میں بیوی ہیں: آپ کے ذاتی اخراجات کے اندراجات، آپ کا مقررہ جیب خرچ اور آپ کے واجبات کا کھاتہ۔,
+web.delete_account.deleted.items.6,web,Messages you sent us from this email address through the contact and support forms.,الرسائل التي أرسلتها إلينا من هذا البريد عبر نماذج التواصل والدعم.,اس ای میل پتے سے رابطہ اور سپورٹ فارمز کے ذریعے ہمیں بھیجے گئے پیغامات۔,
+web.delete_account.deleted.items.7,web,"Any household where you are the only member, with everything in it.",أي منزل أنت عضوه الوحيد، بكل ما فيه.,کوئی بھی گھرانہ جس کے آپ واحد رکن ہیں، اس کی ہر چیز سمیت۔,
+web.delete_account.kept.title,web,"What stays, without your name",ما الذي يبقى دون اسمك,کیا آپ کے نام کے بغیر باقی رہتا ہے,
+web.delete_account.kept.items.0,web,"What you added to a household that still exists stays there, with its amount, date, category, store and item lines, and the entries show as “Deleted member”.",ما أضفته في منزل ما زال قائماً يبقى فيه بمبلغه وتاريخه وتصنيفه ومتجره وبنوده، ويظهر باسم «عضو محذوف».,موجود گھرانوں میں آپ کے اندراجات رقم، تاریخ، زمرے، دکان اور تفصیلی سطروں سمیت باقی رہتے ہیں، اور «حذف شدہ رکن» کے نام سے دکھائی دیتے ہیں۔,
+web.delete_account.kept.items.1,web,"Income you recorded into a shared pool, and transfers to or from a shared pool, stay without your name or notes, so the pool’s balance does not change.",الدخل الذي سجلته في حساب مشترك والتحويلات من الحساب المشترك وإليه تبقى دون اسمك أو ملاحظاتك، فلا يتغير رصيد الحساب المشترك.,مشترکہ پول میں آپ کی درج کردہ آمدنی اور مشترکہ پول سے آنے جانے والی منتقلیاں آپ کے نام یا نوٹس کے بغیر باقی رہتی ہیں، اس لیے پول کا بیلنس نہیں بدلتا۔,
+web.delete_account.kept.items.2,web,"Shared pools you own pass to another admin, with their balance unchanged.",الحسابات المشتركة التي تملكها تنتقل إلى مشرف آخر، ويبقى رصيدها كما هو.,آپ کی ملکیت والے مشترکہ پول کسی دوسرے منتظم کو منتقل ہو جاتے ہیں، اور ان کا بیلنس نہیں بدلتا۔,
+web.delete_account.kept.items.3,web,"Settlements in that household can change: entries you paid are no longer counted and equal splits in the current cycle are divided again, so other members’ debts can change. Account balances and budget spending do not change.",قد تتغير التسويات في ذلك المنزل: لا تُحتسب المصروفات التي دفعتها أنت، وتُعاد قسمة المصروفات المتساوية في الدورة الحالية، فقد تتغير ديون الأعضاء الآخرين. أرصدة الحسابات ومصروف الميزانيات لا تتغير.,اس گھرانے میں تصفیے بدل سکتے ہیں: آپ کے ادا کردہ اندراجات شمار نہیں ہوتے اور موجودہ سائیکل کی برابر تقسیم دوبارہ ہوتی ہے، اس لیے دوسرے ارکان کے قرض بدل سکتے ہیں۔ اکاؤنٹس کے بیلنس اور بجٹ کے اخراجات نہیں بدلتے۔,
+web.delete_account.kept.items.4,web,"A record with no name, email or user ID, showing that a deletion was completed.",سجل لا يحوي اسماً ولا بريداً ولا معرّف مستخدم، يبيّن أن عملية حذف قد اكتملت.,ایک ریکارڈ جس میں نہ نام ہے، نہ ای میل، نہ یوزر آئی ڈی، اور جو صرف یہ بتاتا ہے کہ ایک حذف مکمل ہوا۔,
+web.delete_account.notEdited.title,web,What is not edited,ما الذي لا يُعدَّل,کس چیز میں ترمیم نہیں ہوتی,
+web.delete_account.notEdited.items.0,web,"Free text other members typed, such as a note mentioning you by name, stays as they wrote it.",النصوص التي كتبها الأعضاء الآخرون، مثل ملاحظة تذكرك بالاسم، تبقى كما كتبوها.,دوسرے ارکان کی لکھی ہوئی عبارت، جیسے آپ کا نام لینے والا نوٹ، ویسی ہی رہتی ہے۔,
+web.delete_account.notEdited.items.1,web,"Household names stay as they are, even if one includes your name.",أسماء المنازل تبقى كما هي، حتى لو تضمن أحدها اسمك.,گھرانوں کے نام جوں کے توں رہتے ہیں، چاہے کسی میں آپ کا نام شامل ہو۔,
+web.delete_account.outOfReach.title,web,What we cannot remove,ما لا نستطيع حذفه,جو ہم نہیں ہٹا سکتے,
+web.delete_account.outOfReach.intro,web,"Deletion does not reach these, and we cannot remove individual records from them:",لا يصل الحذف إلى ما يلي، ولا نستطيع إزالة سجلات بعينها منه:,حذف ان تک نہیں پہنچتا، اور ہم ان میں سے الگ الگ ریکارڈ نہیں ہٹا سکتے:,
+web.delete_account.outOfReach.items.0,web,"Copies of emails in the developer’s mailbox, such as support and deletion requests.",نسخ الرسائل الموجودة في بريد المطوّر، مثل طلبات الدعم والحذف.,ڈویلپر کے میل باکس میں ای میلز کی نقول، جیسے سپورٹ اور حذف کی درخواستیں۔,
+web.delete_account.outOfReach.items.1,web,Railway server logs.,سجلات خوادم Railway.,Railway کے سرور لاگز۔,
+web.delete_account.outOfReach.items.2,web,Supabase database backups.,النسخ الاحتياطية لقاعدة بيانات Supabase.,Supabase ڈیٹا بیس کے بیک اپس۔,
+web.delete_account.outOfReach.items.3,web,Supabase authentication audit log entries.,سجلات تدقيق المصادقة في Supabase.,Supabase کے تصدیقی آڈٹ لاگ کے اندراجات۔,
+web.delete_account.admins.title,web,If you manage a household,إذا كنت تدير منزلاً,اگر آپ کسی گھرانے کا انتظام کرتے ہیں,
+web.delete_account.admins.items.0,web,"If you are the primary or only admin of a household with other members, you must choose before scheduling: assign another member as primary admin, or delete the household.",إذا كنت المشرف الأساسي أو الوحيد لمنزل فيه أعضاء آخرون، فعليك الاختيار قبل جدولة الحذف: تعيين عضو آخر مشرفاً أساسياً أو حذف المنزل.,اگر آپ کسی ایسے گھرانے کے بنیادی یا واحد منتظم ہیں جس میں دوسرے ارکان ہیں تو طے کرنے سے پہلے انتخاب کرنا ہوگا: کسی دوسرے رکن کو بنیادی منتظم بنائیں یا گھرانہ حذف کریں۔,
+web.delete_account.admins.items.1,web,"Assigning happens immediately. You stay a co-admin until final deletion, and cancelling does not give the primary admin title back.",التعيين يتم فوراً. تبقى مشرفاً مساعداً حتى الحذف النهائي، ولا يعيد الإلغاء إليك صفة المشرف الأساسي.,منتظم بنانا فوراً ہو جاتا ہے۔ آپ آخری حذف تک شریک منتظم رہتے ہیں، اور منسوخی سے بنیادی منتظم کا منصب واپس نہیں ملتا۔,
+web.delete_account.admins.items.2,web,"Deleting a household removes everything in it when the date comes, including other members’ accounts and entries in that household and the wife’s ledger. Members keep their logins but no longer belong to it.",حذف المنزل يزيل كل ما فيه عند حلول التاريخ، ومنها حسابات الأعضاء الآخرين ومصروفاتهم في هذا المنزل ودفتر الزوجة. يحتفظ الأعضاء بحساباتهم للدخول، لكنهم لا يعودون أعضاء فيه.,گھرانہ حذف کرنے سے تاریخ آنے پر اس کی ہر چیز ہٹ جاتی ہے، جس میں اس گھرانے میں دوسرے ارکان کے اکاؤنٹس اور اندراجات اور بیوی کا کھاتہ بھی شامل ہے۔ ارکان کے لاگ اِن برقرار رہتے ہیں، لیکن وہ اس گھرانے کے رکن نہیں رہتے۔,
+web.delete_account.admins.items.3,web,"Until then the household stays active, its members see a banner so they can export what they want to keep, and it takes no new members. Cancelling your deletion clears this.",حتى ذلك الحين يبقى المنزل نشطاً ويرى أعضاؤه تنبيهاً ليصدّروا ما يريدون الاحتفاظ به، ولا يقبل أعضاء جدداً. وإلغاء حذف حسابك يلغي ذلك.,تب تک گھرانہ فعال رہتا ہے، اس کے ارکان کو ایک بینر نظر آتا ہے تاکہ وہ جو چاہیں ایکسپورٹ کر لیں، اور نئے ارکان شامل نہیں ہو سکتے۔ آپ کے حذف کی منسوخی سے یہ ختم ہو جاتا ہے۔,
+web.delete_account.admins.items.4,web,"A co-admin or a regular member simply leaves, and the household continues.",المشرف المساعد والعضو العادي يغادران فقط، ويستمر المنزل.,شریک منتظم یا عام رکن صرف چھوڑ دیتا ہے، اور گھرانہ جاری رہتا ہے۔,
+web.delete_account.contact,web,Questions? Email us at,عندك سؤال؟ راسلنا على,کوئی سوال ہے؟ ہمیں ای میل کریں:,
+web.delete_account.rights,web,All rights reserved.,جميع الحقوق محفوظة.,جملہ حقوق محفوظ ہیں۔,
+web.delete_account.signIn.title,web,Delete your account yourself,احذف حسابك بنفسك,اپنا اکاؤنٹ خود حذف کریں,
+web.delete_account.signIn.intro,web,Sign in to schedule or cancel the deletion. Signing in alone starts nothing and cancels nothing.,سجّل الدخول لجدولة الحذف أو إلغائه. تسجيل الدخول وحده لا يبدأ شيئاً ولا يلغي شيئاً.,حذف طے یا منسوخ کرنے کے لیے سائن ان کریں۔ صرف سائن ان کرنے سے نہ کچھ شروع ہوتا ہے نہ کچھ منسوخ ہوتا ہے۔,
+web.delete_account.signIn.email,web,Email address,البريد الإلكتروني,ای میل پتہ,
+web.delete_account.signIn.password,web,Password,كلمة المرور,پاس ورڈ,
+web.delete_account.signIn.submit,web,Sign in,تسجيل الدخول,سائن ان کریں,
+web.delete_account.signIn.submitting,web,Checking...,جارٍ التحقق...,جانچ ہو رہی ہے...,
+web.delete_account.signIn.error,web,Could not sign in. Check your email and password and try again.,تعذر تسجيل الدخول. تحقق من البريد وكلمة المرور وحاول مرة أخرى.,سائن ان نہیں ہو سکا۔ ای میل اور پاس ورڈ جانچ کر دوبارہ کوشش کریں۔,
+web.delete_account.signIn.forgot,web,"Forgot your password? Reset it in the app, or send the request form below.",نسيت كلمة المرور؟ استعدها من التطبيق، أو أرسل نموذج الطلب أدناه.,پاس ورڈ بھول گئے؟ ایپ سے ری سیٹ کریں، یا نیچے درخواست فارم بھیجیں۔,
+web.delete_account.request.title,web,Can’t sign in? Send a deletion request,لا تستطيع تسجيل الدخول؟ أرسل طلب حذف,سائن ان نہیں کر سکتے؟ حذف کی درخواست بھیجیں,
+web.delete_account.request.intro,web,"This form does not delete anything. It stores your request and emails it to the developer, who handles it by hand and may reply to this address, so use the email on your account. Sending it does not look up any account or schedule a deletion, and no automatic email is sent to you. We keep the stored request for 90 days, then remove it.",هذا النموذج لا يحذف شيئاً: يخزّن طلبك ويرسله بالبريد إلى المطوّر، الذي يتولاه يدوياً وقد يرد على هذا العنوان، فاكتب بريد حسابك. إرساله لا يبحث عن أي حساب ولا يجدول حذفه، ولن تصلك رسالة تلقائية. نحتفظ بالطلب المخزّن 90 يوماً ثم نزيله.,یہ فارم کچھ حذف نہیں کرتا۔ یہ آپ کی درخواست محفوظ کر کے ڈویلپر کو ای میل کرتا ہے، جو اسے خود دیکھتا ہے اور اس پتے پر جواب دے سکتا ہے، اس لیے اپنے اکاؤنٹ کا ای میل لکھیں۔ اسے بھیجنے سے نہ کوئی اکاؤنٹ تلاش ہوتا ہے نہ حذف طے ہوتا ہے، اور آپ کو خودکار ای میل نہیں آتی۔ محفوظ درخواست ہم 90 دن تک رکھتے ہیں، پھر ہٹا دیتے ہیں۔,
+web.delete_account.request.email,web,The email on your account,بريد حسابك,آپ کے اکاؤنٹ کا ای میل,
+web.delete_account.request.message,web,Message (optional),رسالة (اختياري),پیغام (اختیاری),
+web.delete_account.request.submit,web,Send request,إرسال الطلب,درخواست بھیجیں,
+web.delete_account.request.submitting,web,Sending...,جارٍ الإرسال...,بھیجی جا رہی ہے...,
+web.delete_account.request.receivedTitle,web,We received your request,وصلنا طلبك,آپ کی درخواست ہمیں مل گئی,
+web.delete_account.request.sentBody,web,"It has been stored and sent to the developer, who handles it by hand.",خُزّن طلبك وأُرسل إلى المطوّر، الذي يتولاه يدوياً.,یہ محفوظ ہو گئی ہے اور ڈویلپر کو بھیج دی گئی ہے، جو اسے خود دیکھتا ہے۔,
+web.delete_account.request.capturedBody,web,"It has been stored, but the email that tells the developer about it could not be sent right now, so it may take longer to be seen.",خُزّن طلبك، لكن الرسالة التي تنبّه المطوّر تعذّر إرسالها حالياً، فقد يتأخر الاطلاع عليه.,یہ محفوظ ہو گئی ہے، لیکن ڈویلپر کو مطلع کرنے والی ای میل ابھی نہیں بھیجی جا سکی، اس لیے اسے دیکھنے میں دیر ہو سکتی ہے۔,
+web.delete_account.request.notDeleted,web,Your account has not been deleted or scheduled for deletion by this request.,لم يُحذف حسابك ولم يُجدول حذفه بهذا الطلب.,آپ کا اکاؤنٹ حذف نہیں ہوا اور اس درخواست سے اس کا حذف طے نہیں ہوا۔,
+web.delete_account.request.reference,web,Reference:,رقم المرجع:,حوالہ نمبر:,
+web.delete_account.request.errorInvalid,web,Please enter a valid email address.,يرجى إدخال بريد إلكتروني صحيح.,براہ کرم درست ای میل پتہ درج کریں۔,
+web.delete_account.request.errorRateLimited,web,We received many requests. Please try again shortly.,وصلنا عدد كبير من الطلبات. حاول مرة أخرى بعد قليل.,ہمیں بہت سی درخواستیں ملی ہیں۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔,
+web.delete_account.request.errorUnavailable,web,We did not receive your request. Please try later or email us at the address below.,لم يصلنا طلبك. حاول لاحقاً أو راسلنا مباشرة على البريد أدناه.,آپ کی درخواست ہمیں نہیں ملی۔ بعد میں کوشش کریں یا نیچے دیے گئے پتے پر ای میل کریں۔,
+web.delete_account.request.errorNetwork,web,"Could not reach the server, so we did not receive your request. Check your connection and try again.",تعذر الاتصال بالخادم، ولم يصلنا طلبك. تحقق من اتصالك وحاول مرة أخرى.,سرور سے رابطہ نہیں ہو سکا، اس لیے آپ کی درخواست ہمیں نہیں ملی۔ اپنا کنکشن جانچ کر دوبارہ کوشش کریں۔,
+web.delete_account.account.signedInAs,web,Signed in as,مسجّل الدخول باسم,سائن ان بطور,
+web.delete_account.account.signOut,web,Sign out,تسجيل الخروج,سائن آؤٹ,
+web.delete_account.account.loading,web,Loading...,جارٍ التحميل...,لوڈ ہو رہا ہے...,
+web.delete_account.account.loadError,web,"We could not load your account’s status. Try again, or use the request form below.",تعذر تحميل حالة حسابك. حاول مرة أخرى أو استخدم نموذج الطلب أدناه.,آپ کے اکاؤنٹ کی حالت لوڈ نہیں ہو سکی۔ دوبارہ کوشش کریں یا نیچے درخواست فارم استعمال کریں۔,
+web.delete_account.account.retry,web,Try again,إعادة المحاولة,دوبارہ کوشش کریں,
+web.delete_account.account.flowTitle,web,Schedule your account’s deletion,جدولة حذف حسابك,اپنے اکاؤنٹ کا حذف طے کریں,
+web.delete_account.account.flowIntro,web,"Your account will be deleted 30 days after you confirm. Read this page first, and export from the app anything you want to keep.",سيُحذف حسابك بعد 30 يوماً من التأكيد. اقرأ هذه الصفحة أولاً، وصدّر من التطبيق ما تريد الاحتفاظ به.,آپ کا اکاؤنٹ تصدیق کے 30 دن بعد حذف ہوگا۔ پہلے یہ صفحہ پڑھیں، اور جو رکھنا چاہتے ہیں اسے ایپ سے ایکسپورٹ کر لیں۔,
+web.delete_account.account.settlementWarning,web,Settlements and other members’ debts can change in the households that continue without you. Account balances and budget spending do not change.,قد تتغير التسويات وديون الأعضاء الآخرين في المنازل التي تبقى بعدك. أرصدة الحسابات ومصروف الميزانيات لا تتغير.,جو گھرانے آپ کے بعد جاری رہیں گے ان میں تصفیے اور دوسرے ارکان کے قرض بدل سکتے ہیں۔ اکاؤنٹس کے بیلنس اور بجٹ کے اخراجات نہیں بدلتے۔,
+web.delete_account.account.householdsTitle,web,Your households,منازلك,آپ کے گھرانے,
+web.delete_account.account.noHouseholds,web,You are not a member of any household.,لست عضواً في أي منزل.,آپ کسی گھرانے کے رکن نہیں ہیں۔,
+web.delete_account.account.positionSole,web,"{name}: you are the only member, so it is deleted with everything in it.",{name}: أنت عضوه الوحيد، فسيُحذف بكل ما فيه.,{name}: آپ واحد رکن ہیں، اس لیے یہ اپنی ہر چیز سمیت حذف ہو جائے گا۔,
+web.delete_account.account.positionCoAdmin,web,"{name}: you are a co-admin, so you leave and the household continues.",{name}: أنت مشرف مساعد، فستغادره ويستمر المنزل.,{name}: آپ شریک منتظم ہیں، اس لیے آپ چھوڑ دیں گے اور گھرانہ جاری رہے گا۔,
+web.delete_account.account.positionMember,web,{name}: you leave and the household continues.,{name}: ستغادره ويستمر المنزل.,{name}: آپ چھوڑ دیں گے اور گھرانہ جاری رہے گا۔,
+web.delete_account.account.choiceTitle,web,{name}: you are its primary admin. Choose what happens to it:,{name}: أنت مشرفه الأساسي. اختر ما يحدث له:,{name}: آپ اس کے بنیادی منتظم ہیں۔ انتخاب کریں کہ اس کا کیا ہو:,
+web.delete_account.account.choiceTransfer,web,Assign another member as primary admin (happens immediately),تعيين عضو آخر مشرفاً أساسياً (يتم فوراً),کسی دوسرے رکن کو بنیادی منتظم بنائیں (فوراً ہو جاتا ہے),
+web.delete_account.account.choiceDelete,web,Delete this household with everything in it,حذف هذا المنزل بكل ما فيه,یہ گھرانہ اس کی ہر چیز سمیت حذف کریں,
+web.delete_account.account.choiceDeleteWarning,web,"Everything in it is removed when the date comes, including other members’ accounts and entries in that household and the wife’s ledger. Members keep their logins.",سيُزال كل ما فيه عند حلول التاريخ، ومنها حسابات الأعضاء الآخرين ومصروفاتهم في هذا المنزل ودفتر الزوجة. يحتفظ الأعضاء بحساباتهم للدخول.,تاریخ آنے پر اس کی ہر چیز ہٹ جائے گی، جس میں اس گھرانے میں دوسرے ارکان کے اکاؤنٹس اور اندراجات اور بیوی کا کھاتہ بھی شامل ہے۔ ارکان کے لاگ اِن برقرار رہیں گے۔,
+web.delete_account.account.successorLabel,web,New primary admin,المشرف الأساسي الجديد,نیا بنیادی منتظم,
+web.delete_account.account.successorPlaceholder,web,Choose a member,اختر عضواً,رکن منتخب کریں,
+web.delete_account.account.successorPending,web,(scheduled for deletion),(مجدول للحذف),(حذف کے لیے طے شدہ),
+web.delete_account.account.successorUnnamed,web,Unnamed member,عضو بلا اسم,بے نام رکن,
+web.delete_account.account.noSuccessor,web,"No member can take over, so the choice available is to delete the household.",لا يوجد عضو يمكنه تولي الإدارة، فالخيار المتاح هو حذف المنزل.,کوئی رکن انتظام نہیں سنبھال سکتا، اس لیے دستیاب انتخاب گھرانہ حذف کرنا ہے۔,
+web.delete_account.account.password,web,Password,كلمة المرور,پاس ورڈ,
+web.delete_account.account.passwordHint,web,We ask again to make sure it is you.,نطلبها مرة أخرى للتأكد من أنك صاحب الحساب.,ہم دوبارہ پوچھتے ہیں تاکہ یقین ہو جائے کہ یہ آپ ہی ہیں۔,
+web.delete_account.account.typedWord,web,Type “{word}” to confirm,اكتب «{word}» للتأكيد,تصدیق کے لیے «{word}» لکھیں,
+web.delete_account.account.submit,web,Schedule deletion in 30 days,جدولة الحذف بعد 30 يوماً,30 دن بعد حذف طے کریں,
+web.delete_account.account.submitting,web,Scheduling...,جارٍ الجدولة...,طے ہو رہا ہے...,
+web.delete_account.account.pendingTitle,web,Your account is scheduled for deletion,حسابك مجدول للحذف,آپ کا اکاؤنٹ حذف کے لیے طے ہے,
+web.delete_account.account.pendingDate,web,Deletion date:,موعد الحذف:,حذف کی تاریخ:,
+web.delete_account.account.pendingUsable,web,Until then your account keeps working.,حتى ذلك الحين يبقى حسابك عاملاً.,تب تک آپ کا اکاؤنٹ چلتا رہے گا۔,
+web.delete_account.account.pendingSignIn,web,"Signing in alone does not cancel this. To keep your account, cancel the deletion.",تسجيل الدخول وحده لا يلغي الحذف. للاحتفاظ بحسابك اختر إلغاء الحذف.,صرف سائن ان کرنے سے یہ منسوخ نہیں ہوتا۔ اکاؤنٹ رکھنا ہو تو حذف منسوخ کریں۔,
+web.delete_account.account.pendingHouseholds,web,Households also being deleted:,منازل ستُحذف أيضاً:,یہ گھرانے بھی حذف ہوں گے:,
+web.delete_account.account.cancel,web,Cancel the deletion,إلغاء الحذف,حذف منسوخ کریں,
+web.delete_account.account.cancelling,web,Cancelling...,جارٍ الإلغاء...,منسوخ ہو رہا ہے...,
+web.delete_account.account.cancelled,web,The deletion is cancelled and your account stays. A primary admin assignment already made stays as it is.,أُلغي الحذف ويبقى حسابك. ما تم من تعيين مشرف أساسي يبقى كما هو.,حذف منسوخ ہو گیا اور آپ کا اکاؤنٹ برقرار ہے۔ بنیادی منتظم کی جو تقرری ہو چکی ہے وہ ویسی ہی رہے گی۔,
+web.delete_account.account.inProgressTitle,web,Your account’s deletion has started,بدأ حذف حسابك,آپ کے اکاؤنٹ کا حذف شروع ہو چکا ہے,
+web.delete_account.account.inProgressBody,web,"It can no longer be cancelled, because your data may already be gone. If you have a question, email us at the address below.",لم يعد بالإمكان إلغاء الحذف، لأن بياناتك قد تكون حُذفت. إذا كان عندك سؤال فراسلنا على البريد أدناه.,اب یہ منسوخ نہیں ہو سکتا، کیونکہ ہو سکتا ہے آپ کا ڈیٹا ہٹ چکا ہو۔ کوئی سوال ہو تو نیچے دیے گئے پتے پر ای میل کریں۔,
+web.delete_account.account.errors.password,web,Could not confirm your password. Check it and try again.,تعذر تأكيد كلمة المرور. تحقق منها وحاول مرة أخرى.,پاس ورڈ کی تصدیق نہیں ہو سکی۔ جانچ کر دوبارہ کوشش کریں۔,
+web.delete_account.account.errors.reauthenticationRequired,web,"To confirm this request, enter your password again.",لتأكيد الطلب أدخل كلمة المرور مرة أخرى.,اس درخواست کی تصدیق کے لیے اپنا پاس ورڈ دوبارہ درج کریں۔,
+web.delete_account.account.errors.confirmationMismatch,web,The confirmation word does not match.,كلمة التأكيد غير مطابقة.,تصدیقی لفظ مطابقت نہیں رکھتا۔,
+web.delete_account.account.errors.choiceMissing,web,Choose what happens to each household you manage.,اختر ما يحدث لكل منزل تديره.,ہر اس گھرانے کے لیے انتخاب کریں جس کا آپ انتظام کرتے ہیں۔,
+web.delete_account.account.errors.choiceInvalid,web,Your households have changed. Reload the page and choose again.,تغيّرت منازلك. حدّث الصفحة واختر مرة أخرى.,آپ کے گھرانے بدل گئے ہیں۔ صفحہ دوبارہ لوڈ کر کے پھر انتخاب کریں۔,
+web.delete_account.account.errors.successorInvalid,web,Choose another member of this household.,اختر عضواً آخر من هذا المنزل.,اس گھرانے کا کوئی دوسرا رکن منتخب کریں۔,
+web.delete_account.account.errors.successorPending,web,This member is scheduled for deletion. Choose another member.,هذا العضو مجدول للحذف. اختر عضواً آخر.,یہ رکن حذف کے لیے طے ہے۔ کوئی دوسرا رکن منتخب کریں۔,
+web.delete_account.account.errors.inProgress,web,Deletion has started and cannot be cancelled.,بدأ الحذف ولا يمكن إلغاؤه.,حذف شروع ہو چکا ہے اور منسوخ نہیں ہو سکتا۔,
+web.delete_account.account.errors.generic,web,"That did not go through, and nothing changed on your account. Please try again.",تعذر إتمام الطلب، ولم يتغير شيء في حسابك. حاول مرة أخرى.,یہ مکمل نہیں ہو سکا، اور آپ کے اکاؤنٹ میں کچھ نہیں بدلا۔ دوبارہ کوشش کریں۔,
+web.landing.privacy.items.4.title,web,"Delete your account, with 30 days to change your mind",احذف حسابك، ومعك 30 يوماً للتراجع,,
+web.landing.privacy.items.4.desc,web,"Delete it in the app’s Settings or on the account deletion page. It happens 30 days after you confirm, and you can cancel before then. Signing in alone does not cancel it.",احذفه من إعدادات التطبيق أو من صفحة حذف الحساب. الحذف يتم بعد 30 يوماً من تأكيدك، وتقدر تلغيه قبلها. تسجيل الدخول وحده ما يلغي الحذف.,,
+web.landing.privacy.items.5.title,web,What stays after deletion,وش يبقى بعد الحذف,,
+web.landing.privacy.items.5.desc,web,"Your login, personal accounts, notes and receipt images are deleted. Entries you added to a household that still exists stay as “Deleted member”. Text other people typed and household names are not edited. We cannot remove copies of emails in the developer’s mailbox, Railway logs, Supabase backups or its authentication audit log. Requests sent through the deletion form are kept for 90 days.",ينحذف دخولك وحساباتك الشخصية وملاحظاتك وصور فواتيرك. اللي أضفته في منزل باقٍ يبقى باسم «عضو محذوف». النصوص اللي كتبها غيرك وأسماء المنازل ما تتعدل. وما نقدر نحذف نسخ الرسائل في بريد المطوّر ولا سجلات Railway ولا نسخ Supabase الاحتياطية ولا سجلات تدقيق المصادقة فيه. طلبات نموذج الحذف تبقى 90 يوماً.,,
+web.landing.footer.deleteAccount,web,Delete account,حذف الحساب,,
+email.holder_t7.subject,email,Qawam Money: your account will be deleted on {date},قوام المال: سيُحذف حسابك بتاريخ {date},قوام المال: آپ کا اکاؤنٹ {date} کو حذف ہو جائے گا,
+email.holder_t7.body,email,"Your Qawam Money account is scheduled for permanent deletion on {date}.
+
+Signing in does not cancel this. To keep your account, open the app, go to Settings and choose to cancel the deletion before that date.
+
+If you want a copy of your data, export it before then.
+
+If you did not ask for this, cancel it in the app and change your password.
+","حسابك في قوام المال مجدول للحذف النهائي بتاريخ {date}.
+
+تسجيل الدخول وحده لا يلغي الحذف. إذا أردت الاحتفاظ بحسابك، افتح التطبيق وادخل الإعدادات واختر إلغاء الحذف قبل هذا التاريخ.
+
+إذا أردت نسخة من بياناتك، صدّرها قبل ذلك.
+
+إذا لم تطلب هذا، ألغِ الحذف من التطبيق وغيّر كلمة المرور.
+","قوام المال میں آپ کا اکاؤنٹ {date} کو مستقل طور پر حذف ہونا طے ہے۔
+
+صرف سائن ان کرنے سے حذف منسوخ نہیں ہوتا۔ اکاؤنٹ رکھنا ہو تو ایپ کھولیں، سیٹنگز میں جائیں اور اس تاریخ سے پہلے حذف منسوخ کریں۔
+
+اگر آپ کو اپنے ڈیٹا کی نقل چاہیے تو اس سے پہلے ایکسپورٹ کر لیں۔
+
+اگر آپ نے یہ درخواست نہیں کی تو ایپ سے حذف منسوخ کریں اور اپنا پاس ورڈ بدل لیں۔
+",
+email.holder_t1.subject,email,"Qawam Money: last reminder, your account will be deleted on {date}",قوام المال: تذكير أخير، سيُحذف حسابك بتاريخ {date},قوام المال: آخری یاد دہانی، آپ کا اکاؤنٹ {date} کو حذف ہو جائے گا,
+email.holder_t1.body,email,"This is the last reminder. Your Qawam Money account will be permanently deleted on {date}.
+
+Signing in does not cancel this. To keep your account, open the app, go to Settings and choose to cancel the deletion now.
+
+If you want a copy of your data, export it today.
+","هذا آخر تذكير. سيُحذف حسابك في قوام المال نهائياً بتاريخ {date}.
+
+تسجيل الدخول وحده لا يلغي الحذف. إذا أردت الاحتفاظ بحسابك، افتح التطبيق وادخل الإعدادات واختر إلغاء الحذف الآن.
+
+إذا أردت نسخة من بياناتك، صدّرها اليوم.
+","یہ آخری یاد دہانی ہے۔ قوام المال میں آپ کا اکاؤنٹ {date} کو مستقل طور پر حذف ہو جائے گا۔
+
+صرف سائن ان کرنے سے حذف منسوخ نہیں ہوتا۔ اکاؤنٹ رکھنا ہو تو ایپ کھولیں، سیٹنگز میں جائیں اور ابھی حذف منسوخ کریں۔
+
+اگر آپ کو اپنے ڈیٹا کی نقل چاہیے تو آج ہی ایکسپورٹ کر لیں۔
+",
+email.holder_completion.subject,email,Qawam Money: your account has been deleted,قوام المال: تم حذف حسابك,قوام المال: آپ کا اکاؤنٹ حذف ہو گیا ہے,
+email.holder_completion.body,email,"Your Qawam Money account has been deleted, and you can no longer sign in with it.
+
+Entries you added to households that still exist stay there, shown as ""Deleted member"", with your notes and receipt images removed.
+","تم حذف حسابك في قوام المال، ولم يعد بإمكانك تسجيل الدخول به.
+
+ما أضفته في المنازل التي ما زالت قائمة يبقى فيها باسم ""عضو محذوف""، مع إزالة ملاحظاتك وصور فواتيرك.
+","قوام المال میں آپ کا اکاؤنٹ حذف ہو گیا ہے اور اب آپ اس سے سائن ان نہیں کر سکتے۔
+
+جو اندراجات آپ نے موجود گھرانوں میں کیے تھے وہ وہاں ""حذف شدہ رکن"" کے نام سے باقی رہیں گے، آپ کے نوٹس اور رسیدوں کی تصاویر ہٹا دی گئی ہیں۔
+",
+email.member_marked.subject,email,Qawam Money: a household you belong to will be deleted on {date},قوام المال: سيُحذف منزل أنت عضو فيه بتاريخ {date},قوام المال: جس گھرانے کے آپ رکن ہیں وہ {date} کو حذف ہو جائے گا,
+email.member_marked.body,email,"A household you belong to in Qawam Money is scheduled for deletion on {date}, at the request of the person who manages it.
+
+On that date all its data is removed, including your accounts and entries in that household. Your own account stays, and you can still sign in.
+
+Export anything you want to keep before that date.
+","منزل أنت عضو فيه في قوام المال مجدول للحذف بتاريخ {date}، بطلب من مديره.
+
+في ذلك التاريخ تُحذف كل بياناته، ومنها حساباتك ومصروفاتك المسجلة في هذا المنزل. حسابك أنت يبقى، وتستطيع تسجيل الدخول كالمعتاد.
+
+صدّر ما تريد الاحتفاظ به قبل هذا التاريخ.
+","قوام المال میں جس گھرانے کے آپ رکن ہیں اس کے منتظم کی درخواست پر وہ {date} کو حذف ہونا طے ہے۔
+
+اس تاریخ کو اس کا سارا ڈیٹا ہٹا دیا جائے گا، جس میں اس گھرانے میں آپ کے اکاؤنٹس اور اندراجات بھی شامل ہیں۔ آپ کا اپنا اکاؤنٹ برقرار رہے گا اور آپ سائن ان کر سکیں گے۔
+
+جو کچھ رکھنا چاہتے ہیں اسے اس تاریخ سے پہلے ایکسپورٹ کر لیں۔
+",
+email.member_t7.subject,email,"Qawam Money: reminder, a household you belong to will be deleted on {date}",قوام المال: تذكير، سيُحذف منزل أنت عضو فيه بتاريخ {date},قوام المال: یاد دہانی، جس گھرانے کے آپ رکن ہیں وہ {date} کو حذف ہو جائے گا,
+email.member_t7.body,email,"Reminder: a household you belong to in Qawam Money will be deleted on {date}.
+
+All its data will be removed, including your accounts and entries in that household. Your own account stays, and you can still sign in.
+
+Export anything you want to keep before that date.
+","تذكير: سيُحذف منزل أنت عضو فيه في قوام المال بتاريخ {date}.
+
+ستُحذف كل بياناته، ومنها حساباتك ومصروفاتك المسجلة في هذا المنزل. حسابك أنت يبقى، وتستطيع تسجيل الدخول كالمعتاد.
+
+صدّر ما تريد الاحتفاظ به قبل هذا التاريخ.
+","یاد دہانی: قوام المال میں جس گھرانے کے آپ رکن ہیں وہ {date} کو حذف ہو جائے گا۔
+
+اس کا سارا ڈیٹا ہٹا دیا جائے گا، جس میں اس گھرانے میں آپ کے اکاؤنٹس اور اندراجات بھی شامل ہیں۔ آپ کا اپنا اکاؤنٹ برقرار رہے گا اور آپ سائن ان کر سکیں گے۔
+
+جو کچھ رکھنا چاہتے ہیں اسے اس تاریخ سے پہلے ایکسپورٹ کر لیں۔
+",
