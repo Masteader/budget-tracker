@@ -128,6 +128,25 @@ def test_no_matching_account_stops_without_saying_more(capsys):
     assert "No account matches" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("args", [[], ["--execute"], ["--cancel", "--execute"]])
+def test_an_address_two_accounts_share_is_refused(args, capsys):
+    """Two accounts whose addresses differ only in case: the address does not say which one."""
+    deletion = {"status": "scheduled", "can_cancel": True, "scheduled_for": "2026-12-05T21:30:00+00:00"}
+    client = FakeClient(_preview(ambiguous=True, account_found=True, user_id=None, deletion=deletion))
+    assert operator.main([*BASE, *args], client=client) == 2
+    assert client.names() == ["get_account_deletion_operator_preview"]
+    out = capsys.readouterr().out
+    assert "more than one account" in out
+    assert EMAIL not in out
+
+
+@pytest.mark.parametrize("hint", ["inquiry_reused", "inquiry_invalid"])
+def test_a_reused_or_unknown_reference_is_a_refusal(hint, capsys):
+    client = FakeClient(error=FakeError(hint))
+    assert operator.main([*BASE, "--execute"], client=client) == 2
+    assert hint in capsys.readouterr().out
+
+
 def test_an_invalid_inquiry_stops_before_anything_is_written():
     client = FakeClient(_preview(inquiry_valid=False))
     assert operator.main([*BASE, "--execute"], client=client) == 2

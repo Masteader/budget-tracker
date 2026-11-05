@@ -82,6 +82,22 @@ def test_breakdown_reports_inactive_spending_without_making_it_a_budget(fake_sup
     assert "OPEX-GROCERY" in budget_codes  # an active category keeps its auto-created row, as before
 
 
+def test_a_budget_row_with_no_active_flag_counts_as_active(fake_supabase, cycle):
+    """NULL is_active is active, as the database triggers and the app read it."""
+    fake_supabase.seed("budgets", [
+        _budget("OPEX-HOUSING", cycle, None),
+        _budget("OPEX-CHARITY", cycle, False),
+        {**_budget("OPEX-MISC", cycle, False), "id": "b-misc-old"},
+        {**_budget("OPEX-MISC", cycle, None), "id": "b-misc-new"},
+    ])
+    split = salary_cycle.get_household_categories(HH)
+    active = {c["code"] for c in split["active"]}
+    inactive = {c["code"] for c in split["inactive"]}
+    assert "OPEX-HOUSING" in active
+    assert "OPEX-MISC" in active
+    assert "OPEX-CHARITY" in inactive
+
+
 @pytest.mark.parametrize("how", ["add_category", "sub_allocations"])
 def test_budgeting_a_category_activates_it(fake_supabase, cycle, how):
     fake_supabase.seed("household_category_settings", [

@@ -6,15 +6,17 @@ API process never imports it and has no route to it.
 
 Two switches, each only on with the exact value 1:
 
-ACCOUNT_DELETION_PURGE_ENABLED: without it the worker reads one summary, logs the counts and stops:
-no claim, no email of any kind, no storage or Auth call, no write. A reminder names a date, and with
-the purge off that date would not be met, so no reminder goes out whatever the other switch says.
+ACCOUNT_DELETION_PURGE_ENABLED: without it the worker reads one summary and logs the counts, sends
+the developer's failed and overdue alerts, and removes account_deletion inquiries older than 90 days
+(the public page promises that), then stops: no claim, no email to any account holder or member, no
+storage or Auth call. A reminder names a date, and with the purge off that date would not be met,
+so no reminder goes out whatever the other switch says.
 
 ACCOUNT_DELETION_EMAILS_ENABLED: on top of the first, lets account holders and household members get
 email (T-7, T-1, completion, member marked, member T-7). Purge on and this off is allowed, so purges
 can be tested first: no notice is sent or marked sent, so reminders still in their window go out
 when it comes on. A completion email is skipped: the job still completes, and that email is never
-sent, because the address goes with the account. Developer alerts do not depend on this switch.
+sent, because the address goes with the account. Developer alerts depend on neither switch.
 
 One job, each step safe to repeat: claim, prepare_account_purge (all database work), remove the
 queued storage objects, delete the user through the Auth Admin API (404 counts as done), then
@@ -292,18 +294,43 @@ def _send_alerts(client: Any) -> None:
 # ── One run ──────────────────────────────────────────────────────────────────
 
 
+def _remove_expired_inquiries(client: Any) -> bool:
+    """The page promises account_deletion inquiries go after 90 days. False when it failed."""
+    try:
+        _rpc(client, "purge_expired_account_deletion_inquiries", {"p_days": INQUIRY_RETENTION_DAYS})
+    except Exception as exc:  # noqa: BLE001 - logged by type only
+        logger.error("Could not remove expired deletion inquiries (%s).", type(exc).__name__)
+        return False
+    return True
+
+
+def _alert_developer(client: Any) -> bool:
+    """False when the alerts could not be listed."""
+    try:
+        _send_alerts(client)
+    except Exception as exc:  # noqa: BLE001 - logged by type only
+        logger.error("Could not list account deletion alerts (%s).", type(exc).__name__)
+        return False
+    return True
+
+
 def _run_disabled(client: Any) -> int:
+    """No purge and no email to any user. Developer alerts and the 90-day inquiry removal still
+    run: neither depends on purging, and the page promises the removal."""
+    run_failed = False
     try:
         summary = _rpc(client, "get_account_deletion_queue_summary") or {}
+        logger.info(
+            "Account deletion purge is disabled (%s is not 1); nothing was purged. "
+            "due=%s in_progress=%s failed=%s overdue=%s",
+            ENABLE_ENV, summary.get("due"), summary.get("in_progress"), summary.get("failed"), summary.get("overdue"),
+        )
     except Exception as exc:  # noqa: BLE001 - logged by type only
         logger.error("Could not read the account deletion queue (%s).", type(exc).__name__)
-        return 1
-    logger.info(
-        "Account deletion purge is disabled (%s is not 1); nothing was changed. "
-        "due=%s in_progress=%s failed=%s overdue=%s",
-        ENABLE_ENV, summary.get("due"), summary.get("in_progress"), summary.get("failed"), summary.get("overdue"),
-    )
-    return 0
+        run_failed = True
+    run_failed |= not _alert_developer(client)
+    run_failed |= not _remove_expired_inquiries(client)
+    return 1 if run_failed else 0
 
 
 def run_once(client: Any) -> int:
@@ -333,17 +360,8 @@ def run_once(client: Any) -> int:
         failed += outcome == "failed"
 
     # After the jobs, so a job that failed just now is reported in this run.
-    try:
-        _send_alerts(client)
-    except Exception as exc:  # noqa: BLE001 - logged by type only
-        logger.error("Could not list account deletion alerts (%s).", type(exc).__name__)
-        run_failed = True
-
-    try:
-        _rpc(client, "purge_expired_account_deletion_inquiries", {"p_days": INQUIRY_RETENTION_DAYS})
-    except Exception as exc:  # noqa: BLE001 - logged by type only
-        logger.error("Could not remove expired deletion inquiries (%s).", type(exc).__name__)
-        run_failed = True
+    run_failed |= not _alert_developer(client)
+    run_failed |= not _remove_expired_inquiries(client)
 
     try:
         _rpc(client, "record_account_deletion_worker_run", {

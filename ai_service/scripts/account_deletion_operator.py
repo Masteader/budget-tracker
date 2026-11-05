@@ -39,6 +39,7 @@ _REFERENCE_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 # What the database says when it refuses. Anything else is a failed run.
 _REFUSALS = {
     "inquiry_invalid",
+    "inquiry_reused",
     "operator_handle_invalid",
     "account_not_found",
     "household_choice_missing",
@@ -184,6 +185,10 @@ def main(argv: Optional[Sequence[str]] = None, client: Any = None) -> int:
                        {"p_email": args.email, "p_inquiry_reference": args.inquiry_id}) or {}
         if not preview.get("inquiry_valid"):
             print("Refused: no account deletion request has that reference.")
+            return 2
+        if preview.get("ambiguous"):
+            print("Refused: more than one account has this address, differing only in letter case, so it does not "
+                  "say which account is meant. Nothing was changed. Escalate to the owner.")
             return 2
         if not preview.get("account_found"):
             print("No account matches this address. Nothing was changed.")

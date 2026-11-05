@@ -497,13 +497,34 @@ def test_a_deletion_request_neither_stored_nor_sent_is_an_error(client, no_provi
     assert res.status_code == 503
 
 
+def test_a_deletion_request_that_was_not_stored_is_an_error_even_if_mail_works(client, mailer, monkeypatch):
+    """The page says "stored and sent" for 'sent'. A row the 90-day removal and the operator rely
+    on must exist, so a failed insert answers 503, sends nothing, and the person can retry."""
+    import routes.inquiries as inquiries
+
+    monkeypatch.setattr(inquiries, "get_client", lambda: _InquiriesOnlyClient(fail_insert=True))
+    res = client.post(PUBLIC_URL, json=_DELETION)
+    assert res.status_code == 503
+    assert "sent" not in res.text
+    mailer.assert_not_awaited()
+
+
+def test_other_inquiry_types_still_send_when_the_row_is_not_stored(client, mailer, monkeypatch):
+    import routes.inquiries as inquiries
+
+    monkeypatch.setattr(inquiries, "get_client", lambda: _InquiriesOnlyClient(fail_insert=True))
+    res = client.post(PUBLIC_URL, json={"type": "support", "email": "leaving@example.com", "message": "help"})
+    assert res.status_code == 200
+    assert res.json()["status"] == "sent"
+
+
 def test_a_failed_insert_never_logs_the_address(client, mailer, monkeypatch, caplog):
     import routes.inquiries as inquiries
 
     monkeypatch.setattr(inquiries, "get_client", lambda: _InquiriesOnlyClient(fail_insert=True))
     with caplog.at_level("DEBUG"):
         res = client.post(PUBLIC_URL, json=_DELETION)
-    assert res.status_code == 200
+    assert res.status_code == 503
     assert "leaving@example.com" not in caplog.text
 
 

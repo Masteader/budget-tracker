@@ -1314,9 +1314,11 @@ def get_household_categories(household_id: str) -> Dict[str, List[Dict[str, Any]
         for b in (b_resp.data or []):
             code_val = b.get("category_code")
             if code_val:
-                # If any budget row for this category is explicitly active, record True; if all False, False
-                if code_val not in budget_status_map or b.get("is_active") is True:
-                    budget_status_map[code_val] = bool(b.get("is_active"))
+                # Active when any row is: NULL counts as active, as the database triggers read it
+                # (is_active IS NOT FALSE). Inactive only when every row is explicitly False.
+                row_active = b.get("is_active") is not False
+                if code_val not in budget_status_map or row_active:
+                    budget_status_map[code_val] = row_active
     except Exception as exc:
         logger.warning("Could not query budgets for category status: %s", exc)
 

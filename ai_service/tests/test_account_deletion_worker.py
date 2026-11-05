@@ -39,6 +39,16 @@ DESTRUCTIVE_RPCS = {
     "record_account_deletion_worker_run",
 }
 
+# What a run does with the purge switch off: neither depends on purging, and the page promises the
+# 90-day removal. mark_account_deletion_notice_sent only ever marks a developer alert there.
+PURGE_OFF_RPCS = {"list_account_deletion_alerts_due", "purge_expired_account_deletion_inquiries",
+                  "mark_account_deletion_notice_sent"}
+PURGE_OFF_CALLS = [
+    ("rpc", "get_account_deletion_queue_summary", {}),
+    ("rpc", "list_account_deletion_alerts_due", {}),
+    ("rpc", "purge_expired_account_deletion_inquiries", {"p_days": 90}),
+]
+
 
 class ApiError(Exception):
     """Shaped like postgrest.APIError: ``str()`` is the body, attributes carry the fields."""
@@ -180,28 +190,56 @@ def _recipients(send: AsyncMock) -> list:
 
 
 @pytest.mark.parametrize("value", [None, "", "0", "true", "TRUE", "yes", "on", "2", "1 "[:0]])
-def test_disabled_makes_no_destructive_call_of_any_kind(monkeypatch, caplog, mailer, value):
+def test_disabled_makes_no_purge_call_of_any_kind(monkeypatch, caplog, mailer, value):
     if value is None:
         monkeypatch.delenv(worker.ENABLE_ENV, raising=False)
     else:
         monkeypatch.setenv(worker.ENABLE_ENV, value)
 
-    # Everything destructive would fail loudly if it were reached.
+    # Everything that purges, or emails a user, would fail loudly if it were reached.
     client = FakeClient(jobs=[job()])
-    boom = AssertionError("a destructive call was made while disabled")
-    for name in DESTRUCTIVE_RPCS | {"list_account_purge_storage", "list_account_deletion_notices_due",
-                                    "list_account_deletion_alerts_due", "auth.delete", "auth.get", "storage.remove"}:
+    boom = AssertionError("a purge call was made while disabled")
+    for name in (DESTRUCTIVE_RPCS - PURGE_OFF_RPCS) | {"list_account_purge_storage", "list_account_deletion_notices_due",
+                                                       "auth.delete", "auth.get", "storage.remove"}:
         client.failures[name] = boom
 
     with caplog.at_level("INFO"):
         assert worker.run_once(client) == 0
 
-    # Exactly one call was made, and it is the read-only summary.
-    assert client.calls == [("rpc", "get_account_deletion_queue_summary", {})]
+    # The read-only summary, then only the two things that do not depend on the purge.
+    assert client.calls == PURGE_OFF_CALLS
     assert len(client.jobs) == 1, "the due job must still be unclaimed"
     mailer.assert_not_awaited()
     assert "due=3" in caplog.text
     assert "disabled" in caplog.text.lower()
+
+
+def test_disabled_still_alerts_the_developer_about_stuck_jobs(monkeypatch, mailer):
+    monkeypatch.delenv(worker.ENABLE_ENV, raising=False)
+    monkeypatch.setenv("ACCOUNT_DELETION_EMAILS_ENABLED", "1")
+    client = FakeClient()
+    client.results["list_account_deletion_alerts_due"] = [{"request_id": REQ, "alert": "ops_overdue"}]
+    assert worker.run_once(client) == 0
+    assert mailer.await_count == 1
+    assert _recipients(mailer) == [None], "the developer, never a user"
+    assert REQ in mailer.await_args.args[0].body
+    assert client.rpc_params("mark_account_deletion_notice_sent") == [{"p_request_id": REQ, "p_notice": "ops_overdue"}]
+
+
+def test_disabled_still_removes_inquiries_after_90_days(monkeypatch, mailer):
+    monkeypatch.delenv(worker.ENABLE_ENV, raising=False)
+    client = FakeClient()
+    assert worker.run_once(client) == 0
+    assert client.rpc_params("purge_expired_account_deletion_inquiries") == [{"p_days": 90}]
+
+
+@pytest.mark.parametrize("failing", ["list_account_deletion_alerts_due", "purge_expired_account_deletion_inquiries"])
+def test_disabled_run_level_failures_exit_non_zero_and_the_other_step_still_runs(monkeypatch, mailer, failing):
+    monkeypatch.delenv(worker.ENABLE_ENV, raising=False)
+    client = FakeClient()
+    client.failures[failing] = ApiError("boom")
+    assert worker.run_once(client) == 1
+    assert [c[1] for c in client.calls if c[0] == "rpc"] == [c[1] for c in PURGE_OFF_CALLS]
 
 
 def test_only_the_exact_value_1_enables(monkeypatch):
@@ -212,12 +250,13 @@ def test_only_the_exact_value_1_enables(monkeypatch):
         assert worker.purge_enabled() is False
 
 
-def test_disabled_summary_failure_is_a_failed_run_and_still_touches_nothing(monkeypatch, mailer):
+def test_disabled_summary_failure_is_a_failed_run_and_still_purges_nothing(monkeypatch, mailer):
     monkeypatch.delenv(worker.ENABLE_ENV, raising=False)
     client = FakeClient(jobs=[job()])
     client.failures["get_account_deletion_queue_summary"] = ApiError("no such function")
     assert worker.run_once(client) == 1
-    assert client.calls == [("rpc", "get_account_deletion_queue_summary", {})]
+    assert client.calls == PURGE_OFF_CALLS
+    assert len(client.jobs) == 1
 
 
 # ── The job ────────────────────────────────────────────────────────────────
@@ -688,8 +727,8 @@ def test_with_the_purge_off_no_reminder_goes_even_with_emails_on(monkeypatch, ma
     monkeypatch.setenv("ACCOUNT_DELETION_EMAILS_ENABLED", "1")
     client = FakeClient(jobs=[job()])
     boom = AssertionError("a call was made while the purge is off")
-    for name in DESTRUCTIVE_RPCS | {"list_account_purge_storage", "list_account_deletion_notices_due",
-                                    "list_account_deletion_alerts_due", "auth.delete", "auth.get", "storage.remove"}:
+    for name in (DESTRUCTIVE_RPCS - PURGE_OFF_RPCS) | {"list_account_purge_storage", "list_account_deletion_notices_due",
+                                                       "auth.delete", "auth.get", "storage.remove"}:
         client.failures[name] = boom
     client.results["list_account_deletion_notices_due"] = _due_notices()
 
@@ -697,7 +736,7 @@ def test_with_the_purge_off_no_reminder_goes_even_with_emails_on(monkeypatch, ma
         assert worker.run_once(client) == 0
 
     mailer.assert_not_awaited()
-    assert client.calls == [("rpc", "get_account_deletion_queue_summary", {})]
+    assert client.calls == PURGE_OFF_CALLS
     assert client.rpc_params("mark_account_deletion_notice_sent") == []
     assert len(client.jobs) == 1
 
@@ -823,6 +862,38 @@ def test_holder_reminders_say_signing_in_does_not_cancel(notice, locale, phrase)
 )
 def test_member_notices_say_their_account_stays(notice, locale, phrase):
     assert phrase in notices.compose(notice, locale, _SCHEDULED).body
+
+
+@pytest.mark.parametrize("notice", ["member_marked", "member_t7"])
+@pytest.mark.parametrize("locale", ["ar", "en", "ur", "fr", None])
+def test_member_notices_are_in_all_three_languages_arabic_first(notice, locale):
+    """Members have no stored language, and the request's is the requester's: send all three."""
+    message = notices.compose(notice, locale, _SCHEDULED)
+    assert message == notices.compose(notice, "en", _SCHEDULED), "the requester's language plays no part"
+    body = message.body
+    ar = body.index("حسابك أنت يبقى")
+    en = body.index("Your own account stays")
+    ur = body.index("آپ کا اپنا اکاؤنٹ برقرار")
+    assert ar < en < ur
+    assert body.count("2026-12-02") == 3
+    assert "قوام المال" in message.subject and "Qawam Money" in message.subject
+    assert "\n" not in message.subject
+
+
+@pytest.mark.parametrize("notice", ["holder_t7", "holder_t1", "holder_completion"])
+def test_holder_notices_stay_in_the_holder_language(notice):
+    assert "Qawam Money" not in notices.compose(notice, "ar", _SCHEDULED).body
+    assert "قوام المال" not in notices.compose(notice, "en", _SCHEDULED).body
+
+
+def test_member_notice_reaches_members_in_three_languages_whatever_the_request_locale(enabled, mailer):
+    client = FakeClient()
+    client.results["list_account_deletion_notices_due"] = [
+        {"request_id": REQ, "user_id": MEMBER, "notice": "member_marked", "locale": "en", "scheduled_for": "2026-12-01T00:00:00+00:00"},
+    ]
+    assert worker.run_once(client) == 0
+    body = mailer.await_args.args[0].body
+    assert "Your own account stays" in body and "حسابك أنت يبقى" in body and "آپ کا اپنا اکاؤنٹ برقرار" in body
 
 
 @pytest.mark.parametrize("locale", ["fr", "", None])

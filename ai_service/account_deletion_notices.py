@@ -1,5 +1,8 @@
 """Emails about a scheduled account deletion, in Arabic, English and Urdu.
 
+An account holder's email is in the language of their request. A household member's is in all
+three (Arabic, then English, then Urdu): members have no stored language of their own.
+
 The names are the ones public.list_account_deletion_notices_due returns. Plain text, no links: the
 app is where a deletion is cancelled, and a link in a deletion email is what a phishing copy would
 imitate.
@@ -136,6 +139,13 @@ _TEMPLATES = {
 
 NOTICES = tuple(_TEMPLATES)
 
+# Members have no stored language, and the request's locale is the requester's, so a member gets
+# every language, Arabic first.
+TRILINGUAL_NOTICES = ("member_marked", "member_t7")
+TRILINGUAL_ORDER = ("ar", "en", "ur")
+_SUBJECT_SEPARATOR = " / "
+_BODY_SEPARATOR = "\n----------\n\n"
+
 
 def _riyadh_date(value: Union[str, datetime, None]) -> str:
     if value is None:
@@ -147,10 +157,17 @@ def _riyadh_date(value: Union[str, datetime, None]) -> str:
 
 
 def compose(notice: str, locale: Optional[str], scheduled_for: Union[str, datetime, None] = None) -> OutboundEmail:
-    """The email for ``notice``. An unknown locale gets Arabic; an unknown notice raises ValueError."""
+    """The email for ``notice``. A holder's is in their locale, an unknown one getting Arabic. A
+    member's is in Arabic, English and Urdu, in that order, whatever ``locale`` is. An unknown
+    notice raises ValueError."""
     languages = _TEMPLATES.get(notice)
     if languages is None:
         raise ValueError("unknown account deletion notice")
-    subject, body = languages.get(locale or "", languages[DEFAULT_LOCALE])
     date = _riyadh_date(scheduled_for)
+    if notice in TRILINGUAL_NOTICES:
+        parts = [languages[lang] for lang in TRILINGUAL_ORDER]
+        subject = _SUBJECT_SEPARATOR.join(s for s, _ in parts)
+        body = _BODY_SEPARATOR.join(b for _, b in parts)
+    else:
+        subject, body = languages.get(locale or "", languages[DEFAULT_LOCALE])
     return OutboundEmail(subject=subject.replace("{date}", date), body=body.replace("{date}", date))

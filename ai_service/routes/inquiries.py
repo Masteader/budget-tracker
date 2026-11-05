@@ -10,7 +10,8 @@ Contact, support and VIP early-access inquiries, delivered by email to the devel
 
 A request answers 200 only after the email provider accepted the message, or, for a lead or a
 deletion request, once the row is stored ("captured": the row is what gets acted on). Otherwise
-it answers 503 and logs an error; it never pretends to have sent.
+it answers 503 and logs an error; it never pretends to have sent. A deletion request whose row
+could not be stored answers 503 even when mail works: "sent" means stored and sent.
 """
 
 from __future__ import annotations
@@ -265,6 +266,16 @@ async def _deliver(
                "Please try again later.",
     )
     is_lead_capture = inquiry_type in ("vip_early_access", "account_deletion") and db_persisted
+
+    # The page tells the person a deletion request was stored (and sent, or not). The row is
+    # what the operator acts on and what the 90-day removal deletes, so without it the request
+    # is not received: answer 503 and send nothing, and they can try again.
+    if inquiry_type == "account_deletion" and not db_persisted:
+        logger.error("Inquiry ref=%s (%s) NOT stored; refused so the sender can retry.", reference, inquiry_type)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Your request could not be stored right now, so it was not received. Please try again later.",
+        )
 
     if mail_service.active_provider() is None:
         if is_lead_capture:
