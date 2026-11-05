@@ -184,6 +184,9 @@ async def firewall_token_middleware(request: Request, call_next):
             "/favicon.svg",
             # Anonymous waitlist/contact form; protected by validation, honeypot and rate limits.
             "/public/inquiries",
+            # Public account deletion page the app stores require. Only this exact path; there
+            # is deliberately no generic SPA fallback.
+            "/delete-account",
         ]
         or path.startswith("/assets/")
         or path.startswith("/auth/")
@@ -281,6 +284,12 @@ _log_security_configuration()
 @app.get("/", response_class=HTMLResponse, tags=["ops"])
 async def root_landing_page():
     """Public landing page: the committed web_app build (static/index.html)."""
+    return HTMLResponse(content=get_landing_page_html())
+
+
+@app.get("/delete-account", response_class=HTMLResponse, tags=["ops"])
+async def delete_account_page():
+    """Public account deletion page: the same web_app build, which routes on the path."""
     return HTMLResponse(content=get_landing_page_html())
 
 

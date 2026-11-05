@@ -334,6 +334,10 @@ def list_members(household_id: str, caller_id: str) -> Dict[str, Any]:
 
 
 def _map_rpc_error(exc: Exception) -> Exception:
+    # First: these messages can mention the primary admin, which would read as a 403 below.
+    guard = supabase_client.account_deletion_guard_error(exc)
+    if guard is not None:
+        return HouseholdConflictError(str(guard), guard.code)
     fields = db_error_fields(exc)
     message, code = fields["message"], fields["code"]
     if "sole admin" in message.lower():

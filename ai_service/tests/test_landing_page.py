@@ -175,3 +175,52 @@ def test_served_privacy_section_names_the_ai_processor_and_no_sms():
     assert "(RLS)" in bundle
     assert "ما نقرأ رسائلك النصية أبداً" in bundle
     assert "We never read your SMS" in bundle
+
+
+# ── Public account deletion page (store requirement) ───────────────────────────
+
+_PROXIED = {"X-Forwarded-For": "198.51.100.7"}
+
+
+async def _proxied(method: str, path: str):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        return await ac.request(method, path, headers=_PROXIED)
+
+
+@pytest.mark.asyncio
+async def test_delete_account_page_is_public_through_the_proxy():
+    res = await _proxied("GET", "/delete-account")
+    assert res.status_code == 200
+    assert "text/html" in res.headers["content-type"]
+    assert res.text == (STATIC / "index.html").read_text(encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_delete_account_page_still_answers_when_the_build_is_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr(landing_page, "STATIC_INDEX", tmp_path / "index.html")
+    res = await _proxied("GET", "/delete-account")
+    assert res.status_code == 200
+    assert "fmscoinfo@fmsco.com.sa" in res.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["/delete-accounts", "/delete-account/confirm", "/account", "/privacy", "/admin", "/households"])
+async def test_other_unknown_paths_stay_closed_through_the_proxy(path):
+    res = await _proxied("GET", path)
+    assert res.status_code == 401
+    assert "<div id=\"root\">" not in res.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["/delete-accounts", "/delete-account/confirm", "/account", "/privacy"])
+async def test_no_generic_spa_fallback_was_added(path):
+    res = await _get(path)
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE"])
+async def test_delete_account_page_is_read_only(method):
+    res = await _proxied(method, "/delete-account")
+    assert res.status_code == 405

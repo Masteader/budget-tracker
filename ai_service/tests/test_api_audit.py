@@ -237,7 +237,7 @@ def test_remove_sub_category_never_purges_shared_definition(two_households):
 # ─── Route coverage: every non-public route rejects anonymous callers ────────
 
 PUBLIC_PATHS = {
-    "/", "/auth/confirm", "/auth/callback", "/health", "/docs", "/redoc", "/openapi.json",
+    "/", "/delete-account", "/auth/confirm", "/auth/callback", "/health", "/docs", "/redoc", "/openapi.json",
     "/docs/oauth2-redirect", "/hero_glacier.png", "/hero_glacier.jpg", "/favicon.svg",
     "/hero-bg.webp", "/hero-bg.jpg", "/households/invites/{invite_code}",
 }

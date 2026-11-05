@@ -2,12 +2,15 @@
 Contact, support and VIP early-access inquiries, delivered by email to the developer.
 
 - POST /public/inquiries   anonymous (web app, landing pages). Honeypot + per-IP, per-email
-                           and global rate limits.
+                           and global rate limits. Type account_deletion only stores a row and
+                           emails the developer: it never looks up an account and never mails
+                           the submitted address, so the answer says nothing about who has one.
 - POST /support/inquiries  in-app support/escalation. The sender identity comes only from the
                            verified Supabase JWT; the body cannot name a user or email.
 
-A request answers 200 only after the email provider accepted the message. With no provider
-configured the endpoint answers 503 and logs an error; it never pretends to have sent.
+A request answers 200 only after the email provider accepted the message, or, for a lead or a
+deletion request, once the row is stored ("captured": the row is what gets acted on). Otherwise
+it answers 503 and logs an error; it never pretends to have sent.
 """
 
 from __future__ import annotations
@@ -46,6 +49,7 @@ TYPE_LABELS = {
     "vip_early_access": "VIP early access",
     "support": "Support",
     "contact": "Contact",
+    "account_deletion": "Account deletion",
 }
 
 # Deliberately stricter than RFC 5322: no quotes, spaces, commas, angle brackets or line breaks,
@@ -92,7 +96,7 @@ def check_locale(value: Optional[str]) -> Optional[str]:
 class PublicInquiry(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["vip_early_access", "support", "contact"]
+    type: Literal["vip_early_access", "support", "contact", "account_deletion"]
     email: str = Field(..., max_length=MAX_EMAIL + 8)
     name: Optional[str] = Field(None, max_length=MAX_NAME)
     message: Optional[str] = Field(None, max_length=MAX_MESSAGE)
@@ -231,7 +235,8 @@ def _persist_inquiry(
         }).execute()
         return True
     except Exception as exc:
-        logger.warning("Failed to persist inquiry ref=%s to database: %s", reference, exc)
+        # Type only: a database error can quote the failing row, and the row holds the address.
+        logger.warning("Failed to persist inquiry ref=%s to database: %s", reference, type(exc).__name__)
         return False
 
 
@@ -259,7 +264,7 @@ async def _deliver(
         detail="Email delivery is not configured on the server, so your message was not sent. "
                "Please try again later.",
     )
-    is_lead_capture = inquiry_type == "vip_early_access" and db_persisted
+    is_lead_capture = inquiry_type in ("vip_early_access", "account_deletion") and db_persisted
 
     if mail_service.active_provider() is None:
         if is_lead_capture:

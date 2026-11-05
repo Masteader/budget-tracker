@@ -51,6 +51,8 @@ from supabase_client import (
     set_household_rollover_rule,
     get_household_savings_summary,
     create_household_role_invite,
+    ACCOUNT_DELETION_GUARD_MESSAGES,
+    AccountDeletionGuardError,
     InviteRejectedError,
     InviteTargetNotFound,
     inspect_household_role_invite,
@@ -251,6 +253,8 @@ async def create_household_role_invite_endpoint(
         )
     except InviteTargetNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except AccountDeletionGuardError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": exc.code, "message": str(exc)})
     except InviteRejectedError as exc:
         raise HTTPException(status_code=exc.status_code, detail=InviteRejectedError.PUBLIC_MESSAGE)
     except Exception as exc:
@@ -319,6 +323,11 @@ async def claim_household_role_invite_endpoint(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=res.get("error", "Too many failed join attempts. Please try again later."),
                 headers={"Retry-After": "900"},
+            )
+        if res.get("code") in ACCOUNT_DELETION_GUARD_MESSAGES:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": res["code"], "message": res.get("error")},
             )
         if res.get("status") != "success":
             raise HTTPException(

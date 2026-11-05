@@ -367,3 +367,151 @@ def test_app_support_per_user_rate_limit(client, mailer):
 def test_app_support_missing_provider_returns_503(client, no_provider):
     res = client.post(APP_URL, json={"message": "hello there"}, headers={"Authorization": f"Bearer {_token()}"})
     assert res.status_code == 503
+
+
+# ── The public account deletion form ────────────────────────────────────────
+
+_DELETION = {"type": "account_deletion", "email": "leaving@example.com", "name": "Sara", "message": "Please delete it.", "locale": "ur"}
+
+
+class _InquiriesOnlyClient:
+    """Anything but the inquiries table fails the test: the form must not look up an account."""
+
+    def __init__(self, fail_insert=False):
+        self.rows = []
+        self.updates = []
+        self.fail_insert = fail_insert
+
+    def table(self, name):
+        assert name == "inquiries", f"the deletion form touched {name}"
+        return self
+
+    def insert(self, row):
+        if self.fail_insert:
+            raise RuntimeError("insert failed for leaving@example.com")
+        self.rows.append(row)
+        return self
+
+    def update(self, row):
+        self.updates.append(row)
+        return self
+
+    def eq(self, *_args):
+        return self
+
+    def execute(self):
+        return None
+
+    def __getattr__(self, name):
+        raise AssertionError(f"the deletion form used client.{name}")
+
+
+@pytest.fixture()
+def form_db(monkeypatch):
+    import routes.inquiries as inquiries
+
+    db = _InquiriesOnlyClient()
+    monkeypatch.setattr(inquiries, "get_client", lambda: db)
+    return db
+
+
+def test_deletion_request_is_stored_and_emailed_to_the_developer_only(client, mailer, form_db):
+    res = client.post(PUBLIC_URL, json=_DELETION, headers={"X-Forwarded-For": "198.51.100.7"})
+    assert res.status_code == 200, res.text
+    assert res.json()["status"] == "sent"
+
+    assert len(form_db.rows) == 1
+    row = form_db.rows[0]
+    assert (row["type"], row["email"], row["locale"]) == ("account_deletion", "leaving@example.com", "ur")
+
+    msg = _sent_message(mailer)
+    assert "Account deletion" in msg.subject
+    assert "Please delete it." in msg.body
+    assert mailer.await_args.kwargs.get("to_override") is None, "never mails the submitted address"
+    assert len(mailer.await_args.args) == 1
+
+
+def test_deletion_request_needs_no_message(client, mailer, form_db):
+    res = client.post(PUBLIC_URL, json={"type": "account_deletion", "email": "leaving@example.com"})
+    assert res.status_code == 200, res.text
+
+
+def test_deletion_form_answer_never_varies_by_account(client, mailer, form_db, fake_supabase):
+    fake_supabase.seed("users", [{"id": USER_ID, "display_name": "Known", "email": "known@example.com"}])
+    known = client.post(PUBLIC_URL, json={**_DELETION, "email": "known@example.com"})
+    unknown = client.post(PUBLIC_URL, json={**_DELETION, "email": "nobody-here@example.com"})
+    assert known.status_code == unknown.status_code == 200
+    assert set(known.json()) == set(unknown.json()) == {"status", "reference"}
+    assert known.json()["status"] == unknown.json()["status"]
+
+
+def test_deletion_form_honeypot_stores_and_sends_nothing(client, mailer, form_db):
+    res = client.post(PUBLIC_URL, json={**_DELETION, "company_website": "http://spam.test"})
+    assert res.status_code == 200
+    assert res.json()["status"] == "sent"
+    assert form_db.rows == []
+    mailer.assert_not_awaited()
+
+
+def test_deletion_form_shares_the_per_email_limit(client, mailer, form_db, monkeypatch):
+    import routes.inquiries as inquiries
+
+    ips = iter(f"203.0.113.{n}" for n in range(1, 50))
+    monkeypatch.setattr(inquiries, "client_ip_info", lambda _request: (next(ips), True))
+    statuses = [client.post(PUBLIC_URL, json=_DELETION).status_code for _ in range(4)]
+    assert statuses == [200, 200, 200, 429]
+
+
+def test_deletion_form_shares_the_per_ip_limit(client, mailer, form_db, monkeypatch):
+    import routes.inquiries as inquiries
+
+    monkeypatch.setattr(inquiries, "client_ip_info", lambda _request: ("203.0.113.5", True))
+    statuses = [
+        client.post(PUBLIC_URL, json={**_DELETION, "email": f"u{n}@example.com"}).status_code for n in range(6)
+    ]
+    assert statuses == [200, 200, 200, 200, 200, 429]
+
+
+def test_a_stored_deletion_request_is_received_even_without_a_mail_provider(client, no_provider, form_db):
+    """The row is what the developer acts on, so this is true, not a pretended success."""
+    res = client.post(PUBLIC_URL, json=_DELETION)
+    assert res.status_code == 200, res.text
+    assert res.json()["status"] == "captured"
+    assert len(form_db.rows) == 1
+    no_provider.assert_not_awaited()
+
+
+def test_a_stored_deletion_request_is_received_when_the_provider_fails(client, mailer, form_db):
+    mailer.side_effect = mail_service.MailDeliveryError("down")
+    res = client.post(PUBLIC_URL, json=_DELETION)
+    assert res.status_code == 200, res.text
+    assert res.json()["status"] == "captured"
+    assert form_db.updates == [{"status": "failed"}]
+
+
+def test_a_deletion_request_neither_stored_nor_sent_is_an_error(client, no_provider, monkeypatch):
+    import routes.inquiries as inquiries
+
+    monkeypatch.setattr(inquiries, "get_client", lambda: _InquiriesOnlyClient(fail_insert=True))
+    res = client.post(PUBLIC_URL, json=_DELETION)
+    assert res.status_code == 503
+
+
+def test_a_failed_insert_never_logs_the_address(client, mailer, monkeypatch, caplog):
+    import routes.inquiries as inquiries
+
+    monkeypatch.setattr(inquiries, "get_client", lambda: _InquiriesOnlyClient(fail_insert=True))
+    with caplog.at_level("DEBUG"):
+        res = client.post(PUBLIC_URL, json=_DELETION)
+    assert res.status_code == 200
+    assert "leaving@example.com" not in caplog.text
+
+
+def test_deletion_form_is_reachable_through_the_proxy_without_any_token(client, mailer, form_db):
+    res = client.post(PUBLIC_URL, json=_DELETION, headers={"X-Forwarded-For": "198.51.100.7"})
+    assert res.status_code == 200
+
+
+def test_the_other_types_still_refuse_a_missing_provider(client, no_provider):
+    res = client.post(PUBLIC_URL, json={"type": "support", "email": "a@example.com", "message": "hi"})
+    assert res.status_code == 503

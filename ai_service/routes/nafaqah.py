@@ -27,6 +27,7 @@ from nafaqah_service import (
     NafaqahForbidden,
     NoProviderError,
     NotFamilyHousehold,
+    AccountPendingDeletion,
     OverpaymentError,
     build_summary,
     get_allowance,
@@ -68,6 +69,8 @@ def nafaqah_http_error(exc: NafaqahError) -> HTTPException:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"message": str(exc), "code": "no_provider"})
     if isinstance(exc, NotFamilyHousehold):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"message": str(exc), "code": "not_family"})
+    if isinstance(exc, AccountPendingDeletion):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"message": str(exc), "code": exc.code})
     if isinstance(exc, InvalidNafaqahRequest):
         return HTTPException(status_code=422, detail=str(exc))
     return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))

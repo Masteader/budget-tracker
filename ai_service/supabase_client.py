@@ -1201,6 +1201,29 @@ class InviteRejectedError(TransactionRejectedError):
     PUBLIC_MESSAGE = "The database rejected this invite."
 
 
+# Hints raised by the grace-period guards (migration 20261105000100). Routes answer 409 with the
+# code, which the app localizes; the database text is never echoed.
+ACCOUNT_DELETION_GUARD_MESSAGES = {
+    "account_pending_deletion": "This account is scheduled for deletion.",
+    "household_pending_deletion": "This household is scheduled for deletion.",
+    "successor_pending_deletion": "This member is scheduled for deletion.",
+}
+
+
+class AccountDeletionGuardError(ValueError):
+    def __init__(self, code: str):
+        super().__init__(ACCOUNT_DELETION_GUARD_MESSAGES[code])
+        self.code = code
+
+
+def account_deletion_guard_error(exc: BaseException) -> Optional[AccountDeletionGuardError]:
+    """The guard refusal behind a database error, else None."""
+    from postgrest_compat import db_error_fields
+
+    hint = db_error_fields(exc)["hint"]
+    return AccountDeletionGuardError(hint) if hint in ACCOUNT_DELETION_GUARD_MESSAGES else None
+
+
 def create_household_role_invite(
     household_id: str,
     role: str,
@@ -1251,6 +1274,9 @@ def create_household_role_invite(
         # A database refusal is the request's fault (4xx), never a 500 (FABLE2-API-06).
         from postgrest_compat import db_error_fields
 
+        guard = account_deletion_guard_error(exc)
+        if guard is not None:
+            raise guard from exc
         sqlstate = db_error_fields(exc)["code"]
         if sqlstate == "23503":
             raise InviteTargetNotFound() from exc
@@ -1319,6 +1345,9 @@ def claim_household_role_invite(invite_code: str, user_id: str) -> dict:
         }).execute()
     except Exception as exc:
         logger.error("Supabase claim_household_role_invite RPC error: %s", exc)
+        guard = account_deletion_guard_error(exc)
+        if guard is not None:
+            return {"status": "error", "code": guard.code, "error": str(guard)}
         # Never echo raw database errors to the client. The DB lockout (repeated failed
         # join attempts) is surfaced distinctly so the route can answer 429.
         if "too many failed join attempts" in str(exc).lower():

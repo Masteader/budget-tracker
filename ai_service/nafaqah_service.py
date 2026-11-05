@@ -42,7 +42,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Dict, Iterable, List, Optional
 
 from postgrest_compat import db_error_fields, first_row
-from supabase_client import get_client, get_household_payday
+from supabase_client import account_deletion_guard_error, get_client, get_household_payday
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,14 @@ class NafaqahError(Exception):
 
 class NafaqahForbidden(NafaqahError):
     """The caller may not perform this action in this household."""
+
+
+class AccountPendingDeletion(NafaqahError):
+    """The grace-period guard refused: the target account is scheduled for deletion."""
+
+    def __init__(self, message: str, code: str):
+        super().__init__(message)
+        self.code = code
 
 
 class NotFamilyHousehold(NafaqahError):
@@ -571,6 +579,9 @@ def _map_db_error(exc: Exception) -> Exception:
     """
     fields = db_error_fields(exc)
     message, code, hint = fields["message"], fields["code"], fields["hint"]
+    guard = account_deletion_guard_error(exc)
+    if guard is not None:
+        return AccountPendingDeletion(str(guard), guard.code)
     if hint == "overpayment" or "exceeds the outstanding balance" in message:
         return OverpaymentError("Reimbursement exceeds the outstanding balance.")
     if hint == LEDGER_WOULD_BE_OVERPAID or "ledger overpaid" in message:
