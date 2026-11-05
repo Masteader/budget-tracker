@@ -32,7 +32,7 @@ Create a Railway Cron service from the same image as the API:
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | Same as the API |
 | `RESEND_API_KEY` or `SMTP_*`, `MAIL_FROM`, `CONTACT_RECIPIENT_EMAIL` | Same as the API. Without a provider, no reminders or alerts go out, and purges still run. |
 | `ACCOUNT_DELETION_PURGE_ENABLED` | Leave unset until approved. Only the exact value `1` enables it. |
-| `ACCOUNT_DELETION_EMAILS_ENABLED` | Leave unset until reminder emails to real users are approved. Only the exact value `1` enables them. Separate from the purge switch. |
+| `ACCOUNT_DELETION_EMAILS_ENABLED` | Leave unset until reminder emails to real users are approved. Only the exact value `1` enables them, and only with the purge switch on too. |
 
 Railway does not start a run while the previous one is active. Apply the migrations first (rule 01), because the worker calls functions they create. Their run order is in [the owner actions](../review/OWNER_ACTIONS.md#supabase): `20261105000500` goes before `20261105000000`, and may already be on live. A whole `run_tests.py --rebuild` also runs the suite in that order, on a second database.
 
@@ -41,19 +41,19 @@ Railway does not start a run while the previous one is active. Apply the migrati
 Without `ACCOUNT_DELETION_PURGE_ENABLED=1` the worker calls one read-only function, logs the counts and exits 0:
 
 ```
-Account deletion purge is disabled (ACCOUNT_DELETION_PURGE_ENABLED is not 1); no job was touched. due=0 in_progress=0 failed=0 overdue=0
+Account deletion purge is disabled (ACCOUNT_DELETION_PURGE_ENABLED is not 1); nothing was changed. due=0 in_progress=0 failed=0 overdue=0
 ```
 
-Run it this way first, with emails off too. It proves the service, key and migrations work without changing anything. To stop purges in an emergency, remove the variable. A run already in progress finishes, and the next run touches no job.
+Run it this way first. It proves the service, key and migrations work without changing anything. To stop purges in an emergency, remove the variable. A run already in progress finishes, and the next run does nothing, which also stops reminders.
 
 ## The email switch
 
-`ACCOUNT_DELETION_EMAILS_ENABLED=1` (that exact value) governs every email to an account holder or household member: T-7, T-1, completion, member marked and member T-7. It is independent of the purge switch.
+`ACCOUNT_DELETION_EMAILS_ENABLED=1` (that exact value) governs every email to an account holder or household member: T-7, T-1, completion, member marked and member T-7. These emails need both switches, because a reminder names a date, and with the purge off that date would not be met. To test purges first, turn on the purge switch alone.
 
 | Purge | Emails | A run does this |
 |---|---|---|
 | Off | Off | Logs the counts. Writes nothing. |
-| Off | On | Logs the counts and sends the reminders that are due. Touches no job and sends no developer alert. |
+| Off | On | The same: logs the counts and writes nothing. No reminder goes out. |
 | On | Off | Runs jobs and developer alerts. No email to any account holder or member. |
 | On | On | Everything |
 

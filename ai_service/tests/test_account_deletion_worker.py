@@ -678,27 +678,36 @@ def test_off_developer_alerts_still_go_out_and_are_marked(emails_off, mailer):
     assert client.rpc_params("mark_account_deletion_notice_sent") == [{"p_request_id": REQ, "p_notice": "ops_failed"}]
 
 
-def test_on_with_the_purge_off_notices_go_and_no_job_is_touched(monkeypatch, mailer):
-    monkeypatch.delenv(worker.ENABLE_ENV, raising=False)
+@pytest.mark.parametrize("purge", [None, "", "0", "true", "yes"])
+def test_with_the_purge_off_no_reminder_goes_even_with_emails_on(monkeypatch, mailer, caplog, purge):
+    """A reminder names a date the purge would not meet: that would be false."""
+    if purge is None:
+        monkeypatch.delenv(worker.ENABLE_ENV, raising=False)
+    else:
+        monkeypatch.setenv(worker.ENABLE_ENV, purge)
     monkeypatch.setenv("ACCOUNT_DELETION_EMAILS_ENABLED", "1")
     client = FakeClient(jobs=[job()])
-    boom = AssertionError("a destructive call was made while the purge is off")
-    for name in DESTRUCTIVE_RPCS | {"list_account_purge_storage", "auth.delete", "storage.remove"}:
+    boom = AssertionError("a call was made while the purge is off")
+    for name in DESTRUCTIVE_RPCS | {"list_account_purge_storage", "list_account_deletion_notices_due",
+                                    "list_account_deletion_alerts_due", "auth.delete", "auth.get", "storage.remove"}:
         client.failures[name] = boom
+    client.results["list_account_deletion_notices_due"] = _due_notices()
+
+    with caplog.at_level("INFO"):
+        assert worker.run_once(client) == 0
+
+    mailer.assert_not_awaited()
+    assert client.calls == [("rpc", "get_account_deletion_queue_summary", {})]
+    assert client.rpc_params("mark_account_deletion_notice_sent") == []
+    assert len(client.jobs) == 1
+
+
+def test_with_both_on_reminders_go(enabled, mailer):
+    client = FakeClient()
     client.results["list_account_deletion_notices_due"] = _due_notices()[:1]
     assert worker.run_once(client) == 0
     assert _recipients(mailer) == [EMAIL]
     assert client.rpc_params("mark_account_deletion_notice_sent") == [{"p_request_id": REQ, "p_notice": "holder_t7"}]
-    assert len(client.jobs) == 1
-
-
-def test_on_with_the_purge_off_and_no_provider_changes_nothing(monkeypatch, no_provider):
-    monkeypatch.delenv(worker.ENABLE_ENV, raising=False)
-    monkeypatch.setenv("ACCOUNT_DELETION_EMAILS_ENABLED", "1")
-    client = FakeClient()
-    client.results["list_account_deletion_notices_due"] = _due_notices()
-    assert worker.run_once(client) == 0
-    assert client.rpc_params("mark_account_deletion_notice_sent") == []
 
 
 # ── Alerts, retention, heartbeat ───────────────────────────────────────────

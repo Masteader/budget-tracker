@@ -119,7 +119,7 @@ None of this is done, and nothing is deployed. Each step needs explicit approval
 ### Railway
 - Create the Cron service as in [the runbook](../runbooks/account-deletion-purge.md): same image, start command `python account_deletion_worker.py`, schedule `17 * * * *`, `SUPABASE_URL` and `SUPABASE_SECRET_KEY` as on the API. Run it first with `ACCOUNT_DELETION_PURGE_ENABLED` unset, then set it to `1` once approved.
 - Confirm `RESEND_API_KEY` or the `SMTP_*` variables, with `MAIL_FROM` and `CONTACT_RECIPIENT_EMAIL`. The page says "we may email", so it stays true without them, and purges still run.
-- Purges and emails have separate switches. `ACCOUNT_DELETION_PURGE_ENABLED=1` runs jobs and developer alerts. `ACCOUNT_DELETION_EMAILS_ENABLED=1` emails account holders and household members, and needs its own approval. To enable purges before approving reminders, set only the first: failure alerts still reach the developer, and completion emails are skipped for those accounts for good. See [the runbook](../runbooks/account-deletion-purge.md#the-email-switch).
+- Purges and emails have separate switches. `ACCOUNT_DELETION_PURGE_ENABLED=1` runs jobs and developer alerts. `ACCOUNT_DELETION_EMAILS_ENABLED=1` emails account holders and household members, only with the purge switch on too, and needs its own approval. To enable purges before approving reminders, set only the first: failure alerts still reach the developer, and completion emails are skipped for those accounts for good. See [the runbook](../runbooks/account-deletion-purge.md#the-email-switch).
 
 ### Supabase
 - Run the read-only checks in `docs/review/audit/account_deletion_preflight_checks.sql`, section 4 before the migrations.

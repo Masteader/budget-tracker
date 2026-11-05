@@ -818,7 +818,8 @@ def test_developer_alert_goes_out_with_emails_off(world, db, resend, run_worker)
     assert gateway.emails == []
 
 
-def test_purge_off_emails_on_reminds_and_touches_no_job(world, db, resend, run_worker):
+def test_purge_off_sends_no_reminder_and_touches_no_job(world, db, resend, run_worker):
+    """A reminder would name a date the purge would not meet, so it needs both switches."""
     gateway = resend
     flat = world.roommates("DELR", n_members=1)
     mate = flat.members[0]
@@ -827,17 +828,21 @@ def test_purge_off_emails_on_reminds_and_touches_no_job(world, db, resend, run_w
     _date_in(db, mate, "12 hours")
 
     assert run_worker(enabled=False, emails=True) == 0
-    assert _mail_to(gateway) == [mate.email]
-    assert "holder_t1" in _notices_sent(db, request_id)
+    assert gateway.emails == []
+    assert _notices_sent(db, request_id) == []
 
-    # The date passes with the purge still off: no reminder for a past date, no job claimed.
-    gateway.emails.clear()
-    gateway.auth_calls.clear()
+    # The date passes with the purge still off: no job claimed.
     _pass_the_date(db, mate)
     assert run_worker(enabled=False, emails=True) == 0
     assert gateway.emails == []
     assert gateway.auth_calls == []
     assert db.scalar("SELECT status FROM public.account_deletion_requests WHERE id = %s", (request_id,)) == "scheduled"
+
+    # Both on, with the date a day out: the reminder that was held back goes.
+    _date_in(db, mate, "12 hours")
+    assert run_worker(enabled=True, emails=True) == 0
+    assert _mail_to(gateway) == [mate.email]
+    assert "holder_t1" in _notices_sent(db, request_id)
 
     assert mate.rpc("cancel_account_deletion").json()["cancelled"] is True
 

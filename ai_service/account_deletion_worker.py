@@ -4,18 +4,17 @@ Finishes account deletions that have come due. Runs once and exits: python accou
 Meant for a Railway Cron service using this image (docs/runbooks/account-deletion-purge.md). The
 API process never imports it and has no route to it.
 
-Two switches, each only on with the exact value 1, each independent of the other:
+Two switches, each only on with the exact value 1:
 
-ACCOUNT_DELETION_PURGE_ENABLED: without it the worker reads one summary and logs the counts: no
-claim, no storage or Auth call, no developer alert.
+ACCOUNT_DELETION_PURGE_ENABLED: without it the worker reads one summary, logs the counts and stops:
+no claim, no email of any kind, no storage or Auth call, no write. A reminder names a date, and with
+the purge off that date would not be met, so no reminder goes out whatever the other switch says.
 
-ACCOUNT_DELETION_EMAILS_ENABLED: without it no account holder or household member gets an email
-(T-7, T-1, completion, member marked, member T-7), and no notice is marked sent, so reminders still
-in their window go out when it comes on. A completion email is skipped: the job still completes,
-and that email is never sent, because the address goes with the account. Developer alerts do not
-depend on this switch.
-
-With both off a run writes nothing.
+ACCOUNT_DELETION_EMAILS_ENABLED: on top of the first, lets account holders and household members get
+email (T-7, T-1, completion, member marked, member T-7). Purge on and this off is allowed, so purges
+can be tested first: no notice is sent or marked sent, so reminders still in their window go out
+when it comes on. A completion email is skipped: the job still completes, and that email is never
+sent, because the address goes with the account. Developer alerts do not depend on this switch.
 
 One job, each step safe to repeat: claim, prepare_account_purge (all database work), remove the
 queued storage objects, delete the user through the Auth Admin API (404 counts as done), then
@@ -300,13 +299,10 @@ def _run_disabled(client: Any) -> int:
         logger.error("Could not read the account deletion queue (%s).", type(exc).__name__)
         return 1
     logger.info(
-        "Account deletion purge is disabled (%s is not 1); no job was touched. "
+        "Account deletion purge is disabled (%s is not 1); nothing was changed. "
         "due=%s in_progress=%s failed=%s overdue=%s",
         ENABLE_ENV, summary.get("due"), summary.get("in_progress"), summary.get("failed"), summary.get("overdue"),
     )
-    # The purge switch does not govern reminders. With emails off too, this run wrote nothing.
-    if emails_enabled():
-        _send_notices(client)
     return 0
 
 
