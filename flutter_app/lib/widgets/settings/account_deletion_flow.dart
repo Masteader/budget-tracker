@@ -7,11 +7,13 @@ import '../../models/account_deletion.dart';
 import '../../providers/account_deletion_provider.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/public_links.dart';
+import '../../services/salary_cycle_service.dart';
 import '../../theme/app_themes.dart';
 import '../../utils/failure_log.dart';
 import '../app_snackbar.dart';
 
-String _dateText(BuildContext context, DateTime date) => context.fmtDate(date.toLocal(), 'd MMMM yyyy');
+/// The Riyadh date, as the web page and the emails state it, wherever the device is.
+String _dateText(BuildContext context, DateTime date) => context.fmtDate(SalaryCycleService.riyadhDate(date), 'd MMMM yyyy');
 
 /// What the Account section of Settings shows: Delete account or, for a pending
 /// user, the date and Cancel at all times; and the public pages.

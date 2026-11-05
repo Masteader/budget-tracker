@@ -52,10 +52,20 @@ function initialLanguage(): DeleteAccountLanguage {
   return DELETE_ACCOUNT_LANGUAGES.find((lang) => lang === asked) ?? 'ar';
 }
 
-/** The Riyadh date, the same one the reminder emails state. */
+/**
+ * The Riyadh date, the same one the reminder emails state, written day month year as the
+ * app writes it. Urdu's default long form adds a comma the app does not have.
+ */
 function formatDate(value: string | undefined, locale: string): string {
   if (!value) return '';
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'Asia/Riyadh' }).format(new Date(value));
+  const parts = new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Asia/Riyadh',
+  }).formatToParts(new Date(value));
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${part('day')} ${part('month')} ${part('year')}`;
 }
 
 function errorMessage(hint: string | undefined, t: DeleteAccountDictionary): string {

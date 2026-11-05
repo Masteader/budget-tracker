@@ -11,6 +11,7 @@ import 'package:budget_tracker/services/api_service.dart';
 import 'package:budget_tracker/services/local_account_data_cleaner.dart';
 import 'package:budget_tracker/services/offline_queue_manager.dart';
 import 'package:budget_tracker/services/offline_sync_service.dart';
+import 'package:budget_tracker/services/salary_cycle_service.dart';
 import 'package:budget_tracker/theme/app_themes.dart';
 import 'package:budget_tracker/providers/budget_provider.dart';
 import 'package:budget_tracker/providers/transaction_provider.dart';
@@ -925,7 +926,7 @@ void main() {
       testWidgets('$lang: the date is written in that language', (tester) async {
         _http.rpcResults['get_account_deletion_status'] = _scheduledStatus();
         await _pump(tester, lang: lang);
-        final shown = _l(lang).format('del_pending_date', {'date': _l(lang).date(DateTime.parse(_scheduledFor).toLocal(), 'd MMMM yyyy')});
+        final shown = _l(lang).format('del_pending_date', {'date': _l(lang).date(SalaryCycleService.riyadhDate(DateTime.parse(_scheduledFor)), 'd MMMM yyyy')});
         expect(_text(shown), findsOneWidget);
       });
     }

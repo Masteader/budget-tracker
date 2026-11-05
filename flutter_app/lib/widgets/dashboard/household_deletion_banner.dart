@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../providers/account_deletion_provider.dart';
+import '../../services/salary_cycle_service.dart';
 import '../../theme/app_themes.dart';
 
 /// Tells everyone in a household that it is scheduled for deletion, with the date
@@ -66,7 +67,7 @@ class _HouseholdDeletionBannerState extends State<HouseholdDeletionBanner> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  context.trArgs('del_banner_date', {'date': context.fmtDate(date.toLocal(), 'd MMMM yyyy')}),
+                  context.trArgs('del_banner_date', {'date': context.fmtDate(SalaryCycleService.riyadhDate(date), 'd MMMM yyyy')}),
                   style: TextStyle(fontSize: 12.5, color: context.textPrimary),
                 ),
                 const SizedBox(height: 4),
