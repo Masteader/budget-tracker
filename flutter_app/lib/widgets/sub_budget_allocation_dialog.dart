@@ -13,6 +13,7 @@ import '../services/api_service.dart';
 import 'app_snackbar.dart';
 import 'dispose_on_unmount.dart';
 import '../models/money.dart';
+import '../utils/failure_log.dart';
 
 class SubBudgetAllocationDialog extends StatefulWidget {
   final String householdId;
@@ -749,6 +750,15 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
             ? {'_sinking_fund': sfMap}
             : {};
 
+        // A budgeted category is active for the household (the sub-allocation
+        // API does the same); its open-cycle spending counts in the budget.
+        // Activated first: if this fails nothing is written, so the error below
+        // is true, and no budget row waits on a category that stays inactive.
+        await supabase.from('household_category_settings').upsert(
+          {'household_id': widget.householdId, 'category_code': widget.categoryCode, 'is_active': true},
+          onConflict: 'household_id,category_code',
+        );
+
         if (widget.existingBudget != null) {
           await supabase.from('budgets').update({
             'allocated_amount': amount,
@@ -788,12 +798,6 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
             });
           }
         }
-        // A budgeted category is active for the household (the sub-allocation
-        // API does the same); its open-cycle spending counts in the budget.
-        await supabase.from('household_category_settings').upsert(
-          {'household_id': widget.householdId, 'category_code': widget.categoryCode, 'is_active': true},
-          onConflict: 'household_id,category_code',
-        );
       }
 
       if (mounted) {
@@ -810,10 +814,12 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         );
       }
     } catch (e) {
+      // The server's text can carry anything; the user gets a plain message.
+      logFailure('SubBudgetAllocation.save', e);
       if (mounted) {
         setState(() {
           _isSaving = false;
-          _errorMessage = e.toString();
+          _errorMessage = context.tr('sba_save_failed');
         });
       }
     }
