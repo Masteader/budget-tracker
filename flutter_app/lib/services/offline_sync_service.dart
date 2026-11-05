@@ -10,7 +10,7 @@ export 'offline_queue_manager.dart' show OfflineQueueWriteException;
 /// Acts as a unified facade coordinating the OfflineQueueManager and SyncWorker.
 class OfflineSyncService {
   OfflineSyncService._() : queueManager = OfflineQueueManager();
-  static final OfflineSyncService instance = OfflineSyncService._();
+  static OfflineSyncService instance = OfflineSyncService._();
 
   @visibleForTesting
   OfflineSyncService.withQueue(this.queueManager);
@@ -52,6 +52,13 @@ class OfflineSyncService {
 
   /// Refreshes the reactive counter of pending items.
   Future<int> updatePendingCount() => syncWorker.updatePendingCount();
+
+  /// How many of the signed-in user's items have not reached the server,
+  /// including those parked as `failed`.
+  Future<int> unsyncedCount() => syncWorker.unsyncedCount();
+
+  /// Assigns items without an owner to the signed-in user.
+  Future<int> claimOwnerlessItems() => syncWorker.claimOwnerlessItems();
 
   /// Manually triggers an immediate background drain of all queued items.
   Future<int> flushQueue() => syncWorker.drainQueue();

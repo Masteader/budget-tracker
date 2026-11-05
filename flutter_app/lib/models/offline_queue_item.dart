@@ -25,6 +25,13 @@ class OfflineQueueItem {
     this.lastError,
   });
 
+  /// The account that queued this item, or null when it has none (older app
+  /// versions did not record one).
+  String? get ownerId {
+    final owner = payload['user_id']?.toString();
+    return owner == null || owner.isEmpty ? null : owner;
+  }
+
   /// Computes a SHA-256 fingerprint for the given operation.
   ///
   /// Without a [nonce] the key is deterministic for an identical

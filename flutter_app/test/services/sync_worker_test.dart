@@ -38,6 +38,7 @@ void main() {
 
       final dispatched = <String>[];
       worker = SyncWorker(
+        currentUserId: () => 'test-user',
         queueManager: queueManager,
         customDispatcher: (item) async {
           dispatched.add(item.operationType);
@@ -64,6 +65,7 @@ void main() {
       );
 
       worker = SyncWorker(
+        currentUserId: () => 'test-user',
         queueManager: queueManager,
         customDispatcher: (item) async {
           throw Exception('Backend unreachable');
@@ -113,6 +115,7 @@ void main() {
         householdId: 'h-1',
       );
       worker = SyncWorker(
+        currentUserId: () => 'test-user',
         queueManager: queueManager,
         interItemDelay: Duration.zero,
         customDispatcher: (item) async => item.id == blocked
@@ -189,6 +192,7 @@ void main() {
         idempotencyKey: 'online-attempt-key',
       );
       worker = SyncWorker(
+        currentUserId: () => 'test-user',
         queueManager: queueManager,
         interItemDelay: Duration.zero,
         customDispatcher: (item) async {
@@ -212,6 +216,7 @@ void main() {
       );
 
       worker = SyncWorker(
+        currentUserId: () => 'test-user',
         queueManager: queueManager,
         interItemDelay: Duration.zero,
         transactionInserter: (row) async {

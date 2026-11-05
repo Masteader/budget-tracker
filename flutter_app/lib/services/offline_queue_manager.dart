@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -374,8 +375,10 @@ class OfflineQueueManager {
     );
   }
 
-  /// Returns the count of items waiting or syncing.
-  Future<int> getPendingCount() async {
+  /// Returns the count of items waiting or syncing: those [userId] would replay
+  /// (its own and ownerless ones), or the whole device's without a [userId].
+  Future<int> getPendingCount({String? userId}) async {
+    if (userId != null) return _countForUser(const ['pending', 'syncing'], userId);
     final db = await database;
     final count = Sqflite.firstIntValue(
       await db.rawQuery(
@@ -383,6 +386,63 @@ class OfflineQueueManager {
       ),
     );
     return count ?? 0;
+  }
+
+  /// Items not yet on the server, including those parked as `failed`: those of
+  /// [userId] and ownerless ones, or the whole device's without a [userId].
+  Future<int> getUnsyncedCount({String? userId}) async {
+    if (userId != null) return _countForUser(const ['pending', 'syncing', 'failed'], userId);
+    final db = await database;
+    final count = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM $tableName'));
+    return count ?? 0;
+  }
+
+  Future<int> _countForUser(List<String> statuses, String userId) async {
+    var count = 0;
+    await _forEachRow(statuses, (id, item) {
+      // An unreadable row cannot say whose it is: warn rather than hide it.
+      final owner = item?.ownerId;
+      if (owner == null || owner == userId) count++;
+    });
+    return count;
+  }
+
+  /// Visits rows one at a time, so one oversized legacy row cannot fail them all.
+  Future<void> _forEachRow(List<String> statuses, FutureOr<void> Function(String id, OfflineQueueItem? item) visit) async {
+    final db = await database;
+    final marks = List.filled(statuses.length, '?').join(', ');
+    final ids = await db.query(tableName, columns: ['id'], where: 'status IN ($marks)', whereArgs: statuses);
+    for (final row in ids) {
+      final id = row['id'] as String;
+      OfflineQueueItem? item;
+      try {
+        final rows = await db.query(tableName, where: 'id = ?', whereArgs: [id]);
+        if (rows.isEmpty) continue;
+        item = OfflineQueueItem.fromMap(rows.first);
+      } catch (e) {
+        debugPrint('[OfflineQueueManager] Unreadable queue row: ${e.runtimeType}');
+      }
+      await visit(id, item);
+    }
+  }
+
+  /// Records [userId] as the owner of every unsynced item that has none.
+  /// Returns how many were claimed.
+  Future<int> claimOwnerlessItems(String userId) async {
+    final db = await database;
+    var claimed = 0;
+    await _forEachRow(const ['pending', 'syncing', 'failed'], (id, item) async {
+      // An empty payload may be one that failed to parse: never overwrite it.
+      if (item == null || item.ownerId != null || item.payload.isEmpty) return;
+      await db.update(
+        tableName,
+        {'payload': jsonEncode({...item.payload, 'user_id': userId})},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      claimed++;
+    });
+    return claimed;
   }
 
   /// Returns the count of poison items parked as `failed`.

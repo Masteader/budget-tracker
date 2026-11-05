@@ -93,10 +93,15 @@ class SyncWorker {
   /// until that account signs in again: replayed with the current user's JWT
   /// it would be refused, or booked under the wrong person (FR-A-09).
   bool _belongsToAnotherUser(OfflineQueueItem item) {
-    final owner = item.payload['user_id']?.toString();
-    if (owner == null || owner.isEmpty) return false;
+    final owner = item.ownerId;
+    if (owner == null) return false;
+    final current = _signedInUserId;
+    return current != null && current != owner;
+  }
+
+  String? get _signedInUserId {
     final current = _currentUserId();
-    return current != null && current.isNotEmpty && current != owner;
+    return current == null || current.isEmpty ? null : current;
   }
 
   ApiService get _apiService => _api ?? ApiService.instance;
@@ -126,9 +131,21 @@ class SyncWorker {
 
   /// Refreshes the reactive counter of pending offline operations.
   Future<int> updatePendingCount() async {
-    final count = await queueManager.getPendingCount();
+    final count = await queueManager.getPendingCount(userId: _signedInUserId);
     pendingCountNotifier.value = count;
     return count;
+  }
+
+  /// The signed-in user's items still to reach the server, parked ones included.
+  Future<int> unsyncedCount() => queueManager.getUnsyncedCount(userId: _signedInUserId);
+
+  /// Assigns items without an owner to the signed-in user, so that signing out
+  /// leaves them waiting for this account rather than the next one. Items of
+  /// older app versions have no owner.
+  Future<int> claimOwnerlessItems() async {
+    final current = _signedInUserId;
+    if (current == null) return 0;
+    return queueManager.claimOwnerlessItems(current);
   }
 
   /// Replays every pending queue item. Returns the number committed by this
@@ -138,6 +155,31 @@ class SyncWorker {
   }
 
   Future<int> _drain() async {
+    int successCount = 0;
+    try {
+      // Signed out (the connectivity listener runs at the login screen too):
+      // every replay would be refused and eat into the item's retry budget.
+      if (_signedInUserId == null) {
+        debugPrint('[SyncWorker] No signed-in user. Queue left for the next sign-in.');
+      } else {
+        successCount = await _drainForSignedInUser();
+      }
+    } catch (e) {
+      debugPrint('[SyncWorker] Error during drainQueue: $e');
+    }
+
+    try {
+      await updatePendingCount();
+    } catch (e) {
+      debugPrint('[SyncWorker] Error refreshing pending count: $e');
+    }
+    if (successCount > 0 && !_flushedController.isClosed) {
+      _flushedController.add(successCount);
+    }
+    return successCount;
+  }
+
+  Future<int> _drainForSignedInUser() async {
     int successCount = 0;
     try {
       await queueManager.recoverInterruptedItems();
@@ -150,6 +192,11 @@ class SyncWorker {
 
         for (final item in batch) {
           attempted.add(item.id);
+          if (_signedInUserId == null) {
+            // Signed out while this drain was running.
+            halted = true;
+            break;
+          }
           if (_belongsToAnotherUser(item)) continue;
           await queueManager.markSyncing(item.id);
 
@@ -182,15 +229,6 @@ class SyncWorker {
       }
     } catch (e) {
       debugPrint('[SyncWorker] Error during drainQueue: $e');
-    }
-
-    try {
-      await updatePendingCount();
-    } catch (e) {
-      debugPrint('[SyncWorker] Error refreshing pending count: $e');
-    }
-    if (successCount > 0 && !_flushedController.isClosed) {
-      _flushedController.add(successCount);
     }
     return successCount;
   }

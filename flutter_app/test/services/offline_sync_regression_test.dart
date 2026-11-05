@@ -57,6 +57,7 @@ void main() {
   });
 
   SyncWorker worker(_Backend backend, {TransactionInserter? inserter}) => SyncWorker(
+        currentUserId: () => 'test-user',
         queueManager: queue,
         api: backend.api,
         transactionInserter: inserter,
@@ -247,7 +248,7 @@ void main() {
             ? _json({'detail': 'message and household_id are required.'}, 400)
             : _json({'status': 'success'}),
       ]);
-      final w = SyncWorker(queueManager: queue, api: backend.api, maxPermanentRetries: 2, interItemDelay: Duration.zero);
+      final w = SyncWorker(currentUserId: () => 'test-user', queueManager: queue, api: backend.api, maxPermanentRetries: 2, interItemDelay: Duration.zero);
 
       expect(await w.drainQueue(), 1); // good one commits, bad one burns 1/2
       expect(await w.drainQueue(), 0); // bad one burns 2/2 -> failed
@@ -294,6 +295,7 @@ void main() {
       final gate = Completer<void>();
       final backend = _Backend([(_) => _json({'status': 'success'})]);
       final w = SyncWorker(
+        currentUserId: () => 'test-user',
         queueManager: queue,
         interItemDelay: Duration.zero,
         customDispatcher: (item) async {
@@ -328,7 +330,7 @@ void main() {
       final id = await queue.enqueue(
         operationType: 'receipt',
         householdId: 'h-1',
-        payload: {'images_base64': [big], 'user_id': 'u-1'},
+        payload: {'images_base64': [big], 'user_id': 'test-user'},
       );
 
       final raw = await db.query(OfflineQueueManager.tableName, where: 'id = ?', whereArgs: [id]);
