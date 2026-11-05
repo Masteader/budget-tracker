@@ -19,7 +19,6 @@ void main() {
       'set_account_section': 'ACCOUNT',
       'set_partner_settlement_section': 'PARTNER SETTLEMENT',
       'set_reminders_section': 'REMINDERS',
-      'set_export_monthly_label': 'Monthly Export',
       'csv_export_title': 'Export Report ({label})',
       'csv_export_current': 'Current',
       'csv_export_summary': '{transactions} • Total {amount}',
@@ -35,7 +34,6 @@ void main() {
       'csv_col_spent_by': 'Spent By',
       'csv_col_source': 'Source',
       'csv_col_items': 'Items Breakdown',
-      'settle_roommate_payload_note': '{from} paid {to} via {method}',
       'undo_action': 'UNDO',
     };
 
@@ -171,14 +169,10 @@ void main() {
   group('settings and settlement error keys have no raw error placeholder (TASK-04)', () {
     const errorKeys = [
       'set_failed_save_payday',
-      'set_failed_save_income',
-      'set_failed_save_rollover_policy',
       'set_failed_leave_household',
-      'set_failed_join',
       'set_failed_create_household',
       'set_failed_add_member',
       'set_failed_remove_dependent',
-      'set_export_error',
       'roles_update_failed',
       'nafaqah_provider_failed',
       'hh_type_failed',

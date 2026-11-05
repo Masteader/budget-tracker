@@ -1,0 +1,24 @@
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
+
+import '../services/api/base_api_client.dart' show ApiRequestException;
+import '../services/api/household_roles_api_client.dart' show HouseholdRolesApiException;
+import '../models/nafaqah.dart' show NafaqahApiException;
+import '../services/household_join.dart' show HouseholdJoinException;
+
+/// What a failure may say in the debug log: the error's type and its machine
+/// code. Server detail and request payloads can carry names, amounts or invite
+/// codes, so they stay out; a Postgres message is kept because it names the
+/// constraint or rule that refused the write, not the row.
+String describeFailure(Object error) => switch (error) {
+      PostgrestException e => 'PostgrestException(code: ${e.code}, message: ${e.message})',
+      ApiRequestException e => 'ApiRequestException(status: ${e.statusCode}, code: ${e.code})',
+      HouseholdRolesApiException e => 'HouseholdRolesApiException(status: ${e.statusCode}, code: ${e.code})',
+      NafaqahApiException e => 'NafaqahApiException(code: ${e.code})',
+      HouseholdJoinException e => 'HouseholdJoinException(code: ${e.code})',
+      _ => error.runtimeType.toString(),
+    };
+
+/// Records a failure the user only sees as a friendly message, so it is still
+/// visible to whoever debugs it.
+void logFailure(String where, Object error) => debugPrint('[$where] failed: ${describeFailure(error)}');

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../utils/failure_log.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -99,6 +101,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
       );
     } catch (e) {
       // FR-A-11: no invented "offline" code; it could never be redeemed.
+      logFailure('RoleInvite.generate', e);
       if (!mounted) return;
       setState(() => _isGenerating = false);
       final status = e is ApiRequestException ? e.statusCode : null;

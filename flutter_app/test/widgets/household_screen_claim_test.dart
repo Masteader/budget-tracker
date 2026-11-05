@@ -247,7 +247,9 @@ void main() {
       );
 
       expect(joinCalls, 0);
-      expect(find.text('Invalid, expired, or already used invite code'), findsOneWidget);
+      // The reason, in the user's language rather than the server's English.
+      expect(find.text("This invite code isn't valid. Check it or ask for a new one."), findsOneWidget);
+      expect(find.text('Invalid, expired, or already used invite code'), findsNothing);
       expect(find.text('Joined Dashboard Test'), findsNothing);
     });
 

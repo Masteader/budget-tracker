@@ -87,15 +87,43 @@ void checkInviteClaimResponse(Map<String, dynamic> response) {
   }
 }
 
-/// What to tell the user when joining failed: a localized message for
-/// `already_member`, otherwise the server's own error text.
-String householdJoinErrorText(BuildContext context, Object error) {
+/// The server's English refusals (`RAISE EXCEPTION` and `{success: false,
+/// error}` in `join_household_by_code`, `claim_household_role_invite`,
+/// `create_household_and_claim`, `leave_household` and the last-admin trigger)
+/// and the key that says the same in the user's language.
+const Map<String, String> _refusalKeys = {
+  'too many failed join attempts': 'hh_join_rate_limited',
+  'invite code has expired': 'hh_invite_expired',
+  'invite code has already been used': 'hh_invite_used',
+  'invalid, expired, or already used invite code': 'hh_invite_invalid',
+  'invalid invite code': 'hh_invite_invalid',
+  'household creation limit reached': 'set_household_limit_reached',
+  'sole admin cannot leave': 'set_leave_promote_admin_first',
+  'cannot remove the sole admin': 'set_leave_promote_admin_first',
+};
+
+/// The localization key of a household refusal the server explained, or null
+/// when [error] is not one it recognises.
+String? householdRefusalKey(Object error) {
+  final String message;
   if (error is HouseholdJoinException) {
-    if (error.isAlreadyMember) return context.tr('hh_already_member');
-    if (error.isRoleMismatch) return context.tr('hh_invite_role_mismatch');
-    if (error.message.isNotEmpty) return error.message;
-    return context.tr('action_failed');
+    if (error.isAlreadyMember) return 'hh_already_member';
+    if (error.isRoleMismatch) return 'hh_invite_role_mismatch';
+    message = error.message;
+  } else if (error is PostgrestException) {
+    message = error.message;
+  } else {
+    return null;
   }
-  if (error is PostgrestException) return error.message;
-  return context.tr('load_error_generic');
+  final lower = message.toLowerCase();
+  for (final refusal in _refusalKeys.entries) {
+    if (lower.contains(refusal.key)) return refusal.value;
+  }
+  return null;
 }
+
+/// What to tell the user when joining or creating a household failed: the
+/// reason in their language when it is a known refusal, otherwise a generic
+/// failure. Server text is never shown; it is English and can quote internals.
+String householdJoinErrorText(BuildContext context, Object error) =>
+    context.tr(householdRefusalKey(error) ?? 'action_failed');

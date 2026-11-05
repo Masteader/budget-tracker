@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../utils/failure_log.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
@@ -114,10 +116,14 @@ class _HouseholdSwitchSheetState extends State<HouseholdSwitchSheet> {
 
         widget.onSwitched?.call();
         Navigator.pop(context);
+      } else if (!success && mounted) {
+        debugPrint('[HouseholdSwitch] switch_active_household refused or failed');
+        AppSnackBar.showError(context, context.tr('action_failed'), title: context.tr('hss_failed'));
       }
     } catch (e) {
+      logFailure('HouseholdSwitch.switch', e);
       if (mounted) {
-        AppSnackBar.showError(context, context.tr('load_error_generic'), title: context.tr('hss_failed'));
+        AppSnackBar.showError(context, context.tr('action_failed'), title: context.tr('hss_failed'));
       }
     } finally {
       if (mounted) setState(() => _switchingToId = null);

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../utils/failure_log.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -425,6 +427,7 @@ class HouseholdSetupCard extends StatelessWidget {
       );
       return true;
     } catch (e) {
+      logFailure('HouseholdSetup.savePayday', e);
       if (context.mounted) {
         AppSnackBar.showError(
           context,

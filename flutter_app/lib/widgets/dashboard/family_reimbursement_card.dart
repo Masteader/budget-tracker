@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../utils/failure_log.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/widgets/three_d_surface_card.dart';
@@ -587,7 +589,7 @@ class _LedgerHistorySheetState extends State<_LedgerHistorySheet> {
                 }
                 if (snap.hasError) {
                   return Text(
-                    context.trArgs('settle_record_failed_msg', {'error': snap.error ?? ''}),
+                    context.tr('load_error_generic'),
                     style: TextStyle(color: context.dangerColor, fontSize: 12),
                   );
                 }
@@ -697,6 +699,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
       await record(amount: amt, paymentMethod: _paymentMethod, wifeUserId: widget.wifeUserId);
     } catch (e) {
       // Never report a repayment as recorded when the server rejected it.
+      logFailure('FamilyReimbursement.record', e);
       if (!mounted) return;
       setState(() => _isSubmitting = false);
       final String message;

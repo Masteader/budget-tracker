@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../utils/failure_log.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -132,6 +134,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
     if (e is HouseholdRolesApiException) {
       if (e.code == 'forbidden') return context.tr('roles_forbidden');
       if (e.code == 'last_admin') return context.tr('roles_last_admin');
+      if (e.code == 'not_found') return context.tr('fin_role_not_found');
     }
     return context.tr('roles_update_failed');
   }
@@ -184,9 +187,12 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
       widget.onRolesChanged?.call();
       AppSnackBar.showSuccess(context, context.tr('roles_updated'));
     } catch (e) {
+      logFailure('HouseholdRoles.changeRole', e);
       if (!mounted) return;
       setState(() => _busyUserId = null);
       AppSnackBar.showError(context, _errorText(e));
+      // The list on screen is out of date: that person has left.
+      if (e is HouseholdRolesApiException && e.code == 'not_found') _fetch();
     }
   }
 
@@ -284,6 +290,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
         context.trArgs('hh_type_changed', {'type': context.tr(HouseholdTypeChooser.labelKey(stored))}),
       );
     } catch (e) {
+      logFailure('HouseholdRoles.changeType', e);
       if (!mounted) return;
       setState(() => _settingType = false);
       AppSnackBar.showError(context, _typeErrorText(e));
@@ -350,6 +357,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
       final key = _financialRoleKey(stored) ?? _financialRoleKey(chosen)!;
       AppSnackBar.showSuccess(context, context.trArgs('fin_role_changed', {'name': name, 'role': context.tr(key)}));
     } catch (e) {
+      logFailure('HouseholdRoles.changeFinancialRole', e);
       if (!mounted) return;
       setState(() => _busyUserId = null);
       AppSnackBar.showError(context, _financialRoleErrorText(e));
@@ -469,6 +477,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
       widget.onNafaqahProviderChanged?.call(change.summary);
       AppSnackBar.showSuccess(context, context.tr('nafaqah_provider_updated'));
     } catch (e) {
+      logFailure('HouseholdRoles.changeProvider', e);
       if (!mounted) return;
       setState(() => _settingProvider = false);
       AppSnackBar.showError(context, _providerErrorText(e));

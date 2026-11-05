@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../utils/failure_log.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_themes.dart';
@@ -127,8 +129,9 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
         );
       }
     } catch (e) {
+      logFailure('AddHouseholdMember.submit', e);
       if (mounted) {
-        setState(() => _errorMessage = context.tr('load_error_generic'));
+        setState(() => _errorMessage = context.tr('action_failed'));
       }
     } finally {
       if (mounted) {
