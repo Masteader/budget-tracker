@@ -65,6 +65,14 @@ CREATE TABLE IF NOT EXISTS auth.users (
     created_at         timestamptz NOT NULL DEFAULT now()
 );
 
+-- The columns of GoTrue's auth.sessions that the account deletion re-auth check reads.
+CREATE TABLE IF NOT EXISTS auth.sessions (
+    id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now()
+);
+
 -- Same definitions as Supabase GoTrue's auth helpers (claims come from the
 -- PostgREST GUC `request.jwt.claims`; the legacy per-claim GUC is honoured too).
 CREATE OR REPLACE FUNCTION auth.uid()
