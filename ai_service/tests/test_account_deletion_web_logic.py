@@ -145,6 +145,45 @@ def test_the_page_accepts_exactly_what_the_server_accepts(tmp_path):
     assert accepted == [True] * len(ACCEPTED) + [False] * len(REFUSED)
 
 
+# ── The shared table ─────────────────────────────────────────────────────────
+# supabase/tests/52_account_deletion_fold_table.sql holds the cases the server, the app and this
+# page are all tested with, and checks them there against the real SQL function and RPC.
+
+FOLD_TABLE = ROOT / "supabase" / "tests" / "52_account_deletion_fold_table.sql"
+
+
+def _fold_table() -> list:
+    found = re.search(r"\$fold_cases\$\s*(\[.*?\])\s*\$fold_cases\$", FOLD_TABLE.read_text(encoding="utf-8"), re.S)
+    assert found, f"no fold_cases table in {FOLD_TABLE}"
+    return json.loads(found.group(1))
+
+
+def test_the_page_folds_and_accepts_every_row_of_the_shared_table(tmp_path):
+    table = _fold_table()
+    assert len(table) >= 30 and len({r["id"] for r in table}) == len(table)
+    inputs = [r["input"] for r in table]
+    results = _run(tmp_path, [["foldConfirmation", w] for w in inputs] + [["isAcceptedConfirmation", w] for w in inputs])
+    folded, accepted = results[:len(inputs)], results[len(inputs):]
+    wrong = []
+    for row, got_fold, got_match in zip(table, folded, accepted):
+        if got_match != row["match"]:
+            wrong.append((row["id"], "match", got_match))
+        # A row marked ts differs for a known reason (full Unicode lowercasing), and must still differ.
+        if ("ts" in row["fold_differs"]) != (got_fold != row["fold"]):
+            wrong.append((row["id"], "fold", got_fold))
+    assert wrong == []
+
+
+def test_the_shared_table_agrees_with_the_sql_fold_re_done_here():
+    # unicodedata's NFC and Python's full lowercasing: where Python lowercases like JavaScript
+    # (U+0130), the row is marked ts; nothing else may differ from the server's fold.
+    for row in _fold_table():
+        if "ts" not in row["fold_differs"]:
+            assert _sql_fold(row["input"]) == row["fold"], row["id"]
+        if "dart" in row["fold_differs"]:
+            assert unicodedata.normalize("NFC", row["input"]) != row["input"], row["id"]
+
+
 @pytest.mark.parametrize("status, can_cancel, view, cancel", [
     ("none", False, "schedule", False),
     ("scheduled", True, "pending", True),
