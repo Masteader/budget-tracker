@@ -238,5 +238,33 @@ void main() {
       expect(res['status'], equals('success'));
       expect(res['transaction_id'], equals('tx-123'));
     });
+
+    group('recordReimbursementPayment never reads a failure as recorded (B7)', () {
+      const request = ReimbursementRecordRequest(
+        householdId: 'hh-1',
+        payerId: 'a',
+        recipientId: 'b',
+        amount: 250.0,
+        paymentMethod: 'cash',
+      );
+
+      Future<Map<String, dynamic>> record(MockClient http) =>
+          BudgetApiClient(baseClient: BaseApiClient(client: http)).recordReimbursementPayment(request: request);
+
+      test('a 500 throws', () async {
+        final http_ = MockClient((_) async => http.Response(jsonEncode({'detail': 'boom'}), 500));
+        await expectLater(record(http_), throwsA(isA<ApiRequestException>().having((e) => e.statusCode, 'statusCode', 500)));
+      });
+
+      test('a refusal throws with the server code', () async {
+        final http_ = MockClient((_) async => http.Response(jsonEncode({'detail': {'code': 'forbidden', 'message': 'no'}}), 403));
+        await expectLater(record(http_), throwsA(isA<ApiRequestException>().having((e) => e.code, 'code', 'forbidden')));
+      });
+
+      test('being offline throws', () async {
+        final http_ = MockClient((_) async => throw http.ClientException('offline'));
+        await expectLater(record(http_), throwsA(isA<ApiRequestException>()));
+      });
+    });
   });
 }

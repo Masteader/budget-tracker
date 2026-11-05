@@ -3,9 +3,19 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:budget_tracker/l10n/app_localizations.dart';
 import 'package:budget_tracker/models/models.dart';
+import 'package:budget_tracker/services/api_service.dart';
 import 'package:budget_tracker/widgets/dashboard/multi_roommate_settlement_card.dart';
 
+import '../support/fake_settings_supabase.dart';
+
 void main() {
+  // A settlement reloads the summary: answered in memory, never over the network.
+  setUp(() {
+    final original = ApiService.instance;
+    ApiService.instance = FakeSettingsApi();
+    addTearDown(() => ApiService.instance = original);
+  });
+
   const testSummary = SettlementV2Summary(
     mode: 'multi_roommate',
     pairwiseDebts: [
@@ -142,10 +152,10 @@ void main() {
 
     expect(callbackCalled, isTrue);
     expect(capturedRequest, isNotNull);
-    expect(capturedRequest!.notes, 'Tariq paid Ahmed via STC Pay');
+    expect(capturedRequest!.notes, 'Tariq \u2192 Ahmed \u00B7 stc_pay');
   });
 
-  testWidgets('MultiRoommateSettlementCard records settlement note in Arabic', (tester) async {
+  testWidgets('MultiRoommateSettlementCard stores a language-neutral note from an Arabic screen', (tester) async {
     ReimbursementRecordRequest? capturedRequest;
 
     await tester.pumpWidget(
@@ -186,7 +196,100 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(capturedRequest, isNotNull);
-    expect(capturedRequest!.notes, 'Tariq دفع لـ Ahmed عبر STC Pay');
+    // The same note whatever language the payer uses: it is read by everyone.
+    expect(capturedRequest!.notes, 'Tariq \u2192 Ahmed \u00B7 stc_pay');
+  });
+
+  group('the stored note (S10)', () {
+    Future<ReimbursementRecordRequest?> settle(WidgetTester tester, String from, String to, {String lang = 'en', String? chip}) async {
+      ReimbursementRecordRequest? captured;
+      await tester.pumpWidget(MaterialApp(
+        locale: Locale(lang),
+        supportedLocales: const [Locale('en'), Locale('ar'), Locale('ur')],
+        localizationsDelegates: const [
+          AppLocalizationsDelegate(),
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: Scaffold(
+          body: MultiRoommateSettlementCard(
+            householdId: 'hh',
+            currentUserId: 'me',
+            onSettled: () {},
+            summary: SettlementV2Summary(
+              mode: 'multi_roommate',
+              simplifiedDebts: [SimplifiedDebt(fromId: 'x', toId: 'y', fromName: from, toName: to, amount: 10)],
+            ),
+            recordPayment: (req) async {
+              captured = req;
+              return const {'status': 'success'};
+            },
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      final l = AppLocalizations(Locale(lang));
+      await tester.tap(find.widgetWithText(ElevatedButton, l.get('settle_now')));
+      await tester.pumpAndSettle();
+      if (chip != null) {
+        await tester.tap(find.text(l.get(chip)));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.widgetWithText(ElevatedButton, l.get('settle_record_payment')));
+      await tester.pumpAndSettle();
+      return captured;
+    }
+
+    for (final lang in ['en', 'ar', 'ur']) {
+      testWidgets('$lang: names and the method code, the same in every language', (tester) async {
+        final req = await settle(tester, 'Omar', 'Sami', lang: lang, chip: 'pay_method_cash');
+        expect(req!.notes, 'Omar \u2192 Sami \u00B7 cash');
+        expect(req.paymentMethod, 'cash');
+      });
+    }
+
+    testWidgets('a name that looks like a placeholder is stored as written', (tester) async {
+      final req = await settle(tester, '{to}', 'Omar');
+      expect(req!.notes, '{to} \u2192 Omar \u00B7 stc_pay');
+    });
+
+    testWidgets('Arabic names stay searchable in the note', (tester) async {
+      final req = await settle(tester, 'عمر', 'سامي', lang: 'ar');
+      expect(req!.notes, contains('عمر'));
+      expect(req.notes, contains('سامي'));
+    });
+  });
+
+  group('what the parent passes (B4)', () {
+    const debt = SettlementV2Summary(
+      mode: 'multi_roommate',
+      simplifiedDebts: [SimplifiedDebt(fromId: 'x', toId: 'y', fromName: 'Faisal', toName: 'Imran', amount: 10)],
+    );
+    const settled = SettlementV2Summary(mode: 'multi_roommate');
+
+    Widget host(SettlementV2Summary summary, {String householdId = 'hh'}) => MaterialApp(
+          home: Scaffold(body: MultiRoommateSettlementCard(householdId: householdId, currentUserId: 'me', summary: summary)),
+        );
+
+    testWidgets('a different summary replaces the card\'s', (tester) async {
+      await tester.pumpWidget(host(debt));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('roommate_debt_title')), findsOneWidget);
+      await tester.pumpWidget(host(settled));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('roommate_debt_title')), findsNothing);
+    });
+
+    testWidgets('a rebuild with the same summary does not', (tester) async {
+      await tester.pumpWidget(host(debt));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(Switch));
+      await tester.pumpWidget(host(debt));
+      await tester.pumpAndSettle();
+      final toggle = tester.widget<Switch>(find.byType(Switch));
+      expect(toggle.value, isFalse, reason: 'the same state, not a remount');
+    });
   });
 
   testWidgets('MultiRoommateSettlementCard displays all settled when no debts', (tester) async {

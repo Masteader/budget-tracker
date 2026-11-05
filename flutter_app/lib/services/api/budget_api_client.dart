@@ -221,10 +221,13 @@ class BudgetApiClient {
   Future<Map<String, dynamic>> recordReimbursementPayment({
     required ReimbursementRecordRequest request,
   }) async {
-    return baseClient.post(
+    // The base client answers failures with an error map: without the check an
+    // offline or refused settlement reads as recorded.
+    final res = await baseClient.post(
       '/households/${request.householdId}/reimbursements',
       request.toMap(),
     );
+    return ApiRequestException.check(res);
   }
 
   Future<List<HouseholdDependent>> fetchHouseholdDependents({

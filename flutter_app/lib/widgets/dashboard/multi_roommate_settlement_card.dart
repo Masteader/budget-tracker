@@ -12,6 +12,7 @@ import '../app_snackbar.dart';
 import '../../models/money.dart';
 import '../../main.dart' show supabase;
 import '../../models/household_dues.dart';
+import '../../utils/failure_log.dart';
 import 'family_reimbursement_card.dart' show ReimbursementRecorder;
 
 /// Roommate balances, centred on the viewer (UX-16): their net balance first,
@@ -20,6 +21,8 @@ import 'family_reimbursement_card.dart' show ReimbursementRecorder;
 class MultiRoommateSettlementCard extends StatefulWidget {
   final String householdId;
   final SettlementV2Summary? summary;
+
+  /// Called after a settlement is recorded, for the parent to refetch [summary].
   final VoidCallback? onSettled;
   final ReimbursementRecorder? recordPayment;
 
@@ -44,6 +47,13 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
   bool _isLoading = true;
   bool _simplifyDebts = true;
 
+  /// The refetch after a settlement failed: what [_summary] holds may include
+  /// the debt just settled, so it is not offered for settling again.
+  bool _loadFailed = false;
+
+  /// Only the newest load may answer; a summary from the parent replaces any.
+  int _loadGeneration = 0;
+
   @override
   void initState() {
     super.initState();
@@ -58,26 +68,55 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
   @override
   void didUpdateWidget(covariant MultiRoommateSettlementCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.summary != null) {
+    if (widget.householdId != oldWidget.householdId) {
+      _summary = widget.summary;
+      _isLoading = widget.summary == null;
+      _loadFailed = false;
+      _loadGeneration++;
+      if (widget.summary == null) _loadSummary();
+      return;
+    }
+    // A parent rebuild passes the same summary it had: adopting that would put
+    // back a debt this card has since seen settled.
+    if (widget.summary != null && !identical(widget.summary, oldWidget.summary)) {
       _summary = widget.summary;
       _isLoading = false;
+      _loadFailed = false;
+      _loadGeneration++;
     }
   }
 
   Future<void> _loadSummary() async {
+    final generation = ++_loadGeneration;
     try {
       final res = await ApiService.instance.getSettlementV2(widget.householdId);
-      if (mounted) {
+      if (mounted && generation == _loadGeneration) {
         setState(() {
           _summary = res;
           _isLoading = false;
+          _loadFailed = false;
         });
       }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _isLoading = false);
+    } catch (e) {
+      logFailure('RoommateSettlementCard.load', e);
+      if (mounted && generation == _loadGeneration) {
+        setState(() {
+          _isLoading = false;
+          _loadFailed = true;
+        });
       }
     }
+  }
+
+  void _reloadAfterSettlement() {
+    if (!mounted) return;
+    // Until the new summary arrives the settled debt must not be tappable.
+    setState(() {
+      _isLoading = true;
+      _loadFailed = false;
+    });
+    widget.onSettled?.call();
+    _loadSummary();
   }
 
   void _showSettleSheet(
@@ -100,10 +139,7 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
         toName: toName,
         amount: amount,
         recordPayment: widget.recordPayment,
-        onConfirmed: () {
-          widget.onSettled?.call();
-          _loadSummary();
-        },
+        onConfirmed: _reloadAfterSettlement,
       ),
     );
   }
@@ -139,6 +175,33 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
             height: 24,
             child: CircularProgressIndicator(strokeWidth: 2, color: context.infoColor),
           ),
+        ),
+      );
+    }
+
+    if (_loadFailed) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                context.tr('load_error_generic'),
+                style: TextStyle(color: context.dangerColor, fontSize: 12),
+              ),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: context.accentText),
+              onPressed: () {
+                setState(() {
+                  _isLoading = true;
+                  _loadFailed = false;
+                });
+                _loadSummary();
+              },
+              child: Text(context.tr('roles_retry')),
+            ),
+          ],
         ),
       );
     }
@@ -534,12 +597,6 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
     setState(() => _isSubmitting = true);
 
     try {
-      final methodLabel = switch (_paymentMethod) {
-        'stc_pay' => context.tr('pay_method_stc_pay'),
-        'bank_transfer' => context.tr('pay_method_bank_transfer'),
-        'cash' => context.tr('pay_method_cash'),
-        _ => _paymentMethod,
-      };
       final record = widget.recordPayment ?? ApiService.instance.recordReimbursementPayment;
       await record(
         ReimbursementRecordRequest(
@@ -548,15 +605,14 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
           recipientId: widget.toId,
           amount: amt,
           paymentMethod: _paymentMethod,
-          notes: context.trArgs('settle_roommate_payload_note', {
-            'from': widget.fromName,
-            'to': widget.toName,
-            'method': methodLabel,
-          }),
+          // Stored once and read by everyone, so in no one's language: names and
+          // the method code. Concatenated: a name may itself look like a template.
+          notes: '${widget.fromName} \u2192 ${widget.toName} \u00B7 $_paymentMethod',
         ),
       );
     } catch (e) {
       // Never report a settlement as recorded when the server rejected it.
+      logFailure('RoommateSettlementCard.record', e);
       if (!mounted) return;
       setState(() => _isSubmitting = false);
       AppSnackBar.showError(
