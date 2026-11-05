@@ -18,6 +18,7 @@ import 'package:budget_tracker/theme/app_themes.dart';
 import 'package:budget_tracker/providers/budget_provider.dart';
 import 'package:budget_tracker/providers/transaction_provider.dart';
 import 'package:budget_tracker/widgets/settings/account_deletion_flow.dart';
+import 'package:budget_tracker/widgets/settings/household_roles_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -782,6 +783,50 @@ void main() {
       expect(_flow, findsNothing);
       expect(_pendingCard, findsOneWidget);
       expect(_deleteButton, findsNothing);
+    });
+  });
+
+  group('the status after household changes', () {
+    int statusReads() => _http.rpcCalls.where((c) => c.function == 'get_account_deletion_status').length;
+
+    testWidgets('a role change rereads it', (tester) async {
+      await _pump(tester);
+      expect(_deleteButton, findsOneWidget);
+      final before = statusReads();
+      // E.g. primary admin handed over: the server's answer is different now.
+      _http.rpcResults['get_account_deletion_status'] = _scheduledStatus();
+
+      tester.widget<HouseholdRolesCard>(find.byType(HouseholdRolesCard)).onRolesChanged!();
+      await _settle(tester);
+
+      expect(statusReads(), greaterThan(before));
+      expect(_pendingCard, findsOneWidget);
+    });
+
+    testWidgets('leaving a household rereads it', (tester) async {
+      var left = 0;
+      tester.view.physicalSize = const Size(390, 12000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_app(SettingsScreen(onLeftHousehold: (_) => left++)));
+      await _settle(tester);
+      await _provider.load();
+      await _settle(tester);
+      final before = statusReads();
+      _http.rpcResults['get_account_deletion_status'] = _scheduledStatus();
+
+      final leave = find.text(_l('en').get('leave_household')).first;
+      await tester.ensureVisible(leave);
+      await tester.pump();
+      await tester.tap(leave);
+      await _settle(tester);
+      await tester.tap(find.text(_l('en').get('leave')));
+      await _settle(tester);
+
+      expect(_http.rpcCalls.where((c) => c.function == 'leave_household'), hasLength(1));
+      expect(left, 1);
+      expect(statusReads(), greaterThan(before));
+      expect(_provider.isPending, isTrue);
     });
   });
 

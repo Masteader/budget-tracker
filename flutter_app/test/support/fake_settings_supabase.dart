@@ -324,6 +324,13 @@ class FakeSettingsHttpClient extends http.BaseClient {
         body = {'message': error, 'code': 'P0001'};
       } else {
         body = rpcResults[fn] ?? const <String, Object?>{};
+        // As on the server, a status read after a request or cancel that went
+        // through reports it.
+        if (fn == 'request_account_deletion' && body is Map && body['status'] != null) {
+          rpcResults['get_account_deletion_status'] = body;
+        } else if (fn == 'cancel_account_deletion' && body is Map && body['cancelled'] == true) {
+          rpcResults['get_account_deletion_status'] = const {'status': 'none', 'can_cancel': false};
+        }
       }
     }
     final bytes = utf8.encode(jsonEncode(body));

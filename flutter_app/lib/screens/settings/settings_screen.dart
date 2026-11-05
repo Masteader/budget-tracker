@@ -47,7 +47,12 @@ class SettingsScreen extends StatefulWidget {
   @visibleForTesting
   final DateTime Function()? clock;
 
-  const SettingsScreen({super.key, this.clock});
+  /// Where the app goes once the user has left the household; by default back
+  /// through [AuthGate]. A seam for tests.
+  @visibleForTesting
+  final void Function(BuildContext context)? onLeftHousehold;
+
+  const SettingsScreen({super.key, this.clock, this.onLeftHousehold});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -157,11 +162,13 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   /// A role change was confirmed by the server: refresh the signed-in user's
-  /// own role (badge, edit rights, shared-pool transfers).
+  /// own role (badge, edit rights, shared-pool transfers), and the deletion
+  /// status and household banner, which a handover changes.
   void _onRolesChanged() {
     try {
       context.read<HouseholdRoleProvider>().refresh();
     } catch (_) {}
+    context.read<AccountDeletionProvider?>()?.refreshOnResume();
     if (mounted) setState(() => _settlementRevision++);
     _loadUserInfo();
   }
@@ -427,14 +434,22 @@ class _SettingsScreenState extends State<SettingsScreen>
           throw Exception(res['error']);
         }
 
+        // Leaving changes what a pending deletion takes with it.
+        if (mounted) context.read<AccountDeletionProvider?>()?.load();
+
         if (mounted) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            // Back through the gate: it re-resolves (now no household) and
-            // keeps sign-out handling at the root of the navigator.
-            MaterialPageRoute(builder: (_) => const AuthGate()),
-            (route) => false,
-          );
+          final onLeft = widget.onLeftHousehold;
+          if (onLeft != null) {
+            onLeft(context);
+          } else {
+            Navigator.pushAndRemoveUntil(
+              context,
+              // Back through the gate: it re-resolves (now no household) and
+              // keeps sign-out handling at the root of the navigator.
+              MaterialPageRoute(builder: (_) => const AuthGate()),
+              (route) => false,
+            );
+          }
         }
       } catch (e) {
         logFailure('Settings.leaveHousehold', e);
