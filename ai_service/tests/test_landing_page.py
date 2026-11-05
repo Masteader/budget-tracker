@@ -181,6 +181,154 @@ def test_served_privacy_section_names_the_ai_processor_and_no_sms():
 
 _PROXIED = {"X-Forwarded-For": "198.51.100.7"}
 
+# web_app has no unit tests, so the served bundle is where the page's promises are held to.
+# One sentence per promise, in each language the page offers.
+_DELETE_PAGE_COPY = {
+    "en": (
+        "Delete your Qawam Money account",  # names the app as on the store listing
+        "deleted 30 days after you confirm",  # the 30-day window
+        "Signing in alone does not cancel the deletion.",
+        "show as “Deleted member”",  # what is kept, without a name
+        "Free text other members typed",  # what is not edited
+        "Household names stay as they are",
+        "Copies of emails in the developer’s mailbox",  # out of reach
+        "Railway server logs",
+        "Supabase database backups",
+        "Supabase authentication audit log entries",
+        "assign another member as primary admin, or delete the household",
+        "including other members’ accounts and entries in that household and the wife’s ledger",
+        "Members keep their logins",
+        "We keep the stored request for 90 days",
+        "We may email you",  # reminders are never promised
+        "This form does not delete anything",
+        "Your account has not been deleted",
+        "could not be sent right now",  # the 'captured' answer
+    ),
+    "ar": (
+        "حذف حسابك في قوام المال",
+        "بعد 30 يوماً من تأكيدك",
+        "تسجيل الدخول وحده لا يلغي الحذف.",
+        "باسم «عضو محذوف»",
+        "النصوص التي كتبها الأعضاء الآخرون",
+        "أسماء المنازل تبقى كما هي",
+        "نسخ الرسائل الموجودة في بريد المطوّر",
+        "سجلات خوادم Railway",
+        "النسخ الاحتياطية لقاعدة بيانات Supabase",
+        "سجلات تدقيق المصادقة في Supabase",
+        "تعيين عضو آخر مشرفاً أساسياً أو حذف المنزل",
+        "ومنها حسابات الأعضاء الآخرين ومصروفاتهم في هذا المنزل ودفتر الزوجة",
+        "يحتفظ الأعضاء بحساباتهم",
+        "نحتفظ بالطلب المخزّن 90 يوماً",
+        "قد نراسلك",
+        "هذا النموذج لا يحذف شيئاً",
+        "لم يُحذف حسابك",
+        "تعذّر إرسالها حالياً",
+    ),
+    "ur": (
+        "قوام المال میں اپنا اکاؤنٹ حذف کریں",
+        "تصدیق کے 30 دن بعد",
+        "صرف سائن ان کرنے سے حذف منسوخ نہیں ہوتا۔",
+        "«حذف شدہ رکن»",
+        "دوسرے ارکان کی لکھی ہوئی عبارت",
+        "گھرانوں کے نام جوں کے توں رہتے ہیں",
+        "ڈویلپر کے میل باکس میں ای میلز کی نقول",
+        "Railway کے سرور لاگز",
+        "Supabase ڈیٹا بیس کے بیک اپس",
+        "Supabase کے تصدیقی آڈٹ لاگ کے اندراجات",
+        "کسی دوسرے رکن کو بنیادی منتظم بنائیں یا گھرانہ حذف کریں",
+        "جس میں اس گھرانے میں دوسرے ارکان کے اکاؤنٹس اور اندراجات اور بیوی کا کھاتہ بھی شامل ہے",
+        "ارکان کے لاگ اِن برقرار رہتے ہیں",
+        "محفوظ درخواست ہم 90 دن تک رکھتے ہیں",
+        "ہم آپ کو ای میل کر سکتے ہیں",
+        "یہ فارم کچھ حذف نہیں کرتا",
+        "آپ کا اکاؤنٹ حذف نہیں ہوا",
+        "ابھی نہیں بھیجی جا سکی",
+    ),
+}
+
+
+@pytest.mark.parametrize("lang", sorted(_DELETE_PAGE_COPY))
+def test_served_deletion_page_states_its_promises_in_each_language(lang):
+    bundle = _served_bundle()
+    missing = [phrase for phrase in _DELETE_PAGE_COPY[lang] if phrase not in bundle]
+    assert not missing, f"{lang}: {missing}"
+
+
+def test_served_bundle_routes_the_deletion_page_and_supports_urdu():
+    bundle = _served_bundle()
+    assert "/delete-account" in bundle
+    # Page-scoped Urdu with RTL, reachable with ?lang=ur.
+    assert "اردو" in bundle
+    assert "ur-PK-u-ca-gregory-nu-latn" in bundle
+    assert "account_deletion" in bundle
+
+
+def test_served_deletion_page_uses_the_same_rpcs_as_the_app():
+    bundle = _served_bundle()
+    for rpc in (
+        "get_account_deletion_preflight",
+        "request_account_deletion",
+        "cancel_account_deletion",
+    ):
+        assert rpc in bundle, rpc
+    # Every hint the request and cancel RPCs can answer with has a message.
+    for hint in (
+        "reauthentication_required",
+        "confirmation_mismatch",
+        "household_choice_missing",
+        "household_choice_invalid",
+        "successor_invalid",
+        "successor_pending_deletion",
+        "deletion_in_progress",
+    ):
+        assert hint in bundle, hint
+
+
+def test_served_confirmation_words_are_the_ones_the_server_accepts():
+    sql = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "supabase" / "migrations" / "20261105000200_account_deletion_rpcs.sql"
+    ).read_text(encoding="utf-8")
+    bundle = _served_bundle()
+    for word in ("delete", "حذف", "حذف کریں"):
+        assert f"'{word}'" in sql, word
+        assert word in bundle, word
+    assert "DELETE" in bundle  # the word English visitors are shown
+
+
+def test_served_deletion_page_never_claims_an_outcome_the_form_cannot_deliver():
+    bundle = _served_bundle()
+    for phrase in (
+        "Your account has been deleted",
+        "Your account will be deleted within",
+        "We will email you a reminder",
+        "تم حذف حسابك",
+        "آپ کا اکاؤنٹ حذف ہو گیا ہے",
+    ):
+        assert phrase not in bundle, phrase
+
+
+def test_served_privacy_section_discloses_retention_and_deletion_in_each_language():
+    bundle = _served_bundle()
+    for phrase in (
+        # English
+        "Delete your account, with 30 days to change your mind",
+        "What stays after deletion",
+        "Requests sent through the deletion form are kept for 90 days.",
+        # Arabic
+        "احذف حسابك، ومعك 30 يوماً للتراجع",
+        "وش يبقى بعد الحذف",
+        "طلبات نموذج الحذف تبقى 90 يوماً.",
+    ):
+        assert phrase in bundle, phrase
+
+
+def test_served_footer_links_to_the_deletion_page():
+    bundle = _served_bundle()
+    assert "/delete-account?lang=en" in bundle
+    assert "Delete account" in bundle
+    assert "حذف الحساب" in bundle
+
 
 async def _proxied(method: str, path: str):
     transport = ASGITransport(app=app)

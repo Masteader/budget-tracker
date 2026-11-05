@@ -24,6 +24,9 @@ export const Footer: React.FC<FooterProps> = ({ dict }) => (
         <a href="#faq" className="hover:text-teal">
           {dict.nav.faq}
         </a>
+        <a href={dict.footer.deleteAccountHref} className="hover:text-teal">
+          {dict.footer.deleteAccount}
+        </a>
         <a href={`mailto:${CONTACT_EMAIL}`} className="inline-flex items-center gap-1.5 hover:text-teal">
           <Icon name="mail" className="h-4 w-4" />
           {dict.footer.contact}

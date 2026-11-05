@@ -46,7 +46,10 @@ export const PortalShell: React.FC<PortalShellProps> = ({
 
       <footer className="border-t border-line/60 bg-white py-6 text-center text-xs text-muted">
         <div className="max-w-6xl mx-auto px-4">
-          {dict.brand.name} · {dict.footer.rights}
+          {dict.brand.name} · {dict.footer.rights} ·{' '}
+          <a href={dict.footer.deleteAccountHref} className="hover:text-teal">
+            {dict.footer.deleteAccount}
+          </a>
         </div>
       </footer>
     </div>
