@@ -445,7 +445,8 @@ class NafaqahLedger {
 /// A rejected Nafaqah request. [code] is 'overpayment', 'forbidden',
 /// 'not_family', 'ledger_would_be_overpaid' (an edit would leave the wife's
 /// ledger repaid beyond her advances), 'no_provider' (the family has no
-/// Nafaqah provider yet), 'invalid' or 'network'.
+/// Nafaqah provider yet), 'no_wife' (the family has no wife member, so there
+/// is no allowance or reimbursement to record), 'invalid' or 'network'.
 class NafaqahApiException implements Exception {
   final String code;
   final String message;
@@ -466,7 +467,14 @@ class NafaqahApiException implements Exception {
     final detailCode = detail is Map ? detail['code'] as String? : null;
     final message = res['message']?.toString() ?? '';
     final String code;
-    const stateCodes = {'overpayment', 'not_family', 'ledger_would_be_overpaid', 'no_provider', 'account_pending_deletion'};
+    const stateCodes = {
+      'overpayment',
+      'not_family',
+      'ledger_would_be_overpaid',
+      'no_provider',
+      'no_wife',
+      'account_pending_deletion',
+    };
     if (stateCodes.contains(detailCode)) {
       code = detailCode!;
     } else if (status == 403) {

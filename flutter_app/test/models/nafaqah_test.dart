@@ -1,4 +1,6 @@
+import 'package:budget_tracker/l10n/app_localizations.dart';
 import 'package:budget_tracker/models/nafaqah.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -123,6 +125,19 @@ void main() {
       }).code,
       'no_provider',
     );
+  });
+
+  test('NafaqahApiException tells a family with no wife apart from a bad request', () {
+    final e = NafaqahApiException.fromResponse({
+      'status': 'error',
+      'status_code': 422,
+      'detail': {'code': 'no_wife', 'message': 'x'},
+    });
+    expect(e.code, 'no_wife');
+    for (final lang in const ['en', 'ar', 'ur']) {
+      final text = AppLocalizations(Locale(lang)).get('nafaqah_err_no_wife');
+      expect(text, isNot('nafaqah_err_no_wife'), reason: lang);
+    }
   });
 
   test('NafaqahProviderChange parses the PUT provider response', () {

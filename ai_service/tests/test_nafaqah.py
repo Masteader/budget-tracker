@@ -530,6 +530,25 @@ def test_admin_who_is_not_the_husband_can_set_allowance(family):
     assert st["allocated"] == 800.0
 
 
+def test_no_wife_is_said_plainly_not_as_several_wives(family):
+    family.tables["household_memberships"] = [
+        m for m in family.tables["household_memberships"] if m.get("financial_role") != "spouse"
+    ]
+    ctx = ns.load_family_context(HH)
+    assert ctx.wives == []
+    with pytest.raises(ns.NoWifeInHousehold) as raised:
+        ns.resolve_wife_id(ctx, None)
+    assert raised.value.code == "no_wife"
+    assert "several" not in str(raised.value)
+    # Still a refusal of the request, as before: nothing about money changes.
+    assert isinstance(raised.value, ns.InvalidNafaqahRequest)
+
+    from routes.nafaqah import nafaqah_http_error
+    http = nafaqah_http_error(raised.value)
+    assert http.status_code == 422
+    assert http.detail["code"] == "no_wife" and "several" not in http.detail["message"]
+
+
 def test_several_wives_require_an_explicit_wife(family):
     second = "00000000-0000-4000-8000-0000000000aa"
     family.seed("users", [{"id": second, "household_id": HH, "role": "member", "financial_role": "spouse",

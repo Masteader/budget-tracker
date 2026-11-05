@@ -83,6 +83,12 @@ class InvalidNafaqahRequest(NafaqahError):
     """Malformed amount, cycle key, payment method or a wife outside this household."""
 
 
+class NoWifeInHousehold(InvalidNafaqahRequest):
+    """The family has no wife member, so there is no allowance or reimbursement to record (HTTP 422)."""
+
+    code = "no_wife"
+
+
 class LedgerWouldBeOverpaid(NafaqahError):
     """An edit/delete of a wife_reimbursable advance would leave the advances below the repayments."""
 
@@ -507,6 +513,8 @@ def resolve_wife_id(ctx: FamilyContext, requested: Optional[str]) -> str:
         return req
     if len(ctx.wives) == 1:
         return ctx.wives[0]["id"]
+    if not ctx.wives:
+        raise NoWifeInHousehold("This household has no wife member, so there is no allowance or reimbursement to record.")
     raise InvalidNafaqahRequest("This household has several wives: pass wife_user_id.")
 
 

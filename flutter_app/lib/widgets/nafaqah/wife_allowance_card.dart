@@ -281,9 +281,14 @@ class _AllowanceEditorSheetState extends State<_AllowanceEditorSheet> {
       if (!mounted) return;
       setState(() => _saving = false);
       final forbidden = e is NafaqahApiException && e.code == 'forbidden';
+      final noWife = e is NafaqahApiException && e.code == 'no_wife';
       AppSnackBar.showError(
         context,
-        forbidden ? context.tr('nafaqah_err_forbidden') : e.toString(),
+        forbidden
+            ? context.tr('nafaqah_err_forbidden')
+            : noWife
+                ? context.tr('nafaqah_err_no_wife')
+                : e.toString(),
         title: context.tr('allowance_save_failed'),
       );
       return;

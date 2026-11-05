@@ -4,6 +4,7 @@ sign_out_unsynced_title,app,Unsynced Transactions,معاملات غير متزا
 auth_sign_in_unverified,app,We could not verify your sign-in. Please sign in again or request a new link.,تعذر التحقق من تسجيل دخولك. سجّل الدخول مرة أخرى أو اطلب رابطًا جديدًا.,آپ کے سائن ان کی تصدیق نہیں ہو سکی۔ براہ کرم دوبارہ سائن ان کریں یا نیا لنک طلب کریں۔,
 settle_unconfirmed_title,app,Not Confirmed,تعذّر التأكيد,تصدیق نہیں ہو سکی,
 settle_unconfirmed_msg,app,We couldn't confirm this payment. Check the balance before recording it again.,تعذّر علينا تأكيد هذه الدفعة. راجع الرصيد قبل تسجيلها مرة أخرى.,ہم اس ادائیگی کی تصدیق نہیں کر سکے۔ دوبارہ درج کرنے سے پہلے بیلنس چیک کریں۔,
+nafaqah_err_no_wife,app,"This family has no wife member, so there is no allowance or reimbursement to record.",لا توجد زوجة بين أعضاء هذه الأسرة، فلا يوجد مصروف شخصي أو مبلغ مستحق لتسجيله.,اس خاندان کے ارکان میں کوئی اہلیہ نہیں، اس لیے درج کرنے کو کوئی ذاتی خرچ یا واجب الادا رقم نہیں۔,
 set_export_empty_cycle,app,No transactions to export for {cycle}.,لا توجد معاملات للتصدير في الفترة {cycle}.,{cycle} کے لیے ایکسپورٹ کرنے کو کوئی لین دین نہیں۔,
 hh_join_rate_limited,app,Too many failed attempts. Please try again in 15 minutes.,محاولات فاشلة كثيرة. أعد المحاولة بعد 15 دقيقة.,بہت زیادہ ناکام کوششیں۔ براہ کرم 15 منٹ بعد دوبارہ کوشش کریں۔,
 hh_invite_expired,app,This invite code has expired. Ask for a new one.,انتهت صلاحية رمز الدعوة. اطلب رمزًا جديدًا.,اس دعوتی کوڈ کی میعاد ختم ہو چکی ہے۔ نیا کوڈ مانگیں۔,
