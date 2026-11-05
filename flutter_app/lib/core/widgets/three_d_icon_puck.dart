@@ -57,15 +57,25 @@ class _ThreeDIconPuckState extends State<ThreeDIconPuck> {
                 colors: [Color(0xFFFFFFFF), Color(0xFFFBF6F7)],
               ))
         : (widget.isRoseGold
-            ? const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFFF2A6BD),
-                  VelvetBurgundyColors.roseGold,
-                  Color(0xFFB86B84),
-                ],
-              )
+            ? (isDark
+                ? const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF8B2643),
+                      VelvetBurgundyColors.primaryDark,
+                      Color(0xFF380814),
+                    ],
+                  )
+                : const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFFF2A6BD),
+                      VelvetBurgundyColors.roseGold,
+                      Color(0xFFB86B84),
+                    ],
+                  ))
             : (isDark
                 ? const LinearGradient(
                     begin: Alignment.topLeft,
@@ -113,7 +123,9 @@ class _ThreeDIconPuckState extends State<ThreeDIconPuck> {
               ? VelvetBurgundyColors.roseBorderDark
               : Colors.white.withValues(alpha: 0.95))
           : (widget.isRoseGold
-              ? Colors.white.withValues(alpha: 0.5)
+              ? (isDark
+                  ? VelvetBurgundyColors.roseGoldGlow.withValues(alpha: 0.6)
+                  : Colors.white.withValues(alpha: 0.5))
               : (isDark
                   ? Colors.white.withValues(alpha: 0.22)
                   : Colors.white.withValues(alpha: 0.3))),

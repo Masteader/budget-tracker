@@ -84,6 +84,37 @@ void main() {
       final icon = tester.widget<Icon>(find.byType(Icon));
       expect(icon.color, const Color(0xFF4A0E1E));
     });
+
+    testWidgets('isRoseGold: true renders dark metallic gradient with >= 4.5:1 contrast against white icon in dark mode',
+        (tester) async {
+      await tester.pumpWidget(
+        _app(
+          const ThreeDIconPuck(
+            icon: Icons.account_balance_wallet_rounded,
+            isRoseGold: true,
+          ),
+          theme: AppThemes.darkTheme,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final container = tester.widget<Container>(
+        find.descendant(of: find.byType(ThreeDIconPuck), matching: find.byType(Container)).first,
+      );
+      final decoration = container.decoration as BoxDecoration;
+      final gradient = decoration.gradient as LinearGradient;
+
+      double contrast(Color a, Color b) {
+        final la = a.computeLuminance();
+        final lb = b.computeLuminance();
+        return (la > lb ? la + 0.05 : lb + 0.05) / (la > lb ? lb + 0.05 : la + 0.05);
+      }
+
+      for (final color in gradient.colors) {
+        expect(contrast(Colors.white, color), greaterThanOrEqualTo(4.5),
+            reason: 'White icon must reach >= 4.5:1 contrast on gradient color $color');
+      }
+    });
   });
 
   group('Dashboard HUD Header Icons in Dark Mode', () {
