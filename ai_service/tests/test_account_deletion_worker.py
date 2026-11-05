@@ -393,6 +393,63 @@ def test_deferred_is_not_a_failure_and_purges_nothing(enabled, mailer):
     assert (run["p_claimed"], run["p_completed"], run["p_failed"]) == (1, 0, 0)
 
 
+# The user cancels between claim_due_account_deletions and prepare_account_purge: prepare raises
+# purge_not_allowed (000300) and record_account_purge_failure, finding the request no longer
+# processing, answers its status and changes nothing.
+NOT_DUE = ApiError("This request is not due for purging", hint="purge_not_allowed")
+
+
+def test_a_cancel_between_claim_and_prepare_is_not_a_failure(enabled, mailer, caplog):
+    caplog.set_level("INFO")
+    client = FakeClient(jobs=[job()])
+    client.failures["prepare_account_purge"] = NOT_DUE
+    client.results["record_account_purge_failure"] = {"status": "cancelled", "attempts": 1}
+    assert worker.run_once(client) == 0
+    names = client.names()
+    for later in ("list_account_purge_storage", "storage.remove", "auth.delete", "complete_account_purge"):
+        assert later not in names, later
+    assert client.rpc_params("record_account_purge_failure") == [{"p_request_id": REQ, "p_error_code": "purge_not_allowed"}]
+    run = client.rpc_params("record_account_deletion_worker_run")[0]
+    assert (run["p_claimed"], run["p_completed"], run["p_failed"]) == (1, 0, 0)
+    assert [r for r in caplog.records if r.levelname in ("ERROR", "CRITICAL")] == []
+    assert f"Account deletion job {REQ} was cancelled" in caplog.text
+
+
+def test_not_due_while_still_processing_is_still_a_failure(enabled, mailer):
+    client = FakeClient(jobs=[job()])
+    client.failures["prepare_account_purge"] = NOT_DUE
+    client.results["record_account_purge_failure"] = {"status": "processing", "attempts": 1,
+                                                       "next_attempt_at": "2026-11-06T02:00:00+00:00"}
+    assert worker.run_once(client) == 1
+    run = client.rpc_params("record_account_deletion_worker_run")[0]
+    assert (run["p_claimed"], run["p_completed"], run["p_failed"]) == (1, 0, 1)
+
+
+def test_a_cancelled_status_after_another_error_is_still_a_failure(enabled, mailer):
+    client = FakeClient(jobs=[job()])
+    client.failures["prepare_account_purge"] = ApiError("boom", hint="purge_ledger_invariant")
+    client.results["record_account_purge_failure"] = {"status": "cancelled", "attempts": 1}
+    assert worker.run_once(client) == 1
+
+
+def test_a_cancelled_job_and_a_failed_job_in_one_run_exit_non_zero(enabled, mailer):
+    client = FakeClient(jobs=[job(), job()])
+    results = iter([{"status": "cancelled", "attempts": 1}, {"status": "processing", "attempts": 1}])
+    client.failures["prepare_account_purge"] = NOT_DUE
+    original = client._rpc
+
+    def rpc(name, params):
+        if name == "record_account_purge_failure":
+            client.calls.append(("rpc", name, params))
+            return SimpleNamespace(data=next(results))
+        return original(name, params)
+
+    client._rpc = rpc
+    assert worker.run_once(client) == 1
+    run = client.rpc_params("record_account_deletion_worker_run")[0]
+    assert (run["p_claimed"], run["p_completed"], run["p_failed"]) == (2, 0, 1)
+
+
 def test_a_user_deleted_out_of_band_still_completes(enabled, mailer):
     client = FakeClient(jobs=[job()])
     client.results["prepare_account_purge"] = {

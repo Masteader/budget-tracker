@@ -176,7 +176,7 @@ def _delete_auth_user(client: Any, user_id: str) -> None:
 
 
 def _run_job(client: Any, job: Dict[str, Any]) -> str:
-    """'completed', 'deferred' or 'failed'."""
+    """'completed', 'deferred', 'cancelled' or 'failed'."""
     request_id = job["request_id"]
     user_id = job["user_id"]
     params = {"p_request_id": request_id}
@@ -206,11 +206,20 @@ def _run_job(client: Any, job: Dict[str, Any]) -> str:
         _rpc(client, "complete_account_purge", params)
     except Exception as exc:  # noqa: BLE001 - one job never stops the next
         code = _error_code(exc, step)
-        logger.error("Account deletion job %s failed: %s (%s).", request_id, code, type(exc).__name__)
         try:
-            _rpc(client, "record_account_purge_failure", {"p_request_id": request_id, "p_error_code": code})
+            recorded = _rpc(client, "record_account_purge_failure", {"p_request_id": request_id, "p_error_code": code}) or {}
         except Exception as record_exc:  # noqa: BLE001 - the lease expires and the job is retried
+            logger.error("Account deletion job %s failed: %s (%s).", request_id, code, type(exc).__name__)
             logger.error("Account deletion job %s: could not record the failure (%s).", request_id, type(record_exc).__name__)
+            return "failed"
+        # Cancelled between the claim and prepare: prepare refuses a request that is no longer
+        # processing, and the failure recorder, finding it so, answers its status and changes
+        # nothing. Nothing was purged and nothing failed.
+        status = recorded.get("status") if isinstance(recorded, dict) else None
+        if code == "purge_not_allowed" and status is not None and status != "processing":
+            logger.info("Account deletion job %s was cancelled before its purge started (status %s).", request_id, status)
+            return "cancelled"
+        logger.error("Account deletion job %s failed: %s (%s).", request_id, code, type(exc).__name__)
         return "failed"
 
     logger.info("Account deletion job %s completed.", request_id)
@@ -339,7 +348,7 @@ def run_once(client: Any) -> int:
         return _run_disabled(client)
 
     started_at = datetime.now(timezone.utc)
-    claimed = completed = failed = 0
+    claimed = completed = failed = cancelled = 0
     run_failed = False
 
     _send_notices(client)
@@ -358,6 +367,7 @@ def run_once(client: Any) -> int:
         outcome = _run_job(client, jobs[0])
         completed += outcome == "completed"
         failed += outcome == "failed"
+        cancelled += outcome == "cancelled"
 
     # After the jobs, so a job that failed just now is reported in this run.
     run_failed |= not _alert_developer(client)
@@ -374,7 +384,8 @@ def run_once(client: Any) -> int:
         logger.error("Could not record the account deletion run (%s).", type(exc).__name__)
         run_failed = True
 
-    logger.info("Account deletion run finished: claimed=%d completed=%d failed=%d", claimed, completed, failed)
+    logger.info("Account deletion run finished: claimed=%d completed=%d failed=%d cancelled=%d",
+                claimed, completed, failed, cancelled)
     return 1 if failed or run_failed else 0
 
 

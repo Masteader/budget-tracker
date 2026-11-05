@@ -596,6 +596,47 @@ def test_user_already_gone_from_auth_counts_as_done(world, db, gateway, run_work
     assert tombstone == {"status": "completed", "user_id": None}
 
 
+def test_a_cancel_between_claim_and_prepare_is_not_a_failed_run(world, db, gateway, run_worker, monkeypatch, caplog):
+    """The user cancels after the worker claimed the job and before prepare: the real
+    prepare_account_purge refuses (purge_not_allowed), the real record_account_purge_failure answers
+    'cancelled', and the run is a success with nothing purged."""
+    import account_deletion_worker
+
+    caplog.set_level("INFO")
+    flat = world.roommates("DELH", n_members=1)
+    mate = flat.members[0]
+    request_id = _request(_session_client(world, db, mate), "delete").json()["request_id"]
+    _pass_the_date(db, mate)
+
+    real_rpc = account_deletion_worker._rpc
+    cancels = []
+
+    def rpc(client, name, params=None):
+        data = real_rpc(client, name, params)
+        if name == "claim_due_account_deletions" and any(j["request_id"] == request_id for j in data or []):
+            assert db.scalar("SELECT status FROM public.account_deletion_requests WHERE id = %s", (request_id,)) == "processing"
+            cancels.append(mate.rpc("cancel_account_deletion").json())
+        return data
+
+    monkeypatch.setattr(account_deletion_worker, "_rpc", rpc)
+    runs_before = db.scalar("SELECT count(*) FROM public.account_deletion_worker_runs")
+
+    assert run_worker() == 0
+
+    assert [c.get("cancelled") for c in cancels] == [True]
+    row = db.one("SELECT status, stage, user_id::text AS user_id FROM public.account_deletion_requests WHERE id = %s",
+                 (request_id,))
+    assert row == {"status": "cancelled", "stage": "none", "user_id": mate.id}
+    assert gateway.auth_calls == []
+    assert db.scalar("SELECT count(*) FROM auth.users WHERE id = %s", (mate.id,)) == 1
+    assert db.scalar("SELECT count(*) FROM public.account_deletion_worker_runs") == runs_before + 1
+    last_run = db.one("SELECT failed FROM public.account_deletion_worker_runs ORDER BY started_at DESC LIMIT 1")
+    assert last_run == {"failed": 0}
+    worker_errors = [r for r in caplog.records if r.name == "account_deletion_worker" and r.levelname == "ERROR"]
+    assert worker_errors == []
+    assert f"Account deletion job {request_id} was cancelled" in caplog.text
+
+
 # ── The operator path, for someone who cannot sign in ────────────────────────
 
 
