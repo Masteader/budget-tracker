@@ -200,7 +200,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
       result = result.where((t) => nafaqahBadgeKind(t, isFamily: family)?.name == _selectedSpentByFilter).toList();
     } else if (_selectedSpentByFilter != 'ALL') {
       result = result
-          .where((t) => t.spentBy.toLowerCase() == _selectedSpentByFilter.toLowerCase())
+          .where((t) => t.attributedSpentBy.toLowerCase() == _selectedSpentByFilter.toLowerCase())
           .toList();
     }
 
@@ -743,6 +743,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
               'timestamp': t.timestamp.toIso8601String(),
               'source': t.source,
               'spent_by': t.spentBy,
+              if (t.creatorRemoved) 'user_id': null,
               'notes': t.notes,
             })
         .toList();
@@ -1276,7 +1277,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           currency: tx.currency,
                                           categoryCode: tx.categoryCode,
                                           source: tx.source,
-                                          spentBy: tx.spentBy,
+                                          spentBy: tx.attributedSpentBy,
                                           attributionBadge: _badgeFor(tx, family),
                                           timestamp: tx.timestamp,
                                           items: tx.items,

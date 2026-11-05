@@ -4,6 +4,7 @@ import '../../utils/failure_log.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../models/account_deletion.dart' show accountDeletionGuardKey;
 import '../../models/household_membership.dart';
 import '../../models/nafaqah.dart';
 import '../../services/api/household_roles_api_client.dart';
@@ -132,6 +133,8 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
 
   String _errorText(Object e) {
     if (e is HouseholdRolesApiException) {
+      final guard = accountDeletionGuardKey(e.code);
+      if (guard != null) return context.tr(guard);
       if (e.code == 'forbidden') return context.tr('roles_forbidden');
       if (e.code == 'last_admin') return context.tr('roles_last_admin');
       if (e.code == 'not_found') return context.tr('fin_role_not_found');
@@ -408,6 +411,8 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
 
   String _providerErrorText(Object e) {
     if (e is NafaqahApiException) {
+      final guard = accountDeletionGuardKey(e.code);
+      if (guard != null) return context.tr(guard);
       if (e.code == 'forbidden') return context.tr('nafaqah_provider_forbidden');
       if (e.code == 'invalid') return context.tr('nafaqah_provider_invalid');
       if (e.code == 'not_family') return context.tr('nafaqah_provider_not_family');

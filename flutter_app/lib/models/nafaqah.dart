@@ -466,7 +466,7 @@ class NafaqahApiException implements Exception {
     final detailCode = detail is Map ? detail['code'] as String? : null;
     final message = res['message']?.toString() ?? '';
     final String code;
-    const stateCodes = {'overpayment', 'not_family', 'ledger_would_be_overpaid', 'no_provider'};
+    const stateCodes = {'overpayment', 'not_family', 'ledger_would_be_overpaid', 'no_provider', 'account_pending_deletion'};
     if (stateCodes.contains(detailCode)) {
       code = detailCode!;
     } else if (status == 403) {

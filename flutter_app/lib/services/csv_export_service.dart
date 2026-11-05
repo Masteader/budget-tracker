@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' show DateFormat;
 import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
 import '../l10n/app_localizations.dart';
+import '../models/transaction_attribution.dart' show kDeletedMemberRef;
 import '../theme/app_themes.dart';
 import '../widgets/app_snackbar.dart';
 import 'salary_cycle_service.dart';
@@ -104,9 +105,10 @@ class CsvExportService {
   static String generateTransactionsCsv(
     List<Map<String, dynamic>> transactions, {
     required List<String> headers,
+    String deletedMemberLabel = kDeletedMemberRef,
   }) {
     final buffer = StringBuffer();
-    for (final row in _csvRows(transactions, headers)) {
+    for (final row in _csvRows(transactions, headers, deletedMemberLabel)) {
       buffer.writeln(row.join(','));
     }
     return buffer.toString();
@@ -120,11 +122,20 @@ class CsvExportService {
   static String previewTransactionsCsv(
     List<Map<String, dynamic>> transactions, {
     required List<String> headers,
+    String deletedMemberLabel = kDeletedMemberRef,
   }) {
-    return _csvRows(transactions, headers).map((row) => row.map((field) => '\u2066$field\u2069').join(',')).join('\n');
+    return _csvRows(transactions, headers, deletedMemberLabel).map((row) => row.map((field) => '\u2066$field\u2069').join(',')).join('\n');
   }
 
-  static List<List<String>> _csvRows(List<Map<String, dynamic>> transactions, List<String> headers) {
+  /// `spent_by` is relative to the row's creator. With no creator left, 'me' is the
+  /// deleted member and must not read as whoever exports the file.
+  static String _spentByCell(Map<String, dynamic> tx, String deletedMemberLabel) {
+    final spentBy = tx['spent_by']?.toString() ?? 'both';
+    final creatorRemoved = tx.containsKey('user_id') && (tx['user_id']?.toString() ?? '').trim().isEmpty;
+    return creatorRemoved && spentBy.toLowerCase() != 'both' ? deletedMemberLabel : spentBy;
+  }
+
+  static List<List<String>> _csvRows(List<Map<String, dynamic>> transactions, List<String> headers, String deletedMemberLabel) {
     final rows = <List<String>>[headers.map(_escapeCsv).toList()];
     final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
 
@@ -148,7 +159,7 @@ class CsvExportService {
       final total = (tx['amount'] as num?)?.toDouble() ?? 0.0;
       final vatStr = (total > 0 ? (total * 0.15 / 1.15) : 0.0).toStringAsFixed(2);
 
-      final spentBy = _escapeCsv(tx['spent_by']?.toString() ?? 'both');
+      final spentBy = _escapeCsv(_spentByCell(tx, deletedMemberLabel));
       final source = _escapeCsv(tx['source']?.toString() ?? 'manual');
 
       // Line items
@@ -182,9 +193,11 @@ class CsvExportService {
 
   /// Shows an export dialog with preview and copy options.
   static void showExportDialog(BuildContext context, List<Map<String, dynamic>> transactions, {String? monthLabel}) {
-    final headers = headersFor(AppLocalizations.of(context));
-    final csvContent = generateTransactionsCsv(transactions, headers: headers);
-    final csvPreview = previewTransactionsCsv(transactions, headers: headers);
+    final l = AppLocalizations.of(context);
+    final headers = headersFor(l);
+    final deletedMember = l.get('deleted_member');
+    final csvContent = generateTransactionsCsv(transactions, headers: headers, deletedMemberLabel: deletedMember);
+    final csvPreview = previewTransactionsCsv(transactions, headers: headers, deletedMemberLabel: deletedMember);
     final count = transactions.length;
     final totalSum = transactions.fold<double>(
       0.0,

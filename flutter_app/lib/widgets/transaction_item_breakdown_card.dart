@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/widgets/three_d_surface_card.dart';
 import '../core/widgets/three_d_icon_puck.dart';
+import '../models/transaction_attribution.dart';
 import '../services/zatca_decoder.dart';
 import '../services/receipt_storage_service.dart';
 import '../theme/app_themes.dart';
@@ -102,6 +103,12 @@ class TransactionItemBreakdownCard extends StatelessWidget {
         fg = context.accentText;
         icon = Icons.favorite_outline;
         label = detailed ? context.tr('paid_by_partner') : context.tr('partner');
+        break;
+      case kDeletedMemberRef:
+        bg = context.subtleCardBg;
+        fg = context.textSecondary;
+        icon = Icons.person_off_outlined;
+        label = context.tr('deleted_member');
         break;
       case 'me':
         bg = (context.pillBg);

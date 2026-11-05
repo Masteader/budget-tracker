@@ -4,6 +4,7 @@ import '../../utils/failure_log.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../models/account_deletion.dart' show accountDeletionGuardKey;
 import '../../models/models.dart';
 import '../../services/api/base_api_client.dart' show ApiRequestException;
 import '../../services/api_service.dart';
@@ -106,8 +107,11 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
       setState(() => _isGenerating = false);
       final status = e is ApiRequestException ? e.statusCode : null;
       final code = e is ApiRequestException ? e.code : null;
+      final guard = accountDeletionGuardKey(code);
       final String message;
-      if (status == 403) {
+      if (guard != null) {
+        message = context.tr(guard);
+      } else if (status == 403) {
         message = context.tr('rid_admin_only');
       } else if (code == 'invite_role_mismatch') {
         message = context.tr('hh_invite_role_mismatch');

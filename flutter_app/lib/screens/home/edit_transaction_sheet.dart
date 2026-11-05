@@ -235,8 +235,13 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     return (id == null || id.isEmpty) ? null : id;
   }
 
+  /// The row's creator deleted their account. Who paid stays as stored: the sheet
+  /// speaks to the viewer ("I paid"), and the viewer did not.
+  bool get _creatorRemoved => widget.transaction.creatorRemoved;
+
   /// The viewer recorded the expense (or either is unknown: legacy rows).
   bool get _viewerIsCreator {
+    if (_creatorRemoved) return false;
     final viewer = _viewerId;
     final creator = _creatorId;
     return viewer == null || creator == null || viewer == creator;
@@ -329,6 +334,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   ({String tail, String spentBy})? _resolvedPayer() {
     if (!_payerTouched) {
       final stored = (widget.transaction.payerRef ?? widget.transaction.paidBy).toLowerCase();
+      if (_creatorRemoved) return (tail: stored, spentBy: widget.transaction.spentBy);
       if (stored == 'me' || stored == 'partner') return (tail: stored, spentBy: stored);
       return (tail: stored, spentBy: _creatorRelative(stored) ?? (stored == _creatorId ? 'me' : 'partner'));
     }
@@ -362,6 +368,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     final wife = _classSpouseId;
     if (_canClassify && cls == kWifePersonal && wife != null) return (type: 'individual', id: wife.toLowerCase());
     final ben = _selectedBeneficiary;
+    if (ben == kDeletedMemberRef) return (type: 'individual', id: kDeletedMemberRef);
     if (ben != 'me' && ben != 'partner') return beneficiaryColumns(ben, creatorId: _creatorId);
     if (_viewerIsCreator) {
       return beneficiaryColumns(ben, creatorId: _creatorId, partnerId: _relations.counterpartOf(_creatorId));
@@ -1031,6 +1038,30 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     );
   }
 
+  Widget _buildDeletedMemberPayer() {
+    return Container(
+      key: const ValueKey('edit_tx_deleted_member_payer'),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: context.subtleCardBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.borderColor),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.person_off_outlined, size: 18, color: context.textSecondary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              context.tr('deleted_member'),
+              style: TextStyle(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSettlementPreviewBanner(double amount) {
     String text;
     IconData icon;
@@ -1050,6 +1081,10 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         icon = Icons.shield_outlined;
       }
       color = NafaqahClassSelector.colorFor(cls, context: context);
+    } else if (_selectedPaidBy == kDeletedMemberRef || _selectedBeneficiary == kDeletedMemberRef) {
+      text = context.tr('del_member_row_note');
+      icon = Icons.person_off_outlined;
+      color = context.textSecondary;
     } else if (_selectedPaidBy == 'me' && _selectedBeneficiary == 'both') {
       final half = amount * 0.5;
       text = context.trArgs('settle_shared_partner_owes', {'amount': context.sar(half)});
@@ -1702,6 +1737,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               ),
             ),
             const SizedBox(height: 8),
+            if (_creatorRemoved)
+              _buildDeletedMemberPayer()
+            else
             Row(
               children: [
                 _buildSegmentOption(

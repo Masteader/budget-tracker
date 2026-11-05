@@ -101,7 +101,7 @@ class TransactionProvider extends ChangeNotifier {
       }
 
       if (hasSpentBy) {
-        if (tx.spentBy.toLowerCase() != targetSpentBy) return false;
+        if (tx.attributedSpentBy.toLowerCase() != targetSpentBy) return false;
       }
 
       return true;

@@ -32,6 +32,7 @@ import '../../widgets/dashboard/salary_cycle_selector_bar.dart';
 import '../../widgets/dashboard/household_balances_section.dart';
 import '../../widgets/card_error_state.dart';
 import '../../widgets/dashboard/accounts_summary_card.dart';
+import '../../widgets/dashboard/household_deletion_banner.dart';
 import '../../widgets/dashboard/payday_checkin_banner.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
@@ -645,6 +646,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
                                   );
                                 },
                               ),
+                              HouseholdDeletionBanner(householdId: hid),
                               PaydayCheckinBanner(householdId: hid),
                               Builder(
                                 builder: (ctx) {

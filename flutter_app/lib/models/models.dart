@@ -51,6 +51,11 @@ class Transaction {
   /// user by the database). Null for legacy rows: only admins may change those.
   final String? userId;
 
+  /// The row came back with no creator: they deleted their account (older rows
+  /// can look the same). Their `spent_by = 'me'` must never read as the viewer's.
+  /// False for a row read without the column.
+  final bool creatorRemoved;
+
   /// Family Nafaqah class as stored (`nafaqah_class`: 'wife_reimbursable',
   /// 'wife_personal' or null) and the wife it names. [hasNafaqahFields] says
   /// the row was read with these columns (the feed selects every column), so
@@ -96,6 +101,7 @@ class Transaction {
     String? notes,
     String? rawSms,
     this.userId,
+    this.creatorRemoved = false,
     this.nafaqahClass,
     this.nafaqahSpouseId,
     this.hasNafaqahFields = false,
@@ -224,6 +230,15 @@ class Transaction {
       }
     }
 
+    final creatorRemoved = map.containsKey('user_id') && (map['user_id']?.toString() ?? '').trim().isEmpty;
+    if (creatorRemoved || payerRef.trim().toLowerCase() == kDeletedMemberRef) {
+      detectedPaidBy = kDeletedMemberRef;
+    }
+    if (storedBenId?.trim().toLowerCase() == kDeletedMemberRef ||
+        (creatorRemoved && (detectedBeneficiary == 'me' || detectedBeneficiary == 'partner'))) {
+      detectedBeneficiary = kDeletedMemberRef;
+    }
+
     return Transaction(
       id: map['id'] as String,
       householdId: map['household_id'] as String,
@@ -252,6 +267,7 @@ class Transaction {
           (raw.contains('ZATCA QR: ') ? raw.substring(raw.indexOf('ZATCA QR: ') + 10).trim() : null),
       notes: raw,
       userId: map['user_id'] as String?,
+      creatorRemoved: creatorRemoved,
       nafaqahClass: map['nafaqah_class'] as String?,
       nafaqahSpouseId: map['nafaqah_spouse_id']?.toString(),
       hasNafaqahFields: map.containsKey('nafaqah_class'),
@@ -259,6 +275,9 @@ class Transaction {
       cycleKey: map['cycle_key'] as String?,
     );
   }
+
+  /// Who paid, for showing or filtering. [spentBy] stays the stored column.
+  String get attributedSpentBy => creatorRemoved && spentBy.toLowerCase() != 'both' ? kDeletedMemberRef : spentBy;
 
   bool get isInstallment {
     final raw = notes ?? '';
@@ -383,6 +402,7 @@ class Transaction {
       qrCodeRaw: qrCodeRaw ?? this.qrCodeRaw,
       notes: notes ?? rawSms ?? this.notes,
       userId: userId ?? this.userId,
+      creatorRemoved: creatorRemoved,
       nafaqahClass: nafaqahClass,
       nafaqahSpouseId: nafaqahSpouseId,
       hasNafaqahFields: hasNafaqahFields,

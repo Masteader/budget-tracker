@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../l10n/app_localizations.dart';
+import '../models/account_deletion.dart' show accountDeletionGuardKey;
 
 /// The server refused to join or claim a household invite. [code] is the
 /// RPC's machine code when it sent one (`already_member`: the user is already
@@ -77,9 +78,17 @@ Future<Map<String, dynamic>> createHouseholdAndClaim({
 
 /// Checks the response of `POST /households/invites/{code}/claim`: a 400 is
 /// the server refusing the claim (already a member, invalid or used invite)
-/// and is thrown with the server's message. Network failures and other
-/// statuses are left to the join call that follows.
+/// and is thrown with the server's message; so is a 409 from a grace-period
+/// guard (the account or the household is scheduled for deletion). Network
+/// failures and other statuses are left to the join call that follows.
 void checkInviteClaimResponse(Map<String, dynamic> response) {
+  final conflict = response['detail'];
+  if (response['status'] == 'error' && response['status_code'] == 409 && conflict is Map) {
+    final code = conflict['code']?.toString();
+    if (accountDeletionGuardKey(code) != null) {
+      throw HouseholdJoinException(conflict['message']?.toString() ?? '', code: code);
+    }
+  }
   if (response['status'] == 'error' && response['status_code'] == 400) {
     final detail = response['detail'];
     final message = detail is String && detail.isNotEmpty ? detail : response['message']?.toString() ?? '';
@@ -104,6 +113,9 @@ const Map<String, String> _refusalKeys = {
   'household creation limit reached': 'set_household_limit_reached',
   'sole admin cannot leave': 'set_leave_promote_admin_first',
   'cannot remove the sole admin': 'set_leave_promote_admin_first',
+  'this account is scheduled for deletion': 'del_err_account_pending',
+  'this household is scheduled for deletion': 'del_err_household_pending',
+  'this member is scheduled for deletion': 'del_err_successor_pending',
 };
 
 /// The localization key of a household refusal the server explained, or null
@@ -111,10 +123,14 @@ const Map<String, String> _refusalKeys = {
 String? householdRefusalKey(Object error) {
   final String message;
   if (error is HouseholdJoinException) {
+    final guard = accountDeletionGuardKey(error.code);
+    if (guard != null) return guard;
     if (error.isAlreadyMember) return 'hh_already_member';
     if (error.isRoleMismatch) return 'hh_invite_role_mismatch';
     message = error.message;
   } else if (error is PostgrestException) {
+    final guard = accountDeletionGuardKey(error.hint);
+    if (guard != null) return guard;
     message = error.message;
   } else {
     return null;

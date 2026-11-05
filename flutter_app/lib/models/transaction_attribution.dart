@@ -11,6 +11,11 @@
 ///   read right-anchored by the server.
 library;
 
+/// What the purge writes where a deleted member was named (`beneficiary_id`, the
+/// note tail), and how the app refers to a row's departed creator. Display only:
+/// it never goes into `spent_by`, whose CHECK allows me, partner and both.
+const String kDeletedMemberRef = 'deleted_member';
+
 /// Beneficiary ids meaning "the whole household" (server `_SHARED_IDS`).
 const Set<String> kSharedBeneficiaryIds = {
   '', 'household', 'all_peers', 'all', 'both', 'shared', 'family', 'everyone',
