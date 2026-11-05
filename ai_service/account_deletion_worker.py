@@ -4,8 +4,18 @@ Finishes account deletions that have come due. Runs once and exits: python accou
 Meant for a Railway Cron service using this image (docs/runbooks/account-deletion-purge.md). The
 API process never imports it and has no route to it.
 
-Without ACCOUNT_DELETION_PURGE_ENABLED=1 (that exact value) it reads one summary, logs the counts
-and stops: no claim, no email, no storage or Auth call, no write.
+Two switches, each only on with the exact value 1, each independent of the other:
+
+ACCOUNT_DELETION_PURGE_ENABLED: without it the worker reads one summary and logs the counts: no
+claim, no storage or Auth call, no developer alert.
+
+ACCOUNT_DELETION_EMAILS_ENABLED: without it no account holder or household member gets an email
+(T-7, T-1, completion, member marked, member T-7), and no notice is marked sent, so reminders still
+in their window go out when it comes on. A completion email is skipped: the job still completes,
+and that email is never sent, because the address goes with the account. Developer alerts do not
+depend on this switch.
+
+With both off a run writes nothing.
 
 One job, each step safe to repeat: claim, prepare_account_purge (all database work), remove the
 queued storage objects, delete the user through the Auth Admin API (404 counts as done), then
@@ -38,6 +48,7 @@ from supabase_client import get_client
 logger = logging.getLogger("account_deletion_worker")
 
 ENABLE_ENV = "ACCOUNT_DELETION_PURGE_ENABLED"
+EMAILS_ENV = "ACCOUNT_DELETION_EMAILS_ENABLED"
 MAX_JOBS_PER_RUN = 20
 LEASE_MINUTES = 30
 STORAGE_PAGE_SIZE = 100
@@ -49,6 +60,10 @@ _ERROR_CODE_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 
 def purge_enabled() -> bool:
     return os.environ.get(ENABLE_ENV) == "1"
+
+
+def emails_enabled() -> bool:
+    return os.environ.get(EMAILS_ENV) == "1"
 
 
 def _rpc(client: Any, name: str, params: Optional[Dict[str, Any]] = None) -> Any:
@@ -140,6 +155,17 @@ def _remove_storage(client: Any, items: List[Dict[str, Any]]) -> None:
 # ── One job ──────────────────────────────────────────────────────────────────
 
 
+def _completion_address(client: Any, request_id: str, user_id: str) -> Optional[str]:
+    """The address for the completion email, read before the delete. None means no email."""
+    if not emails_enabled():
+        return None
+    try:
+        return _lookup_email(client, user_id)
+    except Exception as exc:  # noqa: BLE001 - mail never blocks a purge
+        logger.warning("Account deletion job %s: address lookup failed (%s).", request_id, type(exc).__name__)
+        return None
+
+
 def _delete_auth_user(client: Any, user_id: str) -> None:
     try:
         client.auth.admin.delete_user(user_id, should_soft_delete=False)
@@ -166,11 +192,7 @@ def _run_job(client: Any, job: Dict[str, Any]) -> str:
 
         # The address goes with the Auth user, and "your account has been deleted" must not be
         # sent before it is true. A retry after the delete finds no address and sends nothing.
-        email: Optional[str] = None
-        try:
-            email = _lookup_email(client, user_id)
-        except Exception as exc:  # noqa: BLE001 - mail never blocks a purge
-            logger.warning("Account deletion job %s: address lookup failed (%s).", request_id, type(exc).__name__)
+        email = _completion_address(client, request_id, user_id)
 
         step = "auth_failed"
         _delete_auth_user(client, user_id)
@@ -214,6 +236,9 @@ def _send_notices(client: Any) -> None:
     # holder_completion is sent by the job itself, after the Auth delete.
     rows = [r for r in rows if r.get("notice") != "holder_completion"]
     if not rows:
+        return
+    if not emails_enabled():
+        logger.info("Account deletion emails are off (%s is not 1): %d notice(s) not sent, and not marked.", EMAILS_ENV, len(rows))
         return
     if mail_service.active_provider() is None:
         logger.warning("No email provider configured: %d account deletion notice(s) not sent.", len(rows))
@@ -275,10 +300,13 @@ def _run_disabled(client: Any) -> int:
         logger.error("Could not read the account deletion queue (%s).", type(exc).__name__)
         return 1
     logger.info(
-        "Account deletion purge is disabled (%s is not 1); nothing was changed. "
+        "Account deletion purge is disabled (%s is not 1); no job was touched. "
         "due=%s in_progress=%s failed=%s overdue=%s",
         ENABLE_ENV, summary.get("due"), summary.get("in_progress"), summary.get("failed"), summary.get("overdue"),
     )
+    # The purge switch does not govern reminders. With emails off too, this run wrote nothing.
+    if emails_enabled():
+        _send_notices(client)
     return 0
 
 

@@ -8,12 +8,12 @@ The worker that finishes account deletions after the 30-day grace period. It is 
 
 Each run, when enabled:
 
-1. Sends the reminders that are due.
+1. Sends the reminders that are due, if emails are on.
 2. Claims due jobs one at a time, up to 20, and for each one:
    1. `prepare_account_purge`: all database work in one transaction.
    2. Removes the queued receipts through the Storage API.
    3. Deletes the user through the Auth Admin API. A 404 counts as done.
-   4. Emails the completion notice to the address it read before the delete.
+   4. Emails the completion notice to the address it read before the delete, if emails are on.
    5. `complete_account_purge`: checks the user is gone and leaves a record with no identifiers.
 3. Emails the developer about jobs that failed or are more than 48 hours overdue.
 4. Removes `account_deletion` inquiries older than 90 days.
@@ -32,6 +32,7 @@ Create a Railway Cron service from the same image as the API:
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | Same as the API |
 | `RESEND_API_KEY` or `SMTP_*`, `MAIL_FROM`, `CONTACT_RECIPIENT_EMAIL` | Same as the API. Without a provider, no reminders or alerts go out, and purges still run. |
 | `ACCOUNT_DELETION_PURGE_ENABLED` | Leave unset until approved. Only the exact value `1` enables it. |
+| `ACCOUNT_DELETION_EMAILS_ENABLED` | Leave unset until reminder emails to real users are approved. Only the exact value `1` enables them. Separate from the purge switch. |
 
 Railway does not start a run while the previous one is active. Apply the migrations first (rule 01), because the worker calls functions they create.
 
@@ -40,10 +41,38 @@ Railway does not start a run while the previous one is active. Apply the migrati
 Without `ACCOUNT_DELETION_PURGE_ENABLED=1` the worker calls one read-only function, logs the counts and exits 0:
 
 ```
-Account deletion purge is disabled (ACCOUNT_DELETION_PURGE_ENABLED is not 1); nothing was changed. due=0 in_progress=0 failed=0 overdue=0
+Account deletion purge is disabled (ACCOUNT_DELETION_PURGE_ENABLED is not 1); no job was touched. due=0 in_progress=0 failed=0 overdue=0
 ```
 
-Run it this way first. It proves the service, key and migrations work without changing anything. To stop purges in an emergency, remove the variable. A run already in progress finishes, and the next run does nothing.
+Run it this way first, with emails off too. It proves the service, key and migrations work without changing anything. To stop purges in an emergency, remove the variable. A run already in progress finishes, and the next run touches no job.
+
+## The email switch
+
+`ACCOUNT_DELETION_EMAILS_ENABLED=1` (that exact value) governs every email to an account holder or household member: T-7, T-1, completion, member marked and member T-7. It is independent of the purge switch.
+
+| Purge | Emails | A run does this |
+|---|---|---|
+| Off | Off | Logs the counts. Writes nothing. |
+| Off | On | Logs the counts and sends the reminders that are due. Touches no job and sends no developer alert. |
+| On | Off | Runs jobs and developer alerts. No email to any account holder or member. |
+| On | On | Everything |
+
+With emails off:
+
+- **No notice is marked sent**, so one still in its window goes out when emails come on.
+- **The completion email is skipped, and the job still completes.** It is not sent later, because the address goes with the account.
+- **Developer failure and overdue alerts still go out**, as long as the purge is on and a provider is set.
+
+Turning it on does not send a burst of old reminders, because the database offers a notice only while it still helps:
+
+| Notice | Offered |
+|---|---|
+| `holder_t7` | From 7 days to 2 days before the date |
+| `holder_t1` | From 1 day to 1 hour before the date |
+| `member_marked` | Until 1 hour before the date |
+| `member_t7` | After `member_marked`, while more than 2 days remain |
+
+So someone gets at most one holder reminder when it comes on, and none for a date that has passed or is under an hour away. In the normal hourly run these windows change nothing.
 
 ## Is it healthy?
 

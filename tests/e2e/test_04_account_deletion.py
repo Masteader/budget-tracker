@@ -110,11 +110,15 @@ def run_worker(stack, monkeypatch):
     """The Railway Cron entry point, in this process so the network guard stays on."""
     import account_deletion_worker
 
-    def run(enabled=True):
+    def run(enabled=True, emails=None):
         if enabled:
             monkeypatch.setenv("ACCOUNT_DELETION_PURGE_ENABLED", "1")
         else:
             monkeypatch.delenv("ACCOUNT_DELETION_PURGE_ENABLED", raising=False)
+        if emails is True:
+            monkeypatch.setenv("ACCOUNT_DELETION_EMAILS_ENABLED", "1")
+        elif emails is False:
+            monkeypatch.delenv("ACCOUNT_DELETION_EMAILS_ENABLED", raising=False)
         return account_deletion_worker.main()
 
     return run
@@ -133,6 +137,7 @@ def gateway(stack):
 @pytest.fixture()
 def resend(gateway, monkeypatch):
     monkeypatch.setenv("RESEND_API_KEY", "re_e2e_fake_key")
+    monkeypatch.setenv("ACCOUNT_DELETION_EMAILS_ENABLED", "1")
     gateway.resend_status = 200
     yield gateway
 
@@ -689,6 +694,152 @@ def test_operator_path_from_form_to_purge(world, db, resend, run_worker, capsys)
                          "operator_inquiry_reference": None}
     assert _pool_balances(db, flat) == pools_before
     _assert_user_erased(db, mate)
+
+
+# ── The email switch, real worker against real SQL ───────────────────────────
+
+
+def _date_in(db, user, away):
+    """How far away the date is now, for the request and the households it marked."""
+    db.query("UPDATE public.account_deletion_requests SET scheduled_for = now() + %s::interval "
+             "WHERE user_id = %s AND status = 'scheduled'", (away, user.id))
+    db.query("UPDATE public.households SET deletion_scheduled_for = now() + %s::interval "
+             "WHERE deletion_requested_by = %s", (away, user.id))
+
+
+def _notices_sent(db, request_id):
+    return db.scalar("SELECT notices_sent FROM public.account_deletion_requests WHERE id = %s", (request_id,))
+
+
+def _mail_to(gateway):
+    return sorted(addr for mail in gateway.emails for addr in mail["to"])
+
+
+def _household_being_deleted(world, db, tag):
+    flat = world.roommates(tag, n_members=1)
+    client = _session_client(world, db, flat.admin)
+    res = _request(client, choices=[{"household_id": flat.id, "action": "delete"}])
+    assert res.status_code == 200, res.text
+    return flat, flat.admin, flat.members[0], res.json()["request_id"]
+
+
+def test_emails_off_for_weeks_then_on_sends_only_what_still_helps(world, db, resend, run_worker):
+    gateway = resend
+    flat, holder, member, request_id = _household_being_deleted(world, db, "DELM")
+
+    # Off, with a provider ready: nobody hears anything and nothing counts as sent.
+    assert run_worker(emails=False) == 0
+    _date_in(db, holder, "5 days")
+    assert run_worker(emails=False) == 0
+    _date_in(db, holder, "12 hours")
+    assert run_worker(emails=False) == 0
+    assert gateway.emails == []
+    assert _notices_sent(db, request_id) == []
+
+    # On, 12 hours out: T-1 for the holder and the first notice for the member. The T-7 that
+    # passed unsent stays unsent, so no one gets a stale reminder or two at once.
+    assert run_worker(emails=True) == 0
+    assert _mail_to(gateway) == sorted([holder.email, member.email])
+    subjects = {mail["to"][0]: mail["subject"] for mail in gateway.emails}
+    assert "last reminder" in subjects[holder.email]
+    assert "a household you belong to" in subjects[member.email]
+    assert set(_notices_sent(db, request_id)) >= {"holder_t1", "member_marked"}
+    assert "holder_t7" not in _notices_sent(db, request_id)
+
+    # Once each.
+    gateway.emails.clear()
+    assert run_worker(emails=True) == 0
+    assert gateway.emails == []
+
+    # Off again when the date passes: the completion email is skipped, and the job completes.
+    gateway.auth_calls.clear()
+    _pass_the_date(db, holder)
+    assert run_worker(emails=False) == 0
+    assert gateway.emails == []
+    assert db.scalar("SELECT status FROM public.account_deletion_requests WHERE id = %s", (request_id,)) == "completed"
+    assert not {"GET"} & {method for method, _ in gateway.auth_calls}, "no address is read when nothing will be sent"
+    assert db.scalar("SELECT count(*) FROM public.households WHERE id = %s", (flat.id,)) == 0
+    _assert_user_erased(db, holder)
+
+
+@pytest.mark.parametrize("away, holder_gets", [
+    ("36 hours", False),      # T-7 is stale and T-1 is coming
+    ("30 minutes", False),    # the purge is next
+    ("3 days", True),         # T-7 was missed, and still helps
+])
+def test_turning_emails_on_near_the_date(world, db, resend, run_worker, away, holder_gets):
+    gateway = resend
+    mate_flat = world.roommates("DELN", n_members=1)
+    mate = mate_flat.members[0]
+    client = _session_client(world, db, mate)
+    request_id = _request(client).json()["request_id"]
+    _date_in(db, mate, away)
+
+    assert run_worker(emails=True) == 0
+    assert _mail_to(gateway) == ([mate.email] if holder_gets else [])
+    assert ("holder_t7" in _notices_sent(db, request_id)) is holder_gets
+
+    assert mate.rpc("cancel_account_deletion").json()["cancelled"] is True
+
+
+def test_completion_email_goes_when_emails_are_on(world, db, resend, run_worker):
+    gateway = resend
+    flat = world.roommates("DELP", n_members=1)
+    mate = flat.members[0]
+    client = _session_client(world, db, mate)
+    _request(client, locale="ur")
+    _pass_the_date(db, mate)
+    assert run_worker(emails=True) == 0
+    assert _mail_to(gateway) == [mate.email]
+    assert "حذف ہو گیا ہے" in gateway.emails[0]["subject"]
+    _assert_user_erased(db, mate)
+
+
+def test_developer_alert_goes_out_with_emails_off(world, db, resend, run_worker):
+    gateway = resend
+    flat = world.roommates("DELQ", n_members=1)
+    mate = flat.members[0]
+    client = _session_client(world, db, mate)
+    request_id = _request(client).json()["request_id"]
+    _pass_the_date(db, mate)
+    db.query("UPDATE public.account_deletion_requests SET attempts = 4 WHERE id = %s", (request_id,))
+    gateway.auth_delete_failures = 1
+
+    assert run_worker(emails=False) == 1
+    assert db.scalar("SELECT status FROM public.account_deletion_requests WHERE id = %s", (request_id,)) == "failed"
+    assert _mail_to(gateway) == ["inbox@e2e.test"]
+    body = gateway.emails[0]["text"]
+    assert request_id in body and mate.email not in body and mate.id not in body
+    assert _notices_sent(db, request_id) == ["ops_failed"]
+
+    # Once.
+    gateway.emails.clear()
+    assert run_worker(emails=False) == 0
+    assert gateway.emails == []
+
+
+def test_purge_off_emails_on_reminds_and_touches_no_job(world, db, resend, run_worker):
+    gateway = resend
+    flat = world.roommates("DELR", n_members=1)
+    mate = flat.members[0]
+    client = _session_client(world, db, mate)
+    request_id = _request(client).json()["request_id"]
+    _date_in(db, mate, "12 hours")
+
+    assert run_worker(enabled=False, emails=True) == 0
+    assert _mail_to(gateway) == [mate.email]
+    assert "holder_t1" in _notices_sent(db, request_id)
+
+    # The date passes with the purge still off: no reminder for a past date, no job claimed.
+    gateway.emails.clear()
+    gateway.auth_calls.clear()
+    _pass_the_date(db, mate)
+    assert run_worker(enabled=False, emails=True) == 0
+    assert gateway.emails == []
+    assert gateway.auth_calls == []
+    assert db.scalar("SELECT status FROM public.account_deletion_requests WHERE id = %s", (request_id,)) == "scheduled"
+
+    assert mate.rpc("cancel_account_deletion").json()["cancelled"] is True
 
 
 # ── What clients cannot do ───────────────────────────────────────────────────
