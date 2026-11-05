@@ -967,6 +967,13 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     }
   }
 
+  bool get _textIsEnlarged => MediaQuery.textScalerOf(context).scale(10) > 13;
+
+  Widget _buildConvertButton() => TextButton(
+        onPressed: _convertToInstallmentPlan,
+        child: Text(context.tr('convert'), style: TextStyle(color: context.accentText, fontWeight: FontWeight.bold)),
+      );
+
   Widget _buildCyclePill({
     required String label,
     required bool isSelected,
@@ -1493,9 +1500,11 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  context.tr('edit_transaction'),
-                  style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: context.textPrimary),
+                Expanded(
+                  child: Text(
+                    context.tr('edit_transaction'),
+                    style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: context.textPrimary),
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
@@ -1523,6 +1532,8 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             // Amount
             TextField(
               controller: _amountCtrl,
+              // At large text sizes the digits wrap, because an amount is never scrolled out of sight.
+              maxLines: _textIsEnlarged ? null : 1,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold),
               decoration: InputDecoration(
@@ -1544,33 +1555,38 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: context.borderColor),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(Icons.credit_score_rounded, color: context.warnText, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.tr('installment_plans_title'),
-                          style: GoogleFonts.outfit(
-                            color: context.textPrimary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
+                  Row(
+                    children: [
+                      Icon(Icons.credit_score_rounded, color: context.warnText, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              context.tr('installment_plans_title'),
+                              style: GoogleFonts.outfit(
+                                color: context.textPrimary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              context.tr('bnpl_empty_desc'),
+                              style: TextStyle(color: context.textSecondary, fontSize: 11),
+                            ),
+                          ],
                         ),
-                        Text(
-                          context.tr('bnpl_empty_desc'),
-                          style: TextStyle(color: context.textSecondary, fontSize: 11),
-                        ),
-                      ],
-                    ),
+                      ),
+                      if (!_textIsEnlarged) _buildConvertButton(),
+                    ],
                   ),
-                  TextButton(
-                    onPressed: _convertToInstallmentPlan,
-                    child: Text(context.tr('convert'), style: TextStyle(color: context.accentText, fontWeight: FontWeight.bold)),
-                  ),
+                  // No room beside the text at large sizes.
+                  if (_textIsEnlarged)
+                    Align(alignment: AlignmentDirectional.centerEnd, child: _buildConvertButton()),
                 ],
               ),
             ),
@@ -1587,22 +1603,29 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
+                  // The pills drop under the title when they do not fit beside it.
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Icon(Icons.calendar_month_rounded, size: 16, color: context.accentText),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          context.tr('change_cycle_date'),
-                          style: GoogleFonts.outfit(
-                            color: context.textPrimary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.calendar_month_rounded, size: 16, color: context.accentText),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              context.tr('change_cycle_date'),
+                              style: GoogleFonts.outfit(
+                                color: context.textPrimary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        ],
                       ),
-                      const SizedBox(width: 6),
                       // Quick Cycle Pills
                       _buildCyclePill(
                         label: context.tr('current_cycle'),
@@ -1612,7 +1635,6 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                           _dateTouched = true;
                         }),
                       ),
-                      const SizedBox(width: 6),
                       _buildCyclePill(
                         label: context.tr('previous_cycle'),
                         isSelected: _targetCycle.key == _previousCycle.key,
@@ -1667,6 +1689,8 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             // Category Dropdown
             DropdownButtonFormField<String>(
               initialValue: _selectedCategory,
+              isExpanded: true,
+              itemHeight: null,
               dropdownColor: context.cardBg,
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
@@ -1694,6 +1718,8 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               initialValue: _subCategories.any((s) => s['sub_code'] == _selectedSubCategory)
                   ? _selectedSubCategory
                   : null,
+              isExpanded: true,
+              itemHeight: null,
               dropdownColor: context.cardBg,
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
@@ -1831,18 +1857,18 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             ),
             const SizedBox(height: 14),
             ],
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              runSpacing: 4,
               children: [
-                Expanded(
-                  child: Text(
-                    context.tr('paid_for_whom_title'),
-                    style: GoogleFonts.outfit(
-                      fontSize: 11,
-                      letterSpacing: 0.8,
-                      fontWeight: FontWeight.w700,
-                      color: context.textSecondary,
-                    ),
+                Text(
+                  context.tr('paid_for_whom_title'),
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    letterSpacing: 0.8,
+                    fontWeight: FontWeight.w700,
+                    color: context.textSecondary,
                   ),
                 ),
                 InkWell(
@@ -1851,15 +1877,18 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.add_rounded, size: 14, color: context.accentText),
                         const SizedBox(width: 2),
-                        Text(
-                          context.tr('add_child'),
-                          style: GoogleFonts.outfit(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: context.accentText,
+                        Flexible(
+                          child: Text(
+                            context.tr('add_child'),
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: context.accentText,
+                            ),
                           ),
                         ),
                       ],
@@ -1934,8 +1963,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             const SizedBox(height: 20),
 
             // Line items header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
                   context.tr('exact_line_items'),
@@ -1976,23 +2006,27 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.receipt_long_rounded,
-                          size: 16,
-                          color: _taxEnabled ? context.accentText : context.textSecondary,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          context.tr('invoice_tax_toggle'),
-                          style: GoogleFonts.outfit(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: context.textPrimary,
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.receipt_long_rounded,
+                            size: 16,
+                            color: _taxEnabled ? context.accentText : context.textSecondary,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              context.tr('invoice_tax_toggle'),
+                              style: GoogleFonts.outfit(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: context.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     Switch.adaptive(
                       value: _taxEnabled,
@@ -2010,18 +2044,8 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               final qty = ((it['quantity'] as num?)?.toDouble() ?? 1.0);
               final qtyInt = qty.toInt() > 0 ? qty.toInt() : 1;
               final price = (it['price'] as num?)?.toDouble() ?? 0.0;
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: context.subtleCardBg,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: context.borderColor),
-                ),
-                child: Row(
-                  children: [
-                    // Quantity Stepper: [-] 1x [+]
-                    Container(
+              // Quantity Stepper: [-] 1x [+]
+              final stepper = Container(
                       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                       decoration: BoxDecoration(
                         color: context.cardBg,
@@ -2080,13 +2104,11 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Item Name
-                    Expanded(
-                      flex: 3,
-                      child: TextFormField(
+              );
+              // Item Name
+              final nameField = TextFormField(
                         initialValue: it['name'] ?? '',
+                        maxLines: _textIsEnlarged ? null : 1,
                         style: TextStyle(color: context.textPrimary, fontSize: 13),
                         decoration: InputDecoration(
                           hintText: context.tr('item_name'),
@@ -2095,18 +2117,16 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                           isDense: true,
                         ),
                         onChanged: (val) => it['name'] = val,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Price & Line Total
-                    Expanded(
-                      flex: 2,
-                      child: Column(
+              );
+              // Price & Line Total
+              final priceColumn = Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           TextFormField(
                             initialValue: price.toStringAsFixed(2),
+                            // Digits wrap at large text sizes: an amount is never scrolled out of sight.
+                            maxLines: _textIsEnlarged ? null : 1,
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                             textAlign: TextAlign.end,
                             style: TextStyle(color: context.accentText, fontSize: 13, fontWeight: FontWeight.w600),
@@ -2127,15 +2147,44 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                               style: TextStyle(color: context.textSecondary, fontSize: 10, fontWeight: FontWeight.w500),
                             ),
                         ],
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: context.tr('close'),
-                      icon: Icon(Icons.close, size: 18, color: context.textSecondary),
-                      onPressed: () => _removeItem(idx),
-                    ),
-                  ],
+              );
+              final removeButton = IconButton(
+                tooltip: context.tr('close'),
+                icon: Icon(Icons.close, size: 18, color: context.textSecondary),
+                onPressed: () => _removeItem(idx),
+              );
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: context.subtleCardBg,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: context.borderColor),
                 ),
+                // Stacked at large text sizes: no room for all of it on one line.
+                child: _textIsEnlarged
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [stepper, removeButton],
+                          ),
+                          nameField,
+                          const SizedBox(height: 6),
+                          priceColumn,
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          stepper,
+                          const SizedBox(width: 8),
+                          Expanded(flex: 3, child: nameField),
+                          const SizedBox(width: 8),
+                          Expanded(flex: 2, child: priceColumn),
+                          removeButton,
+                        ],
+                      ),
               );
             }),
 

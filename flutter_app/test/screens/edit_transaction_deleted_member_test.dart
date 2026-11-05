@@ -169,13 +169,12 @@ void main() {
   });
 
   testWidgets('the new row fits at 320px and x2.0 text', (tester) async {
-    // Other rows of this sheet (title, amount, category, items) already overflow at
-    // this size. The errors they raise are drained here so this checks only the new
-    // row: it stays inside the screen, and its text wraps instead of clipping.
+    // It stays inside the screen, and its text wraps instead of clipping. The whole
+    // sheet at this size is in edit_transaction_sheet_overflow_test.dart.
     await _pumpSheet(tester, _row({}), lang: 'ar', width: 320, scale: 2.0);
     final payer = find.byKey(const ValueKey('edit_tx_deleted_member_payer'));
     expect(payer, findsOneWidget);
-    while (tester.takeException() != null) {}
+    expect(tester.takeException(), isNull);
     final rect = tester.getRect(payer);
     expect(rect.left, greaterThanOrEqualTo(0));
     expect(rect.right, lessThanOrEqualTo(320));
