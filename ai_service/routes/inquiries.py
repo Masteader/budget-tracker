@@ -251,7 +251,8 @@ def _update_inquiry_status(reference: str, status: str, provider: Optional[str] 
             update_data["delivery_provider"] = provider
         client.table("inquiries").update(update_data).eq("reference", reference).execute()
     except Exception as exc:
-        logger.warning("Failed to update inquiry status for ref=%s: %s", reference, exc)
+        # Type only: a database error can quote the failing row, and the row holds the address.
+        logger.warning("Failed to update inquiry status for ref=%s: %s", reference, type(exc).__name__)
 
 
 async def _deliver(
@@ -292,13 +293,14 @@ async def _deliver(
     try:
         provider = await mail_service.send_email(message)
     except mail_service.MailNotConfiguredError as exc:
-        logger.error("Inquiry ref=%s (%s) NOT delivered: %s", reference, inquiry_type, exc)
+        # Type only, here and below: a mail error can quote the sender's or the recipient's address.
+        logger.error("Inquiry ref=%s (%s) NOT delivered: %s", reference, inquiry_type, type(exc).__name__)
         if is_lead_capture:
             return {"status": "captured", "reference": reference}
         raise not_configured
     except Exception as exc:
         logger.error(
-            "Inquiry ref=%s (%s) NOT delivered: %s: %s", reference, inquiry_type, type(exc).__name__, exc,
+            "Inquiry ref=%s (%s) NOT delivered: %s", reference, inquiry_type, type(exc).__name__,
         )
         if is_lead_capture:
             _update_inquiry_status(reference, status="failed")

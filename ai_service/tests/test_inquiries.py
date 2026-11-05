@@ -528,6 +528,37 @@ def test_a_failed_insert_never_logs_the_address(client, mailer, monkeypatch, cap
     assert "leaving@example.com" not in caplog.text
 
 
+class _FailingUpdateClient(_InquiriesOnlyClient):
+    def update(self, row):
+        raise RuntimeError("update failed for leaving@example.com")
+
+
+# Mail and database errors can quote the recipient, the sender or the failing row. The log gets
+# the error's type only, as the insert path already does.
+@pytest.mark.parametrize("payload, failure, db_class, want", [
+    (_DELETION, mail_service.MailNotConfiguredError("no route for leaving@example.com"), _InquiriesOnlyClient, 200),
+    (_DELETION, mail_service.MailDeliveryError("550 mailbox leaving@example.com refused"), _FailingUpdateClient, 200),
+    ({"type": "support", "email": "leaving@example.com", "message": "help"},
+     mail_service.MailDeliveryError("550 mailbox leaving@example.com refused"), _InquiriesOnlyClient, 502),
+    ({"type": "support", "email": "leaving@example.com", "message": "help"},
+     mail_service.MailNotConfiguredError("no route for leaving@example.com"), _InquiriesOnlyClient, 503),
+], ids=["not-configured-stored", "delivery-and-status-update-fail", "delivery-fails", "not-configured"])
+def test_delivery_and_status_failures_never_log_the_address(client, mailer, monkeypatch, caplog, payload, failure,
+                                                             db_class, want):
+    import routes.inquiries as inquiries
+
+    monkeypatch.setattr(inquiries, "get_client", lambda: db_class())
+    mailer.side_effect = failure
+    with caplog.at_level("DEBUG"):
+        res = client.post(PUBLIC_URL, json=payload)
+    assert res.status_code == want, res.text
+    assert "not delivered" in caplog.text.lower()
+    assert type(failure).__name__ in caplog.text
+    assert "leaving@example.com" not in caplog.text
+    if db_class is _FailingUpdateClient:
+        assert "Failed to update inquiry status" in caplog.text
+
+
 def test_deletion_form_is_reachable_through_the_proxy_without_any_token(client, mailer, form_db):
     res = client.post(PUBLIC_URL, json=_DELETION, headers={"X-Forwarded-For": "198.51.100.7"})
     assert res.status_code == 200
