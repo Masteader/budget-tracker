@@ -12,10 +12,27 @@ import '../widgets/app_snackbar.dart';
 class CsvExportService {
   CsvExportService._();
 
-  static String generateTransactionsCsv(List<Map<String, dynamic>> transactions) {
+  static String generateTransactionsCsv(
+    List<Map<String, dynamic>> transactions, {
+    BuildContext? context,
+  }) {
     final buffer = StringBuffer();
     // CSV Header
-    buffer.writeln('Date,Merchant,Category,Amount (SAR),VAT (SAR),Spent By,Source,Items Breakdown');
+    if (context != null) {
+      final headers = [
+        context.tr('csv_col_date'),
+        context.tr('csv_col_merchant'),
+        context.tr('csv_col_category'),
+        context.tr('csv_col_amount'),
+        context.tr('csv_col_vat'),
+        context.tr('csv_col_spent_by'),
+        context.tr('csv_col_source'),
+        context.tr('csv_col_items'),
+      ].map(_escapeCsv).join(',');
+      buffer.writeln(headers);
+    } else {
+      buffer.writeln('Date,Merchant,Category,Amount (SAR),VAT (SAR),Spent By,Source,Items Breakdown');
+    }
 
     final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
 
@@ -73,7 +90,7 @@ class CsvExportService {
 
   /// Shows an export dialog with preview and copy options.
   static void showExportDialog(BuildContext context, List<Map<String, dynamic>> transactions, {String? monthLabel}) {
-    final csvContent = generateTransactionsCsv(transactions);
+    final csvContent = generateTransactionsCsv(transactions, context: context);
     final count = transactions.length;
     final totalSum = transactions.fold<double>(
       0.0,

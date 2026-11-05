@@ -746,7 +746,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
               'notes': t.notes,
             })
         .toList();
-    CsvExportService.showExportDialog(context, exportList, monthLabel: 'All Records');
+    CsvExportService.showExportDialog(context, exportList, monthLabel: context.tr('csv_export_all_records'));
   }
 
   /// MOB-26: downloads the statement with the user's JWT and opens the system

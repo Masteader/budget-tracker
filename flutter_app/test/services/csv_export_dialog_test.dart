@@ -61,7 +61,7 @@ void main() {
       expect(find.text(l.get('close')), findsOneWidget);
       expect(find.text(l.get('csv_copy')), findsOneWidget);
       if (lang != 'en') {
-        for (final english in ['Close', 'Copy CSV']) {
+        for (final english in ['Close', 'Copy CSV', 'Date,Merchant']) {
           expect(find.text(english), findsNothing, reason: english);
         }
         expect(find.textContaining('Export Report'), findsNothing);
@@ -82,9 +82,11 @@ void main() {
       });
       addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
       await _open(tester, lang: lang);
+      final alertCtx = tester.element(find.byType(AlertDialog));
+      final expectedCsv = CsvExportService.generateTransactionsCsv(_rows, context: alertCtx);
       await tester.tap(find.text(l.get('csv_copy')));
       await tester.pumpAndSettle();
-      expect(copied, CsvExportService.generateTransactionsCsv(_rows));
+      expect(copied, expectedCsv);
       expect(find.text(l.get('csv_copied_title')), findsOneWidget);
       expect(find.text(l.get('csv_copied_msg')), findsOneWidget);
     });
@@ -107,7 +109,8 @@ void main() {
 
   testWidgets('the CSV preview keeps its columns in order in RTL', (tester) async {
     await _open(tester, lang: 'ar');
-    final preview = tester.widget<Text>(find.textContaining('Date,Merchant'));
+    final lAr = AppLocalizations(const Locale('ar'));
+    final preview = tester.widget<Text>(find.textContaining(lAr.get('csv_col_date')));
     expect(preview.textDirection, TextDirection.ltr);
     expect(preview.textAlign, TextAlign.left);
   });

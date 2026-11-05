@@ -26,6 +26,16 @@ void main() {
       'csv_copy': 'Copy CSV',
       'csv_copied_title': 'Report Copied',
       'csv_copied_msg': 'CSV report copied to clipboard. Ready to paste into Excel or Google Sheets.',
+      'csv_export_all_records': 'All Records',
+      'csv_col_date': 'Date',
+      'csv_col_merchant': 'Merchant',
+      'csv_col_category': 'Category',
+      'csv_col_amount': 'Amount (SAR)',
+      'csv_col_vat': 'VAT (SAR)',
+      'csv_col_spent_by': 'Spent By',
+      'csv_col_source': 'Source',
+      'csv_col_items': 'Items Breakdown',
+      'settle_roommate_payload_note': '{from} paid {to} via {method}',
       'undo_action': 'UNDO',
     };
 

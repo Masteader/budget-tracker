@@ -534,6 +534,12 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
     setState(() => _isSubmitting = true);
 
     try {
+      final methodLabel = switch (_paymentMethod) {
+        'stc_pay' => context.tr('pay_method_stc_pay'),
+        'bank_transfer' => context.tr('pay_method_bank_transfer'),
+        'cash' => context.tr('pay_method_cash'),
+        _ => _paymentMethod,
+      };
       final record = widget.recordPayment ?? ApiService.instance.recordReimbursementPayment;
       await record(
         ReimbursementRecordRequest(
@@ -542,7 +548,11 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
           recipientId: widget.toId,
           amount: amt,
           paymentMethod: _paymentMethod,
-          notes: '${widget.fromName} paid ${widget.toName} via ${_paymentMethod.toUpperCase()}',
+          notes: context.trArgs('settle_roommate_payload_note', {
+            'from': widget.fromName,
+            'to': widget.toName,
+            'method': methodLabel,
+          }),
         ),
       );
     } catch (e) {

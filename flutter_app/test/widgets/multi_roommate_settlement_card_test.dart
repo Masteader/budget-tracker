@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:budget_tracker/l10n/app_localizations.dart';
 import 'package:budget_tracker/models/models.dart';
 import 'package:budget_tracker/widgets/dashboard/multi_roommate_settlement_card.dart';
 
@@ -104,6 +106,7 @@ void main() {
 
   testWidgets('MultiRoommateSettlementCard opens settle payment bottom sheet and confirms', (tester) async {
     bool callbackCalled = false;
+    ReimbursementRecordRequest? capturedRequest;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -114,7 +117,10 @@ void main() {
             onSettled: () {
               callbackCalled = true;
             },
-            recordPayment: (_) async => {'status': 'success'},
+            recordPayment: (req) async {
+              capturedRequest = req;
+              return {'status': 'success'};
+            },
           ),
         ),
       ),
@@ -135,6 +141,52 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(callbackCalled, isTrue);
+    expect(capturedRequest, isNotNull);
+    expect(capturedRequest!.notes, 'Tariq paid Ahmed via STC Pay');
+  });
+
+  testWidgets('MultiRoommateSettlementCard records settlement note in Arabic', (tester) async {
+    ReimbursementRecordRequest? capturedRequest;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        supportedLocales: const [Locale('en'), Locale('ar'), Locale('ur')],
+        localizationsDelegates: const [
+          AppLocalizationsDelegate(),
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: Scaffold(
+          body: MultiRoommateSettlementCard(
+            householdId: 'hh-flat-1',
+            summary: testSummary,
+            onSettled: () {},
+            recordPayment: (req) async {
+              capturedRequest = req;
+              return {'status': 'success'};
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Tap first Settle button (تسوية in Arabic)
+    final settleButtons = find.widgetWithText(ElevatedButton, 'تسوية');
+    expect(settleButtons, findsWidgets);
+    await tester.tap(settleButtons.first);
+    await tester.pumpAndSettle();
+
+    // Tap confirm in bottom sheet (تسجيل دفعة التسوية)
+    final confirmButtons = find.widgetWithText(ElevatedButton, 'تسجيل دفعة التسوية');
+    expect(confirmButtons, findsOneWidget);
+    await tester.tap(confirmButtons);
+    await tester.pumpAndSettle();
+
+    expect(capturedRequest, isNotNull);
+    expect(capturedRequest!.notes, 'Tariq دفع لـ Ahmed عبر STC Pay');
   });
 
   testWidgets('MultiRoommateSettlementCard displays all settled when no debts', (tester) async {
