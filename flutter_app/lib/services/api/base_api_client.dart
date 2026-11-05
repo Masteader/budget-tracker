@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../supabase_config.dart';
+import '../../utils/failure_log.dart';
 
 typedef AuthTokenProvider = String? Function();
 typedef SessionRefresher = Future<String?> Function();
@@ -27,6 +28,12 @@ typedef SessionRefresher = Future<String?> Function();
 /// Error responses are always normalised to a map containing
 /// `status: 'error'`, `status_code` and a human readable `message`.
 class BaseApiClient {
+  /// Whether a failed request's URL, response body and error text reach the log.
+  /// Never in a release build: `debugPrint` is not stripped from one, and bodies
+  /// can carry balances, names and invite codes (see `failure_log.dart`).
+  @visibleForTesting
+  static bool logFailureDetail = !kReleaseMode;
+
   final http.Client _client;
   final AuthTokenProvider? _authTokenProvider;
   final SessionRefresher? _sessionRefresher;
@@ -180,7 +187,9 @@ class BaseApiClient {
       );
 
       if (response.statusCode >= 400) {
-        debugPrint('[BaseApiClient] $method $uri failed (${response.statusCode}): ${response.body}');
+        debugPrint(logFailureDetail
+            ? '[BaseApiClient] $method $uri failed (${response.statusCode}): ${response.body}'
+            : '[BaseApiClient] $method failed (${response.statusCode})');
         return _errorResponse(response);
       }
       if (response.body.trim().isEmpty) {
@@ -192,7 +201,9 @@ class BaseApiClient {
       }
       return {'status': 'success', 'data': decoded};
     } on Exception catch (e) {
-      debugPrint('[BaseApiClient] $method $uri network error: $e');
+      debugPrint(logFailureDetail
+          ? '[BaseApiClient] $method $uri network error: $e'
+          : '[BaseApiClient] $method network error: ${describeFailure(e)}');
       // `network_error` tells "no answer at all" (offline, DNS, timeout) apart
       // from a server that answered 200 with {"status": "error"}.
       return {'status': 'error', 'message': e.toString(), networkErrorKey: true};
