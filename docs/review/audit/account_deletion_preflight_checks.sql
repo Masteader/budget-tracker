@@ -49,3 +49,41 @@ LEFT JOIN (SELECT from_account_id AS id, sum(amount + fee) AS amount FROM public
 WHERE a.balance - COALESCE(i.income, 0) + COALESCE(t.spent, 0)
                 - COALESCE(x_in.amount, 0) + COALESCE(x_out.amount, 0) < 0
 ORDER BY implied_opening ASC;
+
+
+-- ── 2. Anonymous access to inquiries and templates (fixed by 20261105000600) ─────
+
+-- 2a. Every row is a finding: a policy naming anon or PUBLIC on these tables.
+SELECT tablename, policyname, roles, cmd
+FROM pg_policies
+WHERE schemaname = 'public'
+  AND tablename IN ('inquiries', 'cost_control_templates')
+  AND NOT (roles <@ ARRAY['authenticated', 'service_role']::name[]);
+
+-- 2b. What each client role can do. After the fix: all false, except that authenticated
+-- can select templates.
+SELECT t.relname AS table_name, r.rolname AS role,
+       has_table_privilege(r.rolname, t.oid, 'SELECT') AS can_select,
+       has_table_privilege(r.rolname, t.oid, 'INSERT') AS can_insert,
+       has_table_privilege(r.rolname, t.oid, 'UPDATE') AS can_update,
+       has_table_privilege(r.rolname, t.oid, 'DELETE') AS can_delete,
+       has_table_privilege(r.rolname, t.oid, 'TRUNCATE') AS can_truncate
+FROM pg_class t
+CROSS JOIN (VALUES ('anon'), ('authenticated')) AS r(rolname)
+WHERE t.oid IN ('public.inquiries'::regclass, 'public.cost_control_templates'::regclass)
+ORDER BY 1, 2;
+
+-- 2c. Who can call the two RPCs. After the fix: both false for both.
+SELECT p.oid::regprocedure AS function_name,
+       has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_can_execute,
+       has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated_can_execute
+FROM pg_proc p
+WHERE p.pronamespace = 'public'::regnamespace
+  AND p.proname IN ('replace_household_category', 'seed_household_default_taxonomy');
+
+-- 2d. Did anyone use the anonymous door? Rows the backend wrote have a reference of 12 hex
+-- characters and a source of web, landing or app. Anything else came from somewhere else.
+SELECT source, type, count(*), min(created_at) AS first_seen, max(created_at) AS last_seen
+FROM public.inquiries
+WHERE reference !~ '^[0-9a-f]{12}$' OR source NOT IN ('web', 'landing', 'app')
+GROUP BY 1, 2;
