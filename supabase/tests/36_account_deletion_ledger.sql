@@ -170,8 +170,8 @@ BEGIN
     END IF;
     PERFORM pg_temp.expect('admin voided the row',
         (SELECT count(*)::text FROM public.income_records WHERE id = v_id), '0');
-    -- This file does not assert the balance after a void: see test 35.
-    UPDATE public.accounts SET balance = 1210.00 WHERE id = 'e36c0000-0000-0000-0000-000000000001';
+    PERFORM pg_temp.expect('the void took the 200 off the pool once',
+        (SELECT balance::text FROM public.accounts WHERE id = 'e36c0000-0000-0000-0000-000000000001'), '1010.00');
     RAISE NOTICE 'PASSED: void_income_record refuses a regular member on a NULL creator and allows an admin.';
 END $$;
 
@@ -190,7 +190,7 @@ BEGIN
         (SELECT owner_user_id::text FROM public.accounts WHERE id = 'e36c0000-0000-0000-0000-000000000001'),
         'e3600000-0000-0000-0000-00000000000c');
     PERFORM pg_temp.expect('pool balance after deleting admin A',
-        (SELECT balance::text FROM public.accounts WHERE id = 'e36c0000-0000-0000-0000-000000000001'), '1210.00');
+        (SELECT balance::text FROM public.accounts WHERE id = 'e36c0000-0000-0000-0000-000000000001'), '1010.00');
     PERFORM pg_temp.expect('A pool->personal transfer kept with NULL side and creator',
         (SELECT count(*)::text FROM public.account_transfers
          WHERE notes = 'T36 A from pool' AND user_id IS NULL AND to_account_id IS NULL
