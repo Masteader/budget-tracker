@@ -58,18 +58,20 @@ class _HouseholdSettlementPanelState extends State<HouseholdSettlementPanel> {
 
   Future<void> _fetch() async {
     final generation = ++_generation;
+    final SettlementV2Summary summary;
     try {
-      final summary = await ApiService.instance.getSettlementV2(widget.householdId);
-      if (!mounted || generation != _generation) return;
-      setState(() {
-        _summary = summary;
-        _failed = false;
-      });
+      summary = await ApiService.instance.getSettlementV2(widget.householdId);
     } catch (e) {
       logFailure('Settings.settlementFetch', e);
       if (!mounted || generation != _generation) return;
       setState(() => _failed = true);
+      return;
     }
+    if (!mounted || generation != _generation) return;
+    setState(() {
+      _summary = summary;
+      _failed = false;
+    });
   }
 
   void _refresh() {

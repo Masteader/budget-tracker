@@ -10,6 +10,7 @@ export 'offline_queue_manager.dart' show OfflineQueueWriteException;
 /// Acts as a unified facade coordinating the OfflineQueueManager and SyncWorker.
 class OfflineSyncService {
   OfflineSyncService._() : queueManager = OfflineQueueManager();
+  /// Replaceable in tests, like `ApiService.instance`.
   static OfflineSyncService instance = OfflineSyncService._();
 
   @visibleForTesting
