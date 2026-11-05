@@ -233,6 +233,8 @@ SELECT
 -- 20261020070000_audit_definer_search_path_and_household_insert,
 -- 20261020080000_audit_receipts_bucket_limits and 20261020500000_review_lock_financial_role.
 -- Compare their function definitions and grants by hand if it matters.
+-- 20261105000900 and 20261105001100 only replace functions that already exist, so their rows
+-- here prove nothing either: steps 12 and 14 of docs/review/OWNER_ACTIONS.md check their source.
 WITH created(migration, kind, object_name, on_table, in_full_chain) AS (VALUES
     ('20261020005000_preflight_live_alignment', 'column', 'rollover_rule', 'households', True),
     ('20261020010000_audit_invites_rls_and_targeted_claims', 'function', 'validate_invite_target_member', NULL, True),
@@ -485,6 +487,9 @@ WITH created(migration, kind, object_name, on_table, in_full_chain) AS (VALUES
     ('20261105000300_account_deletion_purge', 'function', 'account_deletion_scrub_own_note', NULL, True),
     ('20261105000300_account_deletion_purge', 'function', 'account_deletion_scrub_other_note', NULL, True),
     ('20261105000300_account_deletion_purge', 'function', 'account_deletion_scrub_items', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'account_deletion_scrub_text', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'account_deletion_scrub_item_names', NULL, True),
+    ('20261105000300_account_deletion_purge', 'function', 'account_deletion_replace_everywhere', NULL, True),
     ('20261105000300_account_deletion_purge', 'function', 'claim_due_account_deletions', NULL, True),
     ('20261105000300_account_deletion_purge', 'function', 'prepare_account_purge', NULL, True),
     ('20261105000300_account_deletion_purge', 'function', 'list_account_purge_storage', NULL, True),
@@ -507,6 +512,7 @@ WITH created(migration, kind, object_name, on_table, in_full_chain) AS (VALUES
     ('20261105000800_account_deletion_operator_request', 'function', 'request_account_deletion', NULL, True),
     ('20261105000800_account_deletion_operator_request', 'function', 'cancel_account_deletion', NULL, True),
     ('20261105000800_account_deletion_operator_request', 'function', 'account_deletion_require_operator_handle', NULL, True),
+    ('20261105000800_account_deletion_operator_request', 'function', 'account_deletion_fold_confirmation', NULL, True),
     ('20261105000800_account_deletion_operator_request', 'function', 'get_account_deletion_operator_preview', NULL, True),
     ('20261105000800_account_deletion_operator_request', 'function', 'schedule_account_deletion_by_operator', NULL, True),
     ('20261105000800_account_deletion_operator_request', 'function', 'cancel_account_deletion_by_operator', NULL, True),

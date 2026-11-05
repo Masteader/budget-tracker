@@ -19,6 +19,10 @@ Each run, when enabled:
 4. Removes `account_deletion` inquiries older than 90 days.
 5. Records a heartbeat in `account_deletion_worker_runs`.
 
+Steps 3 and 4 also run when the purge is off: neither depends on purging, and the public page promises the 90 days.
+
+Reminders to the account holder are in the language of their request. Notices to the other members of a household being deleted are in Arabic, English and Urdu, in that order, because members have no stored language.
+
 Every step is safe to repeat. A failure records a code, and the job retries with a growing delay (1, 2, 4, then 8 hours). After 5 attempts it stays `failed` until someone looks at it.
 
 ## Setup (owner)
@@ -34,23 +38,17 @@ Create a Railway Cron service from the same image as the API:
 | `ACCOUNT_DELETION_PURGE_ENABLED` | Leave unset until approved. Only the exact value `1` enables it. |
 | `ACCOUNT_DELETION_EMAILS_ENABLED` | Leave unset until reminder emails to real users are approved. Only the exact value `1` enables them, and only with the purge switch on too. |
 
-Railway does not start a run while the previous one is active. Apply the migrations first (rule 01), because the worker calls functions they create. The exact production order, with a read-only check before and after each file, is in [the owner actions](../review/OWNER_ACTIONS.md#supabase). In short, after re-running section 5 of `docs/review/audit/account_deletion_preflight_checks.sql`:
-
-1. The two older files live is missing: `20261026120000`, then `20261101000100`.
-2. `20261105000500` is already on live. Re-running it is harmless.
-3. `20261105000000` to `000400`, then `000600`, `000700`, `000800` and `000900`.
-
-A whole `run_tests.py --rebuild` runs the suite on live's measured state in this order.
+Railway does not start a run while the previous one is active. Apply the migrations first (rule 01), because the worker calls functions they create. Follow the production run order in [the owner actions](../review/OWNER_ACTIONS.md#supabase) exactly, file by file, with the read-only check before and after each. It is kept only there, so the two documents cannot disagree. A whole `run_tests.py --rebuild` runs the suite on live's measured state in that order.
 
 ## The safety switch
 
-Without `ACCOUNT_DELETION_PURGE_ENABLED=1` the worker calls one read-only function, logs the counts and exits 0:
+Without `ACCOUNT_DELETION_PURGE_ENABLED=1` the worker logs the counts, emails the developer about failed or overdue jobs, removes `account_deletion` inquiries older than 90 days, and exits 0. It claims nothing, purges nothing and emails no account holder or member:
 
 ```
-Account deletion purge is disabled (ACCOUNT_DELETION_PURGE_ENABLED is not 1); nothing was changed. due=0 in_progress=0 failed=0 overdue=0
+Account deletion purge is disabled (ACCOUNT_DELETION_PURGE_ENABLED is not 1); nothing was purged. due=0 in_progress=0 failed=0 overdue=0
 ```
 
-Run it this way first. It proves the service, key and migrations work without changing anything. To stop purges in an emergency, remove the variable. A run already in progress finishes, and the next run does nothing, which also stops reminders.
+Run it this way first. It proves the service, key and migrations work without purging anything. To stop purges in an emergency, remove the variable. A run already in progress finishes, and the next run purges nothing and sends no reminders; developer alerts and the 90-day removal go on.
 
 ## The email switch
 
@@ -58,16 +56,16 @@ Run it this way first. It proves the service, key and migrations work without ch
 
 | Purge | Emails | A run does this |
 |---|---|---|
-| Off | Off | Logs the counts. Writes nothing. |
-| Off | On | The same: logs the counts and writes nothing. No reminder goes out. |
-| On | Off | Runs jobs and developer alerts. No email to any account holder or member. |
+| Off | Off | Logs the counts, sends developer alerts, removes inquiries older than 90 days. No job runs. |
+| Off | On | The same. No reminder goes out. |
+| On | Off | Runs jobs, developer alerts and the 90-day removal. No email to any account holder or member. |
 | On | On | Everything |
 
 With emails off:
 
 - **No notice is marked sent**, so one still in its window goes out when emails come on.
 - **The completion email is skipped, and the job still completes.** It is not sent later, because the address goes with the account.
-- **Developer failure and overdue alerts still go out**, as long as the purge is on and a provider is set.
+- **Developer failure and overdue alerts still go out**, whatever either switch says, as long as a provider is set.
 
 Turning it on does not send a burst of old reminders, because the database offers a notice only while it still helps:
 
@@ -120,7 +118,7 @@ SET status = 'processing', attempts = 0, lease_expires_at = now()
 WHERE id = '<request id>' AND status = 'failed';
 ```
 
-A user whose job has failed stays blocked from joining households and cannot cancel, because their data may already be gone.
+A job that failed before its database step (`stage` is `none`) has deleted nothing, so the user, or the operator with `--cancel`, can still cancel it, whatever its status: `scheduled`, `processing` or `failed`. Once `stage` is past `none`, data is gone: nobody can cancel, and the user stays blocked from joining households until the job is retried and completes. A `failed` job at `none` that nobody cancels also keeps them blocked.
 
 ## Requests from the public form
 
@@ -148,13 +146,15 @@ python scripts/account_deletion_operator.py --email ADDRESS --inquiry-id REFEREN
 
 The tool prints only their own household ids and positions, so get the successor's user id with a read-only query once they have named the person. The database checks that the successor is a member and not pending deletion.
 
-To undo it, run the same command with `--cancel`, as a dry run first. They can also cancel in the app if they get back in, and the request behaves like any other: same 30 days, same status, same emails, same purge.
+The tool refuses, and changes nothing, when two accounts have the address in different letter case (escalate to the owner), and when the reference already scheduled someone else's deletion (`inquiry_reused`): one inquiry is one person's request.
+
+To undo it, run the same command with `--cancel`, as a dry run first. The reference must exist: the inquiry, or the one the open request was scheduled from. They can also cancel in the app if they get back in, and the request behaves like any other: same 30 days, same status, same emails, same purge.
 
 | Exit code | Meaning |
 |---|---|
 | 0 | Done, nothing to do, or a dry run |
 | 1 | The call failed. Check the status before retrying. |
-| 2 | Refused: no matching account or inquiry, a choice is missing, or the database refused. Nothing changed. |
+| 2 | Refused: no matching account or inquiry, an address two accounts share, a choice is missing, or the database refused. Nothing changed. |
 
 What is kept: `initiated_by = 'operator'`, the inquiry reference and your handle, on the request. The inquiry row is removed after 90 days as the page says, even if the job is still open, and the job does not need it. Completion removes the inquiry and the reference, and keeps `initiated_by` and your handle on the record with no identifiers.
 
