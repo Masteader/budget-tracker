@@ -11,7 +11,9 @@ String get _site => fastapiBaseUrl.endsWith('/') ? fastapiBaseUrl.substring(0, f
 
 Uri publicDeleteAccountUri(String languageCode) => Uri.parse('$_site/delete-account?lang=$languageCode');
 
-Uri publicPrivacyUri() => Uri.parse('$_site/#privacy');
+/// The landing page has no Urdu: for `ur` it shows English, with a notice in Urdu
+/// pointing to the deletion page, which has it.
+Uri publicPrivacyUri(String languageCode) => Uri.parse('$_site/?lang=$languageCode#privacy');
 
 /// Opens [uri] in the browser; false when that could not be done. It does not ask
 /// canLaunchUrl first, which would need https declared in the Android manifest

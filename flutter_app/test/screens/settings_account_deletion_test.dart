@@ -1018,7 +1018,7 @@ void main() {
       await _tapKey(tester, 'privacy_page_link');
       expect(_launcher.launched, [
         'https://budget.fmsco.com.sa/delete-account?lang=ur',
-        'https://budget.fmsco.com.sa/#privacy',
+        'https://budget.fmsco.com.sa/?lang=ur#privacy',
       ]);
       expect(_launcher.modes, everyElement(PreferredLaunchMode.externalApplication));
     });

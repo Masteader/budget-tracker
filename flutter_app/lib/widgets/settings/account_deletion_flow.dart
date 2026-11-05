@@ -65,7 +65,7 @@ class AccountDeletionSection extends StatelessWidget {
             ),
             TextButton(
               key: const ValueKey('privacy_page_link'),
-              onPressed: () => _open(context, publicPrivacyUri()),
+              onPressed: () => _open(context, publicPrivacyUri(language)),
               child: Text(context.tr('del_link_privacy'), style: TextStyle(color: context.accentText, fontSize: 12)),
             ),
           ],

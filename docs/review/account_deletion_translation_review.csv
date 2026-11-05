@@ -101,6 +101,8 @@ web.delete_account.pageTitle,web,Delete your account | Qawam Money قوام ال
 web.delete_account.skipToContent,web,Skip to main content,تخطَّ إلى المحتوى الرئيسي,مرکزی مواد پر جائیں,
 web.delete_account.home,web,Home,الصفحة الرئيسية,ہوم پیج,
 web.delete_account.languageNav,web,Language,اللغة,زبان,
+web.delete_account.landingNotice.body,web,"This page is not available in Urdu, so it is shown in English.",هذه الصفحة غير متوفرة بالأردية، لذلك تظهر بالإنجليزية.,یہ صفحہ اردو میں دستیاب نہیں، اس لیے انگریزی میں دکھایا گیا ہے۔,
+web.delete_account.landingNotice.link,web,Read about account deletion and your data in Urdu,اقرأ عن حذف الحساب وبياناتك بالأردية,اکاؤنٹ حذف کرنے اور اپنے ڈیٹا کے بارے میں اردو میں پڑھیں,
 web.delete_account.appName,web,Qawam Money · قوام المال,قوام المال · Qawam Money,قوام المال · Qawam Money,
 web.delete_account.title,web,Delete your Qawam Money account,حذف حسابك في قوام المال,قوام المال میں اپنا اکاؤنٹ حذف کریں,
 web.delete_account.intro,web,"This page explains how to delete your account in the Qawam Money (قوام المال) app, what is removed, what stays, and how to change your mind. It does not happen at once: your account is deleted 30 days after you confirm.",توضح هذه الصفحة كيف تحذف حسابك في تطبيق قوام المال (Qawam Money)، وما الذي يُحذف، وما الذي يبقى، وكيف تتراجع. لا يتم الحذف فوراً: يُحذف حسابك بعد 30 يوماً من تأكيدك.,یہ صفحہ بتاتا ہے کہ قوام المال (Qawam Money) ایپ میں اپنا اکاؤنٹ کیسے حذف کریں، کیا ہٹایا جاتا ہے، کیا باقی رہتا ہے اور ارادہ کیسے بدلیں۔ حذف فوراً نہیں ہوتا: آپ کا اکاؤنٹ تصدیق کے 30 دن بعد حذف ہوتا ہے۔,

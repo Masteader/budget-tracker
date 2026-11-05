@@ -730,6 +730,8 @@ export interface DeleteAccountDictionary {
   skipToContent: string;
   home: string;
   languageNav: string;
+  /** Shown in Urdu on the landing page, which has no Urdu. The other two are its source text. */
+  landingNotice: { body: string; link: string };
   appName: string;
   title: string;
   intro: string;
@@ -831,6 +833,10 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
     skipToContent: 'تخطَّ إلى المحتوى الرئيسي',
     home: 'الصفحة الرئيسية',
     languageNav: 'اللغة',
+    landingNotice: {
+      body: 'هذه الصفحة غير متوفرة بالأردية، لذلك تظهر بالإنجليزية.',
+      link: 'اقرأ عن حذف الحساب وبياناتك بالأردية',
+    },
     appName: 'قوام المال · Qawam Money',
     title: 'حذف حسابك في قوام المال',
     intro:
@@ -994,6 +1000,10 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
     skipToContent: 'Skip to main content',
     home: 'Home',
     languageNav: 'Language',
+    landingNotice: {
+      body: 'This page is not available in Urdu, so it is shown in English.',
+      link: 'Read about account deletion and your data in Urdu',
+    },
     appName: 'Qawam Money · قوام المال',
     title: 'Delete your Qawam Money account',
     intro:
@@ -1157,6 +1167,10 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
     skipToContent: 'مرکزی مواد پر جائیں',
     home: 'ہوم پیج',
     languageNav: 'زبان',
+    landingNotice: {
+      body: 'یہ صفحہ اردو میں دستیاب نہیں، اس لیے انگریزی میں دکھایا گیا ہے۔',
+      link: 'اکاؤنٹ حذف کرنے اور اپنے ڈیٹا کے بارے میں اردو میں پڑھیں',
+    },
     appName: 'قوام المال · Qawam Money',
     title: 'قوام المال میں اپنا اکاؤنٹ حذف کریں',
     intro:

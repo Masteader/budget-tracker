@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { translations, type Language } from './i18n/translations';
+import { deleteAccountTranslations, translations, type Language } from './i18n/translations';
 import { useAuth } from './context/useAuth';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
@@ -13,21 +13,48 @@ import { AuthModal } from './components/auth/AuthModal';
 import { PortalShell } from './components/portal/PortalShell';
 import { AccountDeletionPage } from './components/AccountDeletionPage';
 
-/** Arabic by default; `?lang=en` opens the English page (handy for sharing). */
-function initialLanguage(): Language {
+function askedLanguage(): string | null {
   try {
-    return new URLSearchParams(window.location.search).get('lang') === 'en' ? 'en' : 'ar';
+    return new URLSearchParams(window.location.search).get('lang');
   } catch {
-    return 'ar';
+    return null;
   }
 }
+
+/**
+ * Arabic by default; `?lang=en` opens the English page (handy for sharing). This page has no Urdu,
+ * and the app's Urdu readers get English, with a notice in Urdu pointing to the page that has it.
+ */
+function initialLanguage(): Language {
+  const asked = askedLanguage();
+  return asked === 'en' || asked === 'ur' ? 'en' : 'ar';
+}
+
+const PRIVACY_HASH = '#privacy';
+
+/** Says, in Urdu, why this page is in English, and where the deletion and data details are in Urdu. */
+const UrduNotice: React.FC = () => {
+  const notice = deleteAccountTranslations.ur.landingNotice;
+  return (
+    <aside id="urdu-notice" lang="ur" dir="rtl" className="bg-ink px-4 py-3 text-center text-sm text-white">
+      {notice.body}{' '}
+      <a href="/delete-account?lang=ur" className="font-semibold underline">
+        {notice.link}
+      </a>
+    </aside>
+  );
+};
 
 const Site: React.FC = () => {
   const { session } = useAuth();
   const [lang, setLang] = useState<Language>(initialLanguage);
+  const [hash, setHash] = useState(() => window.location.hash);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authInitialTab, setAuthInitialTab] = useState<'signin' | 'signup'>('signin');
   const dict = translations[lang];
+
+  // The privacy section is on the landing page, so a link to it opens that page signed in too.
+  const showPortal = Boolean(session) && hash !== PRIVACY_HASH;
 
   useEffect(() => {
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
@@ -35,17 +62,36 @@ const Site: React.FC = () => {
     document.title = dict.a11y.pageTitle;
   }, [lang, dict]);
 
+  useEffect(() => {
+    const onHashChange = () => setHash(window.location.hash);
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  // The browser looks for the anchor before React has rendered it, so scroll once it exists.
+  useEffect(() => {
+    if (!showPortal && hash.length > 1) {
+      document.getElementById(hash.slice(1))?.scrollIntoView();
+    }
+  }, [hash, showPortal]);
+
   const handleOpenAuth = (tab: 'signin' | 'signup') => {
     setAuthInitialTab(tab);
     setAuthModalOpen(true);
   };
 
+  /** Signed in and reading the privacy section: the header's account button goes back to the account. */
+  const backToPortal = () => {
+    window.history.pushState(null, '', window.location.pathname + window.location.search);
+    setHash('');
+  };
+
   // Authenticated state: render account portal
-  if (session) {
+  if (showPortal) {
     return <PortalShell lang={lang} setLanguage={setLang} dict={dict} />;
   }
 
-  // Unauthenticated state: render landing page
+  // Unauthenticated state, or the privacy section: render landing page
   return (
     <div id="top" className="flex min-h-screen flex-col font-sans">
       <a
@@ -54,11 +100,12 @@ const Site: React.FC = () => {
       >
         {dict.a11y.skipToContent}
       </a>
+      {askedLanguage() === 'ur' && lang === 'en' && <UrduNotice />}
       <Header
         lang={lang}
         setLanguage={setLang}
         dict={dict}
-        onOpenAuth={handleOpenAuth}
+        onOpenAuth={session ? backToPortal : handleOpenAuth}
       />
       <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">
         <Hero dict={dict} lang={lang} />

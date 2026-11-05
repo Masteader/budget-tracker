@@ -323,6 +323,12 @@ def test_served_privacy_section_discloses_retention_and_deletion_in_each_languag
         assert phrase in bundle, phrase
 
 
+def test_served_landing_page_points_urdu_readers_to_the_page_in_urdu():
+    bundle = _served_bundle()
+    assert "یہ صفحہ اردو میں دستیاب نہیں" in bundle
+    assert "/delete-account?lang=ur" in bundle
+
+
 def test_served_footer_links_to_the_deletion_page():
     bundle = _served_bundle()
     assert "/delete-account?lang=en" in bundle
