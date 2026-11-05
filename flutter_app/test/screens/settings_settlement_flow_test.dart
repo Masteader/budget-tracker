@@ -179,21 +179,14 @@ void main() {
     testWidgets('while the refetch is running the settled debt cannot be tapped', (tester) async {
       await _pump(tester);
       await _openSettlement(tester);
-      final slow = Completer<SettlementV2Summary>();
-      final slower = Completer<SettlementV2Summary>();
-      _api.gates[_a] = slow;
+      final hold = Completer<void>();
+      _api.holds[_a] = hold;
 
-      await tester.ensureVisible(_settleButton.first);
-      await tester.tap(_settleButton.first);
-      await _settle(tester);
-      await tester.tap(find.widgetWithText(ElevatedButton, _en.get('settle_record_payment')));
-      await tester.pump();
-      _api.gates[_a] = slower;
-      await _settle(tester);
-
+      await _recordSettlement(tester);
       expect(_settleButton, findsNothing);
-      slow.complete(_settled);
-      slower.complete(_settled);
+      expect(find.byKey(const Key('roommate_debt_title')), findsNothing);
+
+      hold.complete();
       await _settle(tester);
       expect(find.text(_en.get('settle_all_settled')), findsOneWidget);
     });
@@ -314,6 +307,26 @@ void main() {
       await _settle(tester);
       expect(find.text(_en.get('roles_retry')), findsNothing);
       expect(find.textContaining('Sami'), findsWidgets);
+    });
+
+    testWidgets('within one household an older failure cannot replace a newer answer', (tester) async {
+      _api.byHousehold[_a] = _roommate('First', 'Debt', 10);
+      await _pump(tester);
+      await _openSettlement(tester);
+
+      final older = Completer<SettlementV2Summary>();
+      _api.gates[_a] = older;
+      tester.widget<HouseholdRolesCard>(find.byType(HouseholdRolesCard)).onNafaqahProviderChanged!(null);
+      await _settle(tester);
+
+      _api.byHousehold[_a] = _roommate('Newest', 'Debt', 20);
+      tester.widget<HouseholdRolesCard>(find.byType(HouseholdRolesCard)).onNafaqahProviderChanged!(null);
+      await _settle(tester);
+
+      older.completeError(Exception('late failure'));
+      await _settle(tester);
+      expect(find.text(_en.get('roles_retry')), findsNothing);
+      expect(find.textContaining('Newest'), findsWidgets);
     });
 
     testWidgets('within one household an older answer cannot replace a newer one', (tester) async {

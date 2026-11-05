@@ -35,6 +35,9 @@ class FakeSettingsApi extends ApiService {
   /// A household listed here answers only when its completer does.
   final Map<String, Completer<SettlementV2Summary>> gates = {};
 
+  /// Every request of a household listed here waits for its completer.
+  final Map<String, Completer<void>> holds = {};
+
   /// Households whose settlement requests fail.
   final Set<String> failingHouseholds = {};
 
@@ -43,6 +46,7 @@ class FakeSettingsApi extends ApiService {
     settlementCallCount++;
     final gate = gates.remove(householdId);
     if (gate != null) return gate.future;
+    if (holds[householdId] != null) await holds[householdId]!.future;
     await Future<void>.delayed(Duration.zero);
     if (failSettlement || failingHouseholds.contains(householdId)) {
       throw Exception('Failed to fetch settlement');

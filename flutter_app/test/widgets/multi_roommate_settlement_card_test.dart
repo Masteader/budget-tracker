@@ -261,6 +261,46 @@ void main() {
     });
   });
 
+  group('the reload after a settlement (B4)', () {
+    const debt = SettlementV2Summary(
+      mode: 'multi_roommate',
+      simplifiedDebts: [SimplifiedDebt(fromId: 'x', toId: 'y', fromName: 'Faisal', toName: 'Imran', amount: 10)],
+    );
+
+    testWidgets('a failed reload offers Retry, never the debt just settled', (tester) async {
+      final api = FakeSettingsApi()
+        ..failSettlement = true
+        ..settlement = const SettlementV2Summary(mode: 'multi_roommate');
+      ApiService.instance = api;
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: const [AppLocalizationsDelegate()],
+        home: Scaffold(
+          body: MultiRoommateSettlementCard(
+            householdId: 'hh',
+            currentUserId: 'me',
+            summary: debt,
+            recordPayment: (_) async => const {'status': 'success'},
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      final l = AppLocalizations(const Locale('en'));
+      await tester.tap(find.widgetWithText(ElevatedButton, l.get('settle_now')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, l.get('settle_record_payment')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('roommate_debt_title')), findsNothing);
+      expect(find.widgetWithText(ElevatedButton, l.get('settle_now')), findsNothing);
+      expect(find.text(l.get('roles_retry')), findsOneWidget);
+
+      api.failSettlement = false;
+      await tester.tap(find.text(l.get('roles_retry')));
+      await tester.pumpAndSettle();
+      expect(find.text(l.get('settle_all_settled')), findsOneWidget);
+    });
+  });
+
   group('what the parent passes (B4)', () {
     const debt = SettlementV2Summary(
       mode: 'multi_roommate',
