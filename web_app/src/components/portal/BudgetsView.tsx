@@ -236,7 +236,7 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({ dict, lang }) => {
         </h3>
         <p className="text-xs text-muted mb-6">
           {lang === 'ar'
-            ? 'توزيع المخصصات المحددة للأبناء والمصاريف المستقلة ضمن ميزانية البيت'
+            ? 'توزيع المخصصات المحددة للأبناء والمصاريف المستقلة ضمن ميزانية الأسرة'
             : 'Sub-allocations defined for children and independent line-items within the household budget'}
         </p>
 

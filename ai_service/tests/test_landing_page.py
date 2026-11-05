@@ -124,12 +124,18 @@ def test_served_build_matches_the_web_app_page_head():
         assert tag in served, f"static/index.html is stale: {tag[:80]}"
 
 
+# The one use of the old Arabic name that stays: in the portal's Budgets view it means "household
+# budget", not the brand. flutter_app/test/screens/brand_identity_test.dart pins it to that file.
+_HOUSEHOLD_BUDGET_PHRASE = "ضمن ميزانية الأسرة"
+
+
 @pytest.mark.parametrize("path", _static_text_files(), ids=lambda p: p.relative_to(STATIC).as_posix())
 def test_served_build_has_neither_the_old_nor_the_withdrawn_name(path):
     from test_qawam_money_branding import _has_old_name, _has_withdrawn_name
 
     text = path.read_text(encoding="utf-8")
-    assert not _has_old_name(text), path.name
+    assert text.count(_HOUSEHOLD_BUDGET_PHRASE) <= 1, path.name
+    assert not _has_old_name(text.replace(_HOUSEHOLD_BUDGET_PHRASE, "")), path.name
     assert not _has_withdrawn_name(text), path.name
 
 
