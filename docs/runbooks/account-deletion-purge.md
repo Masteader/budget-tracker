@@ -34,7 +34,7 @@ Create a Railway Cron service from the same image as the API:
 | `ACCOUNT_DELETION_PURGE_ENABLED` | Leave unset until approved. Only the exact value `1` enables it. |
 | `ACCOUNT_DELETION_EMAILS_ENABLED` | Leave unset until reminder emails to real users are approved. Only the exact value `1` enables them. Separate from the purge switch. |
 
-Railway does not start a run while the previous one is active. Apply the migrations first (rule 01), because the worker calls functions they create.
+Railway does not start a run while the previous one is active. Apply the migrations first (rule 01), because the worker calls functions they create. Their run order is in [the owner actions](../review/OWNER_ACTIONS.md#supabase): `20261105000500` goes before `20261105000000`, and may already be on live. A whole `run_tests.py --rebuild` also runs the suite in that order, on a second database.
 
 ## The safety switch
 

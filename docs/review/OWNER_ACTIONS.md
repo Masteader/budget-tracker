@@ -123,7 +123,11 @@ None of this is done, and nothing is deployed. Each step needs explicit approval
 
 ### Supabase
 - Run the read-only checks in `docs/review/audit/account_deletion_preflight_checks.sql`, section 4 before the migrations.
-- Apply the migrations one per run, in filename order.
+- Apply the migrations one per run, in filename order, with these notes, because production has no migration history and nothing records what has run:
+  - **The void hotfix may already be on live.** `20261105000500_void_income_single_subtraction.sql` goes first, as a standalone hotfix, before `20261105000000`. If that's already done, you don't need to run it again. Running it again is harmless, so run it whenever you're unsure.
+  - **`20261105000000` no longer defines `void_income_record`,** so running it after the hotfix doesn't bring the double subtraction back. It does make `income_records.user_id` nullable, so don't run it on a database without `000500`: with the older function, any member could void the income of someone deleted out of band.
+  - **`REVOKE TRUNCATE` may already have run on live.** `20261105000600_limit_anonymous_contact_form.sql` is fine on that state and safe to re-run: each statement sets the end state regardless of what came before.
+  - Order: `000500` if not already there, then `000000`, `000100`, `000200`, `000300`, `000400`, then `000600`, `000700`, `000800`, `000900`.
 - Confirm the Magic Link email template includes `{{ .Token }}`. The app's forgotten-password fallback at re-auth asks for that code.
 - Drop `budgets_spent_backup_20261019` when ready. It exists only on live, and the purge does not touch it.
 

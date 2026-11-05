@@ -15,7 +15,8 @@
 --   4. A pool owned by someone who already left the household is re-owned, not
 --      destroyed, when their account is deleted.
 --   5. void_income_record cannot be abused through a NULL user_id: a regular
---      member is refused, an admin is allowed.
+--      member is refused, an admin is allowed. The function comes from 000500,
+--      which test 46 also runs ahead of this file's migration.
 --   6. A household with income, transfers and several members deletes through the
 --      purge's fixed order.
 --   7. The foreign keys are in the required state.

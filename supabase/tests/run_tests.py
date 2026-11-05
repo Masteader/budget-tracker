@@ -16,7 +16,9 @@ Plain-psql mode (no Docker needed)::
 PGPORT, PGUSER, PGPASSWORD). ``--rebuild`` drops and recreates the database,
 then applies ``00_local_supabase_stubs.sql`` (platform stubs), ``schema.sql``,
 ``seed.sql`` (system categories that migrations reference) and every migration in replay order (see ``migration_replay_order``) before
-running the tests. Never point ``--rebuild`` at a real Supabase project.
+running the tests. A whole ``--rebuild`` then builds ``<db>_rollout`` in the order production gets
+(hotfixes first, see ``rollout_order_check``) and runs the tests there too. Never point ``--rebuild``
+at a real Supabase project.
 
 Without ``--rebuild`` the tests run against the existing database named by
 ``--db``. Pre-flight against a local replica of live (never live itself)::
@@ -56,6 +58,15 @@ REPLAY_DEPENDENCIES = {
         "20261018_multi_source_income_and_accounts.sql",
     ],
 }
+
+
+# The rollout the account deletion batch gets. See rollout_order_check.
+ROLLOUT_BATCH = "20261105000000"
+ROLLOUT_HOTFIXES = ("20261105000500",)
+ROLLOUT_ALREADY_ON_LIVE = """
+REVOKE TRUNCATE ON public.inquiries FROM anon, authenticated;
+REVOKE TRUNCATE ON public.cost_control_templates FROM anon, authenticated;
+"""
 
 
 def migration_replay_order(migration_dir):
@@ -145,6 +156,56 @@ def rebuild_database(db_name, stop_before=None):
     print("Rebuild complete.")
 
 
+def migrations_of(prefixes):
+    """The migrations whose filename starts with one of these prefixes, in replay order."""
+    return [m for m in migration_replay_order(os.path.join(SUPABASE_DIR, "migrations"))
+            if os.path.basename(m).startswith(tuple(prefixes))]
+
+
+def run_sql_text(sql, db_name):
+    proc = subprocess.run(psql_command(db_name, True), input=sql.encode("utf-8"), capture_output=True)
+    if proc.returncode != 0:
+        raise SystemExit(f"Rollout SQL failed: {proc.stderr.decode('utf-8', errors='replace')}")
+
+
+def rollout_order_check(db_name, test_files):
+    """Builds the order production gets, and runs the tests against it. Returns the failed files.
+
+    Production has no migration history: files are run by hand. Some go out early as standalone
+    hotfixes, so the chain later runs around them. A later file that redefines what a hotfix fixed
+    would quietly undo it, and a filename-order rebuild can never see that, because the hotfix runs
+    after it there.
+
+    Order: everything before the batch; what has already run by hand on live; the hotfixes; the
+    batch in filename order WITHOUT the hotfixes; the tests. Then the hotfixes again, which must
+    be harmless, and the tests again.
+    """
+    rollout_db = f"{db_name}_rollout"
+    print(f"\nRollout order check on {rollout_db}: hotfixes {', '.join(ROLLOUT_HOTFIXES)} before the batch")
+    rebuild_database(rollout_db, stop_before=ROLLOUT_BATCH)
+    run_sql_text(ROLLOUT_ALREADY_ON_LIVE, rollout_db)
+
+    hotfixes = migrations_of(ROLLOUT_HOTFIXES)
+    for path in hotfixes:
+        if not run_sql_file(path, db_name=rollout_db, use_psql=True, quiet=True):
+            raise SystemExit(f"Hotfix did not apply first: {os.path.basename(path)}")
+    for path in migrations_of([ROLLOUT_BATCH[:8]]):
+        if path not in hotfixes and not run_sql_file(path, db_name=rollout_db, use_psql=True, quiet=True):
+            raise SystemExit(f"Migration failed after the hotfixes: {os.path.basename(path)}")
+
+    failed = [t for t in test_files if not run_sql_file(t, db_name=rollout_db, use_psql=True, quiet=True)]
+
+    print("Running the hotfixes again, as an operator following the chain would.")
+    for path in hotfixes:
+        if not run_sql_file(path, db_name=rollout_db, use_psql=True, quiet=True):
+            raise SystemExit(f"Re-running a hotfix failed: {os.path.basename(path)}")
+    failed += [t for t in test_files if not run_sql_file(t, db_name=rollout_db, use_psql=True, quiet=True)]
+
+    # Throwaway, like the rebuild: no second database left behind.
+    subprocess.run(["dropdb", "--if-exists", rollout_db], capture_output=True, text=True)
+    return sorted(set(failed))
+
+
 def apply_pending_migrations(db_name, apply_from, use_psql):
     """Apply migrations whose filename sorts at or after ``apply_from`` to an existing database."""
     migrations = [m for m in migration_replay_order(os.path.join(SUPABASE_DIR, "migrations"))
@@ -204,6 +265,16 @@ def main():
             passed.append(tf)
         else:
             failed.append(tf)
+
+    # A whole rebuild also proves the order production runs the files in.
+    rollout_failed = []
+    if args.rebuild and not args.stop_before and not args.tests:
+        rollout_failed = rollout_order_check(db_name, test_files)
+        print(f"Rollout order: {len(test_files) - len(rollout_failed)} passed, {len(rollout_failed)} failed")
+        for f in rollout_failed:
+            print(f"  - rollout order: {os.path.basename(f)}")
+        failed = sorted(set(failed) | set(rollout_failed))
+        passed = [t for t in passed if t not in failed]
 
     print("\n================================")
     print(f"Results: {len(passed)} passed, {len(failed)} failed")
