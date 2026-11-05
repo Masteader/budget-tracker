@@ -701,6 +701,14 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
             seen_codes.add(c)
             ordered_codes.append(c)
 
+    # A category the household keeps inactive counts in no budget (migration 20261105001000): its
+    # spending is reported below, but no budget row is made for it. None: unknown, so none is made.
+    try:
+        inactive_codes: Optional[set] = {c["code"] for c in get_household_categories(household_id).get("inactive", [])}
+    except Exception as exc:
+        logger.warning("Could not read inactive categories for household=%s: %s", household_id, exc)
+        inactive_codes = None
+
     month_str = f"{target_key}-01"
     for c_code in ordered_codes:
         b = budget_by_code.get(c_code)
@@ -764,8 +772,8 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
         actual_spent = max(total_sub_spent, db_spent)
         remaining = allocated - actual_spent
 
-        # If this category has spending but no budget row in DB, auto-create one
-        if b is None and actual_spent > 0:
+        # If an active category has spending but no budget row in DB, auto-create one
+        if b is None and actual_spent > 0 and inactive_codes is not None and c_code not in inactive_codes:
             try:
                 new_row = {
                     "household_id": household_id,
@@ -885,7 +893,8 @@ def add_category_and_budget(req: Any) -> Dict[str, Any]:
             "is_active": True,
         }
         client.table("budgets").insert(budget_payload).execute()
-    
+    activate_household_category(client, req.household_id, req.code)
+
     return {
         "status": "success",
         "category_code": req.code,
@@ -1252,7 +1261,8 @@ def save_sub_allocations(
             "is_active": True,
         }
         client.table("budgets").insert(insert_data).execute()
-        
+    activate_household_category(client, household_id, category_code)
+
     return {
         "status": "success",
         "category_code": category_code,
@@ -1335,6 +1345,24 @@ def get_household_categories(household_id: str) -> Dict[str, List[Dict[str, Any]
             inactive.append(cat_info)
 
     return {"active": active, "inactive": inactive}
+
+
+def activate_household_category(client: Any, household_id: str, category_code: str) -> None:
+    """
+    A category the household gives a budget is active for it (household_category_settings), so a
+    category toggled off earlier and budgeted again is listed and matched as active. Budget rows
+    are written by the caller; the database counts the open cycle's spending into the newly active
+    row (migration 20261105001000).
+    """
+    try:
+        client.table("household_category_settings").upsert({
+            "household_id": household_id,
+            "category_code": category_code,
+            "is_active": True,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }, on_conflict="household_id,category_code").execute()
+    except Exception as exc:
+        logger.warning("Could not activate category %s for household %s: %s", category_code, household_id, exc)
 
 
 def toggle_category_status(household_id: str, category_code: str, is_active: bool) -> Dict[str, Any]:

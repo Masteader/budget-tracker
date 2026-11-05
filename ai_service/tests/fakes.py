@@ -297,13 +297,15 @@ class FakeSupabaseClient:
         return []
 
     def _recompute_budget_spent(self, params: dict) -> int:
-        """Mirror of public.recompute_budget_spent (migration 20261020800000)."""
+        """Mirror of public.recompute_budget_spent (migrations 20261020800000, 20261105001000)."""
         hid, keys = params.get("p_household_id"), set(params.get("p_cycle_keys") or [])
         txs = self.tables.get("transactions", [])
         n = 0
         for b in self.tables.get("budgets", []):
             if b.get("household_id") != hid or b.get("cycle_key") not in keys:
                 continue
+            if b.get("is_active") is False:
+                continue  # an inactive row keeps its value
             total = sum(
                 float(t.get("amount") or 0) for t in txs
                 if t.get("household_id") == hid and t.get("category_code") == b.get("category_code")

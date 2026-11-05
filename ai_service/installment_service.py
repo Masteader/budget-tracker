@@ -561,9 +561,10 @@ class InstallmentService:
         It calls the SQL function ``recompute_budget_spent(p_household_id, p_cycle_keys)``
         (migration 20261020800000; SECURITY DEFINER, executable by service_role only), which applies
         the trigger rules in one statement: settlements and ``wife_personal`` rows are not category
-        spending. When the function is missing (migration not applied yet) the same computation
-        runs here, reading only that cycle's transactions and budget rows. Errors are logged and
-        swallowed: callers treat the recalculation as best effort.
+        spending, and only active budget rows are recomputed (an inactive category's row keeps its
+        value, migration 20261105001000). When the function is missing (migration not applied
+        yet) the same computation runs here, reading only that cycle's transactions and budget
+        rows. Errors are logged and swallowed: callers treat the recalculation as best effort.
         """
         from decimal import Decimal
 
@@ -605,7 +606,7 @@ class InstallmentService:
 
             budget_rows = (
                 sb.table("budgets")
-                .select("id, category_code")
+                .select("id, category_code, is_active")
                 .eq("household_id", household_id)
                 .eq("cycle_key", target_key)
                 .execute()
@@ -613,6 +614,8 @@ class InstallmentService:
                 or []
             )
             for b in budget_rows:
+                if b.get("is_active") is False:
+                    continue  # an inactive category counts in no budget; its row keeps its value
                 spent = max(Decimal("0"), spent_by_cat.get(b.get("category_code"), Decimal("0")))
                 sb.table("budgets").update({"spent_amount": float(spent.quantize(Decimal("0.01")))}).eq(
                     "id", b["id"]

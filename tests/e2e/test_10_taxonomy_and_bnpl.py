@@ -114,9 +114,37 @@ def test_new_categories_are_available_not_budgeted_until_added(world, db):
 
 def test_rent_expense_lands_in_the_new_housing_sub_category(world, db, llm):
     hh = world.roommates("tx2", n_members=0)
+    # A 500 SAR Utilities budget, the old fallback for rent: the rent must never reach it.
+    r = hh.admin.api.post("/budgets/categories", json={
+        "household_id": hh.id, "code": "OPEX-UTILITIES", "category": "Utilities", "allocated_amount": 500})
+    assert r.status_code == 200, r.text
     res = world.chat_commit(hh.admin, hh, llm, merchant="Ejar", amount=2500, category_code="OPEX-HOUSING")
     assert res.status_code == 200, res.text
-    row = db.one("SELECT category_code, sub_category FROM public.transactions WHERE id = %s",
+    row = db.one("SELECT category_code, sub_category, cycle_key FROM public.transactions WHERE id = %s",
                  (res.json()["transaction_id"],))
     assert row["category_code"] == "OPEX-HOUSING"
     assert row["sub_category"] == "housing_rent", row
+
+    def spent(code):
+        return db.scalar("SELECT COALESCE(sum(spent_amount), 0) FROM public.budgets WHERE household_id = %s "
+                         "AND category_code = %s AND cycle_key = %s", (hh.id, code, row["cycle_key"]))
+
+    # Housing is inactive for the household (owner decision 2026-11-05): the rent is filed under it
+    # and counts in no budget, not in Utilities. Opening the breakdown makes no budget for it either.
+    assert spent("OPEX-UTILITIES") == 0
+    assert hh.admin.api.get("/budgets/breakdown", params={"household_id": hh.id}).status_code == 200
+    assert db.scalar("SELECT count(*) FROM public.budgets WHERE household_id = %s AND category_code = 'OPEX-HOUSING' "
+                     "AND is_active IS NOT FALSE", (hh.id,)) == 0
+    inactive = {c["code"] for c in hh.admin.api.get(f"/households/{hh.id}/categories").json()["inactive"]}
+    assert "OPEX-HOUSING" in inactive
+
+    # The admin activates Housing with a budget: the rent already recorded this cycle counts at once.
+    r = hh.admin.api.post("/budgets/categories", json={
+        "household_id": hh.id, "code": "OPEX-HOUSING", "category": "Rent", "allocated_amount": 3000})
+    assert r.status_code == 200, r.text
+    assert spent("OPEX-HOUSING") == 2500
+    assert spent("OPEX-UTILITIES") == 0
+    assert db.scalar("SELECT is_active FROM public.household_category_settings WHERE household_id = %s "
+                     "AND category_code = 'OPEX-HOUSING'", (hh.id,)) is True
+    active = {c["code"] for c in hh.admin.api.get(f"/households/{hh.id}/categories").json()["active"]}
+    assert "OPEX-HOUSING" in active
