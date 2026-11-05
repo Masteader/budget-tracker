@@ -10,6 +10,8 @@ import '../../models/models.dart';
 import '../../models/nafaqah.dart';
 import '../../services/api_service.dart';
 import '../../widgets/transactions/nafaqah_feed_badge.dart';
+import '../../widgets/transactions/unbudgeted_badge.dart';
+import '../../models/budget_coverage.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/household_role_provider.dart';
 import '../../providers/installment_provider.dart';
@@ -42,6 +44,9 @@ class TransactionFeedScreen extends StatefulWidget {
   /// `GET /budgets/cycles` (injectable for tests).
   final Future<Map<String, dynamic>> Function(String householdId)? loadCycles;
 
+  /// The household's budget rows, for the "Unbudgeted" badge (injectable for tests).
+  final BudgetCoverageLoader? loadBudgetCoverage;
+
   final String initialDatePeriod;
 
   const TransactionFeedScreen({
@@ -49,6 +54,7 @@ class TransactionFeedScreen extends StatefulWidget {
     this.householdId,
     this.loadNafaqah,
     this.loadCycles,
+    this.loadBudgetCoverage,
     this.initialDatePeriod = 'CYCLE',
   });
 
@@ -140,6 +146,24 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   /// A family household: from the Nafaqah summary, or (offline) from a
   /// classified row.
   bool _isFamily(List<Transaction> rows) => _family.isFamily || rows.any((t) => t.nafaqahClass != null);
+
+  /// Which categories have an active budget in which cycle: an expense in
+  /// another is filed under its category but counts in no budget, and is
+  /// marked "Unbudgeted" (owner decision 2026-11-05). Unknown until loaded.
+  BudgetCoverage _coverage = BudgetCoverage.unknown;
+  String? _coverageRequestedFor;
+
+  void _ensureBudgetCoverage(String? householdId, {bool force = false}) {
+    if (householdId == null || householdId.isEmpty) return;
+    if (!force && _coverageRequestedFor == householdId) return;
+    _coverageRequestedFor = householdId;
+    final loader = widget.loadBudgetCoverage ?? loadBudgetCoverage;
+    Future<BudgetCoverage>.sync(() => loader(householdId)).then((coverage) {
+      if (mounted && _coverageRequestedFor == householdId) setState(() => _coverage = coverage);
+    }).catchError((Object e) {
+      debugPrint('[TransactionFeed] Budget coverage unavailable: $e');
+    });
+  }
 
   Widget? _badgeFor(Transaction tx, bool isFamily) {
     final kind = nafaqahBadgeKind(tx, isFamily: isFamily);
@@ -947,6 +971,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     final hid = widget.householdId ?? roles?.householdId ?? (rows.isNotEmpty ? rows.first.householdId : null);
     _ensureFamilyContext(hid);
     _ensureCycles(hid);
+    _ensureBudgetCoverage(hid);
     return Scaffold(
       backgroundColor: context.scaffoldBg,
       appBar: AppBar(
@@ -1191,6 +1216,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                               : RefreshIndicator(
                                   color: context.accentText,
                                   onRefresh: () async {
+                                    _ensureBudgetCoverage(hid, force: true);
                                     await Future.wait([
                                       context.read<TransactionProvider>().fetchTransactions(),
                                       context.read<BudgetProvider>().refresh(),
@@ -1279,6 +1305,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           source: tx.source,
                                           spentBy: tx.attributedSpentBy,
                                           attributionBadge: _badgeFor(tx, family),
+                                          budgetBadge: _coverage.isUnbudgeted(tx) ? const UnbudgetedBadge() : null,
                                           timestamp: tx.timestamp,
                                           items: tx.items,
                                           isReallocated: tx.isReallocated,
@@ -1290,6 +1317,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           lockedNote: canModify ? null : context.tr('perm_tx_locked_note'),
                                           onEdit: !canModify ? null : () async {
                                             final res = await EditTransactionSheet.show(context, tx);
+                                            // The sheet may have given the category a budget.
+                                            _ensureBudgetCoverage(tx.householdId, force: true);
                                             if (res == 'deleted') {
                                               if (context.mounted) {
                                                 context.read<TransactionProvider>().deleteTransaction(tx.id);

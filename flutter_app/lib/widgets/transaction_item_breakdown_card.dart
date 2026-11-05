@@ -37,6 +37,10 @@ class TransactionItemBreakdownCard extends StatelessWidget {
   /// Nafaqah badge ("Owed to Sara", UX-04).
   final Widget? attributionBadge;
 
+  /// Shown after the category, e.g. "Unbudgeted" for an expense in a category
+  /// without an active budget this cycle.
+  final Widget? budgetBadge;
+
   /// When set, the row shows its time (the feed groups rows by day, UX-11).
   final DateTime? timestamp;
 
@@ -60,6 +64,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
     this.onDelete,
     this.lockedNote,
     this.attributionBadge,
+    this.budgetBadge,
     this.timestamp,
   });
 
@@ -283,6 +288,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                if (budgetBadge != null) budgetBadge!,
                 if (isReallocated)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

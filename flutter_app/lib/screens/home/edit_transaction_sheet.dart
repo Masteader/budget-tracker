@@ -27,6 +27,8 @@ import '../../models/money.dart';
 import '../../models/category_catalog.dart';
 import '../../services/salary_cycle_service.dart';
 import '../../widgets/transactions/expense_date_chips.dart';
+import '../../widgets/transactions/unbudgeted_badge.dart';
+import '../../models/budget_coverage.dart';
 
 /// Reads the stored Nafaqah fields (`nafaqah_class`, `nafaqah_spouse_id`) of a transaction.
 typedef NafaqahFieldsLoader = Future<Map<String, dynamic>?> Function(String transactionId);
@@ -64,6 +66,12 @@ class EditTransactionSheet extends StatefulWidget {
   /// [HouseholdRoleProvider], else the roster).
   final bool? isAdmin;
 
+  /// The household's budget rows, for the "Unbudgeted" notice (injectable for tests).
+  final BudgetCoverageLoader? loadBudgetCoverage;
+
+  /// Gives a category a budget (defaults to the existing budget dialog).
+  final CategoryBudgetActivator? activateCategoryBudget;
+
   const EditTransactionSheet({
     super.key,
     required this.transaction,
@@ -76,6 +84,8 @@ class EditTransactionSheet extends StatefulWidget {
     this.currentUserId,
     this.loadRoster,
     this.isAdmin,
+    this.loadBudgetCoverage,
+    this.activateCategoryBudget,
   });
 
   static Future<String?> show(
@@ -143,6 +153,10 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   late DateTime _occurredAt;
   bool _dateTouched = false;
 
+  /// Which categories have an active budget in which cycle; the stored
+  /// expense is "Unbudgeted" when its own has none (owner decision 2026-11-05).
+  BudgetCoverage _coverage = BudgetCoverage.unknown;
+
   SaudiCycle get _currentCycle => SalaryCycleService.currentCycle();
   SaudiCycle get _previousCycle {
     final curr = _currentCycle;
@@ -188,6 +202,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         .toList();
     _dependents = List<String>.from(widget.householdDependents);
     _loadSubCategories(_selectedCategory);
+    _loadBudgetCoverage();
     if (_dependents.isEmpty && widget.transaction.householdId.isNotEmpty) {
       _loadDependents();
     }
@@ -292,6 +307,29 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         if (roles.isAdmin && _nafaqah != null && !_storedNafaqahLoaded) _loadStoredNafaqah();
       }
     } catch (_) {}
+  }
+
+  Future<void> _loadBudgetCoverage() async {
+    final householdId = widget.transaction.householdId;
+    if (householdId.isEmpty) return;
+    try {
+      final coverage = await (widget.loadBudgetCoverage ?? loadBudgetCoverage)(householdId);
+      if (mounted) setState(() => _coverage = coverage);
+    } catch (e) {
+      debugPrint('[EditTransactionSheet] Budget coverage unavailable: $e');
+    }
+  }
+
+  /// The stored expense counts in no budget (its category has no active budget
+  /// for its cycle). Shown until the user picks another category.
+  bool get _showUnbudgeted => _selectedCategory == _initialCategory && _coverage.isUnbudgeted(widget.transaction);
+
+  Future<void> _activateCategoryBudget() async {
+    final code = widget.transaction.categoryCode;
+    if (code == null || code.isEmpty) return;
+    final activate = widget.activateCategoryBudget ?? activateAndBudgetCategory;
+    final saved = await activate(context, widget.transaction.householdId, code);
+    if (saved && mounted) await _loadBudgetCoverage();
   }
 
   /// Household admin: the explicit flag, the role provider, else what the
@@ -1711,6 +1749,10 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 }
               },
             ),
+            if (_showUnbudgeted) ...[
+              const SizedBox(height: 8),
+              UnbudgetedNotice(onActivate: _isAdmin ? _activateCategoryBudget : null),
+            ],
             const SizedBox(height: 12),
 
             // Sub-Category Dropdown

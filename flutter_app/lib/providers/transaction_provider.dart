@@ -417,6 +417,32 @@ class TransactionProvider extends ChangeNotifier {
     return total;
   }
 
+  /// Cycle spending outside [budgetedCodes] (the categories with an active
+  /// budget this cycle): expenses in inactive or unbudgeted categories, which
+  /// count in totals but in no budget. Same exclusions as [totalCycleSpend],
+  /// so it plus the budgeted categories' spend is the cycle total.
+  double unbudgetedCycleSpend(
+    String cycleKey,
+    Set<String> budgetedCodes, {
+    required int paydayDay,
+  }) {
+    double total = 0.0;
+    for (final t in transactions) {
+      if (t.isSettlement) continue;
+      if (t.nafaqahClass == 'wife_personal') continue;
+      if (t.categoryCode != null && budgetedCodes.contains(t.categoryCode)) continue;
+
+      final effectiveKey = (t.cycleKey != null && t.cycleKey!.isNotEmpty)
+          ? t.cycleKey!
+          : SalaryCycleService.cycleKeyForInstant(t.timestamp, paydayDay: paydayDay);
+
+      if (effectiveKey == cycleKey) {
+        total += t.amount;
+      }
+    }
+    return total;
+  }
+
   /// Distinct cycle keys found in loaded transactions.
   Set<String> get loadedCycleKeys =>
       _transactions.map((t) => t.cycleKey).whereType<String>().where((k) => k.isNotEmpty).toSet();

@@ -319,6 +319,18 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
     return reconcileCycleBudgets(list, txProvider, _currentCycleKey, _paydayDay);
   }
 
+  /// The open cycle's spending in categories without an active budget
+  /// (inactive or unbudgeted): in the totals, in no budget (owner decision
+  /// 2026-11-05). Same exclusions as the budgets; null for a past cycle.
+  double? _unbudgetedSpending(List<Budget> budgets, TransactionProvider? txProvider) {
+    if (!_isCurrentCycle || txProvider == null || txProvider.isLoading) return null;
+    return txProvider.unbudgetedCycleSpend(
+      _currentCycleKey,
+      {for (final b in budgets) b.categoryCode},
+      paydayDay: _paydayDay,
+    );
+  }
+
   final GlobalKey _categoriesKey = GlobalKey();
   final GlobalKey _balancesKey = GlobalKey();
   final GlobalKey _commitmentsKey = GlobalKey();
@@ -378,7 +390,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
   /// The top of the dashboard: the guided setup for a household without
   /// budgets (UX-02), otherwise the "until payday" hero and the overspent
   /// categories, plus the checklist while setup steps remain.
-  List<Widget> _buildTop(String hid, List<Budget> budgets) {
+  List<Widget> _buildTop(String hid, List<Budget> budgets, [TransactionProvider? txProvider]) {
     final setup = _setup;
     final hasBudgets = budgets.isNotEmpty;
     if (!hasBudgets && _isCurrentCycle) {
@@ -438,6 +450,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
         onCommitmentsTap: _scrollToCommitments,
         snapshot: (_isCurrentCycle && accountProvider.hasLoaded) ? snapshot : null,
         paydayDay: _paydayDay,
+        unbudgetedSpending: _unbudgetedSpending(budgets, txProvider),
       ),
       // UX-08: overspent categories right under the hero.
       OverBudgetAlerts(budgets: budgets, onShowAll: _scrollToCategories),
@@ -653,7 +666,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
                                   final txProvider = ctx.watch<TransactionProvider>();
                                   return Column(
                                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: _buildTop(hid, _cycleBudgets(budgetSnap.data!, txProvider)),
+                                    children: _buildTop(hid, _cycleBudgets(budgetSnap.data!, txProvider), txProvider),
                                   );
                                 },
                               ),

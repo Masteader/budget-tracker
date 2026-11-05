@@ -49,6 +49,12 @@ class BudgetHeroCard extends StatelessWidget {
 
   final int paydayDay;
 
+  /// The cycle's spending in categories with no active budget (inactive or
+  /// unbudgeted). Not part of any figure above; shown as one line under them
+  /// when above zero, so the cash picture stays honest (owner decision
+  /// 2026-11-05). Computed by the caller with the budgets' own exclusions.
+  final double? unbudgetedSpending;
+
   const BudgetHeroCard({
     super.key,
     required this.budgets,
@@ -62,6 +68,7 @@ class BudgetHeroCard extends StatelessWidget {
     this.now,
     this.snapshot,
     this.paydayDay = SalaryCycleService.defaultPaydayDay,
+    this.unbudgetedSpending,
   });
 
   /// The cycle the hero describes, as calendar dates (Riyadh).
@@ -105,6 +112,7 @@ class BudgetHeroCard extends StatelessWidget {
     final daysUntilPayday = today == running.start ? 0 : running.end.difference(today).inDays + 1;
 
     final fmt = NumberFormat('#,##0.00', 'en_US');
+    final unbudgeted = unbudgetedSpending ?? 0.0;
     final title = outlook.isClosed
         ? context.tr('hero_left_cycle_closed')
         : context.tr(outlook.incomeBased ? 'hero_left_until_payday' : 'hero_left_in_budgets');
@@ -161,6 +169,26 @@ class BudgetHeroCard extends StatelessWidget {
         accentColor: context.accentText,
       ),
     ];
+
+    final Widget dailyFigure = outlook.isClosed || outlook.verdict == PaydayVerdict.overspent
+        ? const SizedBox.shrink()
+        : Text(
+            context.trArgs('hero_daily_safe', {'amount': context.sar(outlook.safeDaily, decimals: 0)}),
+            key: const Key('hero_daily_figure'),
+            style: GoogleFonts.outfit(
+              color: context.textPrimary,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+            ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
+          );
+    final Widget percentSpent = Text(
+      context.trArgs('percent_spent', {'percent': (share * 100).round()}),
+      style: GoogleFonts.outfit(
+        color: context.textSecondary,
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+      ),
+    );
 
     final Widget titleText = Text(
       title,
@@ -247,6 +275,15 @@ class BudgetHeroCard extends StatelessWidget {
                       ),
                     ),
                     Text(baseLine, style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                    if (unbudgeted >= 0.005)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          context.trArgs('hero_unbudgeted_spending', {'amount': context.sar(unbudgeted)}),
+                          key: const Key('hero_unbudgeted_line'),
+                          style: TextStyle(color: context.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
+                      ),
                     if (effectiveCommitments != null && effectiveCommitments > 0) ...[
                       const SizedBox(height: 6),
                       _HeroCommitmentsTip(
@@ -312,33 +349,21 @@ class BudgetHeroCard extends StatelessWidget {
           const SizedBox(height: 10),
 
           // ─── One daily figure, one verdict ─────────────────────────
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: outlook.isClosed || outlook.verdict == PaydayVerdict.overspent
-                    ? const SizedBox.shrink()
-                    : Text(
-                        context.trArgs('hero_daily_safe', {'amount': context.sar(outlook.safeDaily, decimals: 0)}),
-                        key: const Key('hero_daily_figure'),
-                        style: GoogleFonts.outfit(
-                          color: context.textPrimary,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                        ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
-                      ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                context.trArgs('percent_spent', {'percent': (share * 100).round()}),
-                style: GoogleFonts.outfit(
-                  color: context.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+          // Under large text the share goes under the daily figure, like the tiles.
+          if (stackTiles)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [dailyFigure, percentSpent],
+            )
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: dailyFigure),
+                const SizedBox(width: 8),
+                percentSpent,
+              ],
+            ),
           const SizedBox(height: 6),
           Row(
             key: const Key('hero_verdict'),
@@ -472,36 +497,43 @@ class _DialGauge3D extends StatelessWidget {
               ),
             ),
           ),
-          // Inner percentage & days pill
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '$percent%',
-                style: GoogleFonts.outfit(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                  color: isDark ? Colors.white : VelvetBurgundyColors.primaryLight,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              Container(
-                margin: const EdgeInsets.only(top: 1),
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                decoration: BoxDecoration(
-                  color: context.primaryButtonBg,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  context.trArgs('dial_days_short', {'days': daysRemaining.toString()}),
-                  style: GoogleFonts.outfit(
-                    fontSize: 8,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
+          // Inner percentage & days pill (scaled down to fit the ring under large text)
+          SizedBox(
+            width: 58,
+            height: 58,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$percent%',
+                    style: GoogleFonts.outfit(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      color: isDark ? Colors.white : VelvetBurgundyColors.primaryLight,
+                      letterSpacing: -0.5,
+                    ),
                   ),
-                ),
+                  Container(
+                    margin: const EdgeInsets.only(top: 1),
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: context.primaryButtonBg,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      context.trArgs('dial_days_short', {'days': daysRemaining.toString()}),
+                      style: GoogleFonts.outfit(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ],
       ),
