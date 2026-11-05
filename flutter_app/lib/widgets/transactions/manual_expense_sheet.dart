@@ -21,6 +21,7 @@ import '../../services/account_service.dart';
 import '../../services/api_service.dart';
 import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
+import '../../utils/failure_log.dart';
 import '../app_snackbar.dart';
 import '../nafaqah/nafaqah_class_selector.dart';
 import 'expense_date_chips.dart';
@@ -344,7 +345,8 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
           {'id': m.userId, 'display_name': m.displayName, 'role': m.role, 'financial_role': m.financialRole},
       ];
     } catch (e) {
-      debugPrint('[ManualExpenseSheet] Members API unavailable, using own membership: $e');
+      // The API is unavailable: the caller's own membership rows stand in.
+      logFailure('ManualExpenseSheet.members', e);
     }
     final rows = widget.loadOwnMemberships != null
         ? await widget.loadOwnMemberships!(hid)
@@ -395,7 +397,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         if (_viewerIsWife && _familyPayer == 'me') _familyPayer = kWifeReimbursable;
       });
     } catch (e) {
-      debugPrint('[ManualExpenseSheet] Nafaqah context unavailable: $e');
+      logFailure('ManualExpenseSheet.nafaqahContext', e);
     }
   }
 
@@ -422,7 +424,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     try {
       refreshGlobalAppData(context);
     } catch (e) {
-      debugPrint('[ManualExpenseSheet] Refresh after save skipped: $e');
+      logFailure('ManualExpenseSheet.refreshAfterSave', e);
     }
   }
 
