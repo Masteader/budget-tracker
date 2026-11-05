@@ -29,6 +29,7 @@ import '../../services/salary_cycle_service.dart';
 import '../../widgets/transactions/expense_date_chips.dart';
 import '../../widgets/transactions/unbudgeted_badge.dart';
 import '../../models/budget_coverage.dart';
+import '../../utils/failure_log.dart';
 
 /// Reads the stored Nafaqah fields (`nafaqah_class`, `nafaqah_spouse_id`) of a transaction.
 typedef NafaqahFieldsLoader = Future<Map<String, dynamic>?> Function(String transactionId);
@@ -316,7 +317,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       final coverage = await (widget.loadBudgetCoverage ?? loadBudgetCoverage)(householdId);
       if (mounted) setState(() => _coverage = coverage);
     } catch (e) {
-      debugPrint('[EditTransactionSheet] Budget coverage unavailable: $e');
+      logFailure('EditTransactionSheet.budgetCoverage', e);
     }
   }
 
@@ -324,9 +325,13 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   /// for its cycle). Shown until the user picks another category.
   bool get _showUnbudgeted => _selectedCategory == _initialCategory && _coverage.isUnbudgeted(widget.transaction);
 
+  /// Only an expense of the open cycle can still be budgeted: the budget dialog
+  /// writes this cycle's row, and an older cycle keeps its history.
+  bool get _unbudgetedInOpenCycle => BudgetCoverage.isCurrentCycle(widget.transaction);
+
   Future<void> _activateCategoryBudget() async {
     final code = widget.transaction.categoryCode;
-    if (code == null || code.isEmpty) return;
+    if (code == null || code.isEmpty || !_unbudgetedInOpenCycle) return;
     final activate = widget.activateCategoryBudget ?? activateAndBudgetCategory;
     final saved = await activate(context, widget.transaction.householdId, code);
     if (saved && mounted) await _loadBudgetCoverage();
@@ -1751,7 +1756,12 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             ),
             if (_showUnbudgeted) ...[
               const SizedBox(height: 8),
-              UnbudgetedNotice(onActivate: _isAdmin ? _activateCategoryBudget : null),
+              if (_unbudgetedInOpenCycle)
+                UnbudgetedNotice(onActivate: _isAdmin ? _activateCategoryBudget : null)
+              else
+                UnbudgetedNotice(
+                  pastCycleLabel: context.cycleLabel(BudgetCoverage.effectiveCycleKey(widget.transaction)),
+                ),
             ],
             const SizedBox(height: 12),
 

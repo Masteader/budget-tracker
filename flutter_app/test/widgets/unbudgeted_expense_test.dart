@@ -2,6 +2,7 @@
 // is filed under it and counts in no budget. The feed and the edit sheet say
 // "Unbudgeted"; the edit sheet offers an admin the existing budget dialog to
 // activate the category and give it a budget.
+import 'package:budget_tracker/l10n/app_localizations.dart';
 import 'package:budget_tracker/models/budget_coverage.dart';
 import 'package:budget_tracker/models/models.dart';
 import 'package:budget_tracker/models/nafaqah.dart';
@@ -10,6 +11,7 @@ import 'package:budget_tracker/providers/recurring_bills_provider.dart';
 import 'package:budget_tracker/providers/transaction_provider.dart';
 import 'package:budget_tracker/screens/home/edit_transaction_sheet.dart';
 import 'package:budget_tracker/screens/home/transaction_feed_screen.dart';
+import 'package:budget_tracker/services/salary_cycle_service.dart';
 import 'package:budget_tracker/widgets/transactions/unbudgeted_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -184,6 +186,84 @@ void main() {
     });
   });
 
+  group('current cycle versus an older one', () {
+    final current = SalaryCycleService.currentCycle();
+    final previous = SalaryCycleService.cycleForInstant(current.start.subtract(const Duration(days: 1)));
+    final older = SalaryCycleService.cycleForInstant(previous.start.subtract(const Duration(days: 1)));
+
+    Transaction row(String id, String cycleKey, DateTime at) => Transaction.fromMap({
+          'id': id,
+          'household_id': 'h1',
+          'amount': 75.0,
+          'currency': 'SAR',
+          'merchant': 'Store $id',
+          'category_code': 'OPEX-CHARITY',
+          'timestamp': at.toIso8601String(),
+          'created_at': at.toIso8601String(),
+          'cycle_key': cycleKey,
+          'spent_by': 'both',
+        });
+
+    // Budgeting started last cycle: Grocery had a budget then and has one now.
+    final coverage = BudgetCoverage.fromRows([
+      {'category_code': 'OPEX-GROCERY', 'cycle_key': current.key, 'is_active': true},
+      {'category_code': 'OPEX-GROCERY', 'cycle_key': previous.key, 'is_active': true},
+    ]);
+
+    Future<void> pumpSheet(WidgetTester tester, Transaction tx, {String lang = 'en', CategoryBudgetActivator? activate}) async {
+      await tester.pumpWidget(localizedApp(
+        EditTransactionSheet(
+          transaction: tx,
+          isAdmin: true,
+          loadBudgetCoverage: (_) async => coverage,
+          activateCategoryBudget: activate,
+        ),
+        lang: lang,
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    for (final lang in const ['en', 'ar', 'ur']) {
+      testWidgets('$lang: this cycle offers the action and says "this cycle"', (tester) async {
+        final l = AppLocalizations(Locale(lang));
+        await pumpSheet(tester, row('now', current.key, current.start.add(const Duration(hours: 2))), lang: lang);
+        expect(find.byKey(const Key('edit_unbudgeted_notice')), findsOneWidget);
+        expect(find.byKey(const Key('edit_unbudgeted_activate')), findsOneWidget);
+        expect(find.text(l.get('unbudgeted_notice')), findsOneWidget);
+      });
+
+      testWidgets('$lang: an older row names its own cycle and offers no action', (tester) async {
+        final l = AppLocalizations(Locale(lang));
+        await pumpSheet(tester, row('then', previous.key, previous.start.add(const Duration(hours: 2))), lang: lang);
+        expect(find.byKey(const Key('edit_unbudgeted_notice')), findsOneWidget);
+        expect(find.byKey(const Key('edit_unbudgeted_activate')), findsNothing);
+        expect(find.text(l.get('unbudgeted_notice')), findsNothing, reason: 'not "this cycle"');
+        expect(find.text(l.get('unbudgeted_admin_only')), findsNothing);
+        final label = l.cycleLabel(previous.key);
+        expect(find.text(l.format('unbudgeted_notice_past', {'cycle': label})), findsOneWidget);
+      });
+    }
+
+    testWidgets('an older row never opens the budget dialog of this cycle', (tester) async {
+      var opened = 0;
+      await pumpSheet(
+        tester,
+        row('then', previous.key, previous.start.add(const Duration(hours: 2))),
+        activate: (context, householdId, code) async {
+          opened++;
+          return true;
+        },
+      );
+      expect(find.text('Activate and budget'), findsNothing);
+      expect(opened, 0);
+    });
+
+    testWidgets('a row from before the household budgeted at all is not marked', (tester) async {
+      await pumpSheet(tester, row('before', older.key, older.start.add(const Duration(hours: 2))));
+      expect(find.byKey(const Key('edit_unbudgeted_notice')), findsNothing);
+    });
+  });
+
   group('320 px at 200% text', () {
     for (final lang in ['ar', 'en', 'ur']) {
       for (final dark in [false, true]) {
@@ -200,6 +280,7 @@ void main() {
                 const Wrap(spacing: 6, runSpacing: 4, children: [UnbudgetedBadge()]),
                 UnbudgetedNotice(onActivate: () {}),
                 const UnbudgetedNotice(),
+                UnbudgetedNotice(pastCycleLabel: AppLocalizations(Locale(lang)).cycleLabel('2026-10')),
               ],
             ),
             lang: lang,
@@ -208,7 +289,7 @@ void main() {
           await tester.pumpAndSettle();
           expect(tester.takeException(), isNull);
           expect(MediaQuery.textScalerOf(tester.element(find.byType(Column).first)).scale(10), 20);
-          expect(find.byType(UnbudgetedNotice), findsNWidgets(2));
+          expect(find.byType(UnbudgetedNotice), findsNWidgets(3));
         });
       }
     }

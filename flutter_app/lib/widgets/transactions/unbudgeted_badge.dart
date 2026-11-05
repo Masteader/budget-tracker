@@ -75,16 +75,44 @@ class UnbudgetedBadge extends StatelessWidget {
   }
 }
 
-/// The edit sheet's explanation, with the action for an admin ([onActivate])
-/// or, for a member, who can give the category a budget.
+/// The edit sheet's explanation. For an expense of the open cycle: the action
+/// for an admin ([onActivate]) or, for a member, who can give the category a
+/// budget. For an older expense ([pastCycleLabel], its own cycle): a plain note
+/// with no action, because budgeting now cannot reach that cycle.
 class UnbudgetedNotice extends StatelessWidget {
   final VoidCallback? onActivate;
 
-  const UnbudgetedNotice({super.key, this.onActivate});
+  /// The expense's own cycle, when it is not the open one.
+  final String? pastCycleLabel;
+
+  const UnbudgetedNotice({super.key, this.onActivate, this.pastCycleLabel});
 
   @override
   Widget build(BuildContext context) {
     final color = context.warnText;
+    final past = pastCycleLabel;
+    if (past != null) {
+      return Container(
+        key: const Key('edit_unbudgeted_notice'),
+        padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const UnbudgetedBadge(),
+            const SizedBox(height: 6),
+            Text(
+              context.trArgs('unbudgeted_notice_past', {'cycle': past}),
+              style: TextStyle(color: context.textPrimary, fontSize: 12.5),
+            ),
+          ],
+        ),
+      );
+    }
     return Container(
       key: const Key('edit_unbudgeted_notice'),
       padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 12, 4),
