@@ -4,9 +4,10 @@ In-memory fake of the supabase-py client used by the hermetic test suite.
 The real client talks to the network; tests must never do that (they previously
 reached whatever SUPABASE_URL a developer's .env pointed at, i.e. production).
 The fake implements just the PostgREST query-builder surface the service uses:
-select / eq / neq / in_ / gt / gte / lt / lte / is_ / contains / order / limit /
+select / eq / neq / in_ / gt / gte / lt / lte / is_ / contains / order / limit / range /
 single / maybe_single / insert / update / upsert / delete / execute, plus rpc()
-and storage.from_(bucket).upload().
+and storage.from_(bucket).upload(). Set ``client.max_rows`` to cap every select the way
+PostgREST's max-rows setting does (1000 on Supabase): silently, after range and limit.
 """
 
 from __future__ import annotations
@@ -42,6 +43,7 @@ class FakeQuery:
         self._filters: List[Callable[[dict], bool]] = []
         self._order: Optional[tuple[str, bool]] = None
         self._limit: Optional[int] = None
+        self._range: Optional[tuple[int, int]] = None
         self._single = False
         self._maybe_single = False
         self._on_conflict: Optional[str] = None
@@ -130,6 +132,11 @@ class FakeQuery:
         self._limit = n
         return self
 
+    def range(self, start: int, end: int, **_kw: Any) -> "FakeQuery":
+        """Rows start..end inclusive, as PostgREST's Range / offset+limit."""
+        self._range = (start, end)
+        return self
+
     def single(self) -> "FakeQuery":
         self._single = True
         return self
@@ -202,8 +209,12 @@ class FakeQuery:
         if self._order:
             col, desc = self._order
             result.sort(key=lambda r: (r.get(col) is None, r.get(col)), reverse=desc)
+        if self._range is not None:
+            result = result[self._range[0]: self._range[1] + 1]
         if self._limit is not None:
             result = result[: self._limit]
+        if self._client.max_rows is not None:
+            result = result[: self._client.max_rows]
         if self._single:
             if len(result) != 1:
                 raise RuntimeError(f"single() expected exactly one row from {self._table}, got {len(result)}")
@@ -264,6 +275,8 @@ class FakeSupabaseClient:
         self.storage = FakeStorage(self)
         # Optional {table: {column, ...}}: queries naming other columns raise FakeSchemaError.
         self.schemas: Dict[str, set] = {}
+        # Optional PostgREST max-rows: no select answers more rows than this, and none says so.
+        self.max_rows: Optional[int] = None
 
     def table(self, name: str) -> FakeQuery:
         return FakeQuery(self, name)

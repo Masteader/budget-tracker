@@ -12,7 +12,7 @@ from typing import Dict, Any, List, Optional, Tuple
 
 from supabase_client import get_client, get_household_payday
 from salary_cycle import get_salary_cycle_dates
-from nafaqah_service import FamilyContext, get_reimbursement_ledger, load_family_context
+from nafaqah_service import FamilyContext, all_rows, get_reimbursement_ledger, load_family_context
 
 logger = logging.getLogger(__name__)
 
@@ -307,15 +307,18 @@ def _caller_relative(ref: str, creator: str, anchor: str, ctx: FamilyContext) ->
 
 
 def _cycle_transactions(client, household_id: str, start_iso: str, columns: str) -> List[Dict[str, Any]]:
-    response = (
+    """Every transaction of the household since ``start_iso``, newest first. Page by page (by id):
+    PostgREST caps each answer (1000 rows on Supabase) and a settlement sums them all."""
+    if not any(c.strip() == "id" for c in columns.split(",")):
+        columns = "id, " + columns
+    rows = all_rows(lambda: (
         client.table("transactions")
         .select(columns)
         .eq("household_id", household_id)
         .gte("timestamp", start_iso)
-        .order("timestamp", desc=True)
-        .execute()
-    )
-    return response.data or []
+    ))
+    rows.sort(key=lambda r: str(r.get("timestamp") or ""), reverse=True)
+    return rows
 
 
 def _nafaqah_balance(ctx: FamilyContext, wife_ids: List[str]) -> Dict[str, Any]:

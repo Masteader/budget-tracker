@@ -87,6 +87,9 @@ ASSIGNABLE_FINANCIAL_ROLES = {FAMILY: ("spouse", "family_member", "dependent"), 
 MEMBERSHIP_FINANCIAL_ROLES = {FAMILY: ("provider", "spouse", "family_member", "dependent"), ROOMMATES: ("peer",)}
 
 TYPE_CHANGE_BLOCKED = "type_change_blocked"
+# What a deleted wife is still owed blocks the switch on its own (review R2-04, owner decision):
+# the app says to close the record first, by recording its payment or her waiver.
+FORMER_MEMBER_DEBT_OPEN = "former_member_debt_open"
 INVITE_ROLE_MISMATCH = "invite_role_mismatch"
 
 
@@ -418,8 +421,10 @@ def set_household_type(household_id: str, actor_id: str, household_type: str) ->
     """
     An admin switches the household between 'family' and 'roommates' (public.set_household_type
     re-checks with the verified caller). family -> roommates is refused while a wife or any
-    Nafaqah record exists (HouseholdConflictError ``type_change_blocked``); roommates -> family
-    turns peers into family members and the primary admin into the default Nafaqah provider.
+    Nafaqah record exists (HouseholdConflictError ``type_change_blocked``), and when the only thing
+    in the way is a former member's open record (no wife is a member now) with its own code,
+    ``former_member_debt_open`` (review R2-04); roommates -> family turns peers into family members
+    and the primary admin into the default Nafaqah provider.
     """
     roster = load_roster(household_id)
     _require_admin(roster, actor_id)
@@ -433,6 +438,12 @@ def set_household_type(household_id: str, actor_id: str, household_type: str) ->
         ).execute()
     except Exception as exc:
         if _rpc_hint(exc) == TYPE_CHANGE_BLOCKED:
+            blockers = {b.strip() for b in db_error_fields(exc)["details"].split(",") if b.strip()}
+            if "former_member_debt" in blockers and "spouse_member" not in blockers:
+                raise HouseholdConflictError(
+                    "What a former member is still owed is open: record its payment or her waiver first.",
+                    FORMER_MEMBER_DEBT_OPEN,
+                ) from exc
             raise HouseholdConflictError(
                 "A family household with a wife or Nafaqah records cannot become a roommates household.",
                 TYPE_CHANGE_BLOCKED,

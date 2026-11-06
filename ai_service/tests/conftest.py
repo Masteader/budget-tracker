@@ -129,6 +129,7 @@ def mock_auth(monkeypatch, request):
         "test_former_member_debt",
         "test_wife_repayment_debit",
         "test_wife_repayment_review_fixes",
+        "test_wife_repayment_r2_fixes",
     ]
     if any(ex in request.node.nodeid for ex in excluded_tests):
         yield

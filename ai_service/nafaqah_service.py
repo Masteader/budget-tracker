@@ -39,7 +39,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from postgrest_compat import db_error_fields, first_row
 from supabase_client import account_deletion_guard_error, get_client, get_household_payday
@@ -721,6 +721,16 @@ def _detail_amount(details: str) -> Optional[float]:
         return None
 
 
+# The constraints that keep a request key to one operation (migrations 20261105001200 and
+# 20261105001300, review R2-01).
+REQUEST_KEY_CONSTRAINTS = (
+    "nafaqah_request_keys_pkey",
+    "uq_spouse_reimbursements_request",
+    "uq_former_member_debt_events_request",
+    "uq_spouse_reimbursement_requests_key",
+)
+
+
 def _map_db_error(exc: Exception) -> Exception:
     """
     Map a refusal of the Nafaqah RPCs to the service's errors. Every RAISE in migration
@@ -766,6 +776,10 @@ def _map_db_error(exc: Exception) -> Exception:
     if hint == "debt_closed":
         return DebtClosed("This record is already settled or waived.")
     if hint == "request_key_reused":
+        return RequestKeyReused("This request was already used for a different action.")
+    # Two calls with one key at once: the database answers request_key_reused, but a raw unique
+    # violation of a key constraint is the same answer, never a 500 (review R2-07).
+    if code == "23505" and any(c in message or c in details for c in REQUEST_KEY_CONSTRAINTS):
         return RequestKeyReused("This request was already used for a different action.")
     if hint in ("invalid_amount", "invalid_payment_method", "request_key_required"):
         return InvalidNafaqahRequest("The database rejected the request.")
@@ -813,6 +827,40 @@ KIND_PAYMENT = "payment"
 KIND_REVERSAL = "reversal"
 
 
+# PostgREST answers at most its max-rows setting per request (1000 on Supabase by default) and says
+# nothing when it cut an answer short. Every ledger read whose rows are summed or listed in full
+# goes through these two: the rows page by page in a stable order, and a long list of ids in
+# chunks (each one short enough for a URL, each one paged too).
+PAGE_ROWS = 1000
+IN_CHUNK = 100
+
+
+def all_rows(make_query: Callable[[], Any], order_by: str = "id") -> List[Dict[str, Any]]:
+    """Every row of a select. ``make_query`` builds it afresh for each page (filters, no order or
+    range); pages run in ``order_by`` (a unique column), each starting where the rows so far end,
+    until one comes back empty, so a server capping pages below PAGE_ROWS still gives them all."""
+    rows: List[Dict[str, Any]] = []
+    seen = set()
+    while True:
+        page = (make_query().order(order_by).range(len(rows), len(rows) + PAGE_ROWS - 1).execute()).data or []
+        fresh = [r for r in page if r.get(order_by) not in seen]
+        if not fresh:
+            return rows
+        seen.update(r.get(order_by) for r in fresh)
+        rows.extend(fresh)
+
+
+def rows_in(client, table: str, columns: str, column: str, values: Iterable[Any],
+            order_by: str = "id") -> List[Dict[str, Any]]:
+    """Every row of ``table`` whose ``column`` is one of ``values``, IN_CHUNK values per request."""
+    ids = sorted({str(v) for v in values if v})
+    out: List[Dict[str, Any]] = []
+    for i in range(0, len(ids), IN_CHUNK):
+        chunk = ids[i:i + IN_CHUNK]
+        out += all_rows(lambda: client.table(table).select(columns).in_(column, chunk), order_by)
+    return out
+
+
 def _signed_repayment(row: Dict[str, Any]) -> Decimal:
     """A ledger row's effect on what was repaid: a payment adds, a reversal takes it back."""
     amount = _decimal(row.get("amount"))
@@ -821,12 +869,7 @@ def _signed_repayment(row: Dict[str, Any]) -> Decimal:
 
 def _transfers(client, transfer_ids: Iterable[Any]) -> Dict[str, Dict[str, Optional[str]]]:
     """{transfer id: {"from": account, "to": account}} for the rows that moved money."""
-    ids = sorted({str(t) for t in transfer_ids if t})
-    if not ids:
-        return {}
-    rows = (
-        client.table("account_transfers").select("id, from_account_id, to_account_id").in_("id", ids).execute()
-    ).data or []
+    rows = rows_in(client, "account_transfers", "id, from_account_id, to_account_id", "id", transfer_ids)
     return {
         str(r.get("id")): {
             "from": str(r["from_account_id"]) if r.get("from_account_id") else None,
@@ -837,15 +880,8 @@ def _transfers(client, transfer_ids: Iterable[Any]) -> Dict[str, Dict[str, Optio
 
 
 def _accounts(client, account_ids: Iterable[Any]) -> Dict[str, Dict[str, Any]]:
-    ids = sorted({str(a) for a in account_ids if a})
-    if not ids:
-        return {}
-    rows = (
-        client.table("accounts")
-        .select("id, household_id, owner_user_id, is_shared_pool, is_archived, currency")
-        .in_("id", ids)
-        .execute()
-    ).data or []
+    rows = rows_in(client, "accounts", "id, household_id, owner_user_id, is_shared_pool, is_archived, currency",
+                   "id", account_ids)
     return {str(r.get("id")): r for r in rows}
 
 
@@ -865,23 +901,18 @@ def _account_usable_by(ctx: FamilyContext, account: Optional[Dict[str, Any]], ac
 
 def _requests_of(client, ctx: FamilyContext, wife_id: str) -> List[Dict[str, Any]]:
     """Her requests, newest first, each with its outcome ('pending' while it has none)."""
-    rows = (
+    rows = all_rows(lambda: (
         client.table("spouse_reimbursement_requests")
         .select("id, amount, payment_method, created_at")
         .eq("household_id", ctx.household_id)
         .eq("wife_user_id", wife_id)
-        .execute()
-    ).data or []
-    ids = [str(r["id"]) for r in rows if r.get("id")]
-    outcomes = {}
-    if ids:
-        for o in (
-            client.table("spouse_reimbursement_request_outcomes")
-            .select("request_id, outcome, reason, reimbursement_id, created_at")
-            .in_("request_id", ids)
-            .execute()
-        ).data or []:
-            outcomes[str(o.get("request_id"))] = o
+    ))
+    outcomes = {
+        str(o.get("request_id")): o
+        for o in rows_in(client, "spouse_reimbursement_request_outcomes",
+                         "request_id, outcome, reason, reimbursement_id, created_at", "request_id",
+                         [r.get("id") for r in rows], order_by="request_id")
+    }
     out = []
     for r in rows:
         o = outcomes.get(str(r.get("id")))
@@ -911,22 +942,21 @@ def get_reimbursement_ledger(ctx: FamilyContext, wife_id: str, caller_id: Option
     _require_family(ctx)
     _require_wife(ctx, wife_id)
     client = get_client()
-    advances = (
+    # Every row, page by page: what is owed is their sum (PostgREST caps each answer).
+    advances = all_rows(lambda: (
         client.table("transactions")
         .select("id, amount, merchant, category_code, timestamp, cycle_key")
         .eq("household_id", ctx.household_id)
         .eq("nafaqah_spouse_id", wife_id)
         .eq("nafaqah_class", WIFE_REIMBURSABLE)
-        .execute()
-    ).data or []
+    ))
     # Every column: transfer_id, kind and reverses_id exist once 20261105001300 has run.
-    repayments = (
+    repayments = all_rows(lambda: (
         client.table("spouse_reimbursements")
         .select("*")
         .eq("household_id", ctx.household_id)
         .eq("wife_user_id", wife_id)
-        .execute()
-    ).data or []
+    ))
     transfers = _transfers(client, [r.get("transfer_id") for r in repayments])
     reversed_by = {
         str(r.get("reverses_id")): r.get("id") for r in repayments if str(r.get("kind") or KIND_PAYMENT) == KIND_REVERSAL
@@ -1309,22 +1339,15 @@ def list_former_member_debts(ctx: FamilyContext, caller_id: Optional[str] = None
     """The household's records, newest first, each with its payments, reversals and waiver, oldest
     first. ``caller_id`` decides ``can_reverse`` on each payment."""
     client = get_client()
-    rows = (
+    rows = all_rows(lambda: (
         client.table("former_member_debts")
         .select("id, original_amount, paid_amount, status, created_at, closed_at")
         .eq("household_id", ctx.household_id)
-        .execute()
-    ).data or []
+    ))
     if not rows:
         return []
-    ids = [str(r["id"]) for r in rows if r.get("id")]
     # Every column: transfer_id and reverses_event_id exist once 20261105001300 has run.
-    events = (
-        client.table("former_member_debt_events")
-        .select("*")
-        .in_("debt_id", ids)
-        .execute()
-    ).data or []
+    events = rows_in(client, "former_member_debt_events", "*", "debt_id", [r.get("id") for r in rows])
     transfers = _transfers(client, [e.get("transfer_id") for e in events])
     # Who may reverse follows the account the payment left (review R1-07), never a wife.
     may_reverse = bool(caller_id) and ctx.is_member(caller_id) and not ctx.is_wife(caller_id)
@@ -1522,15 +1545,15 @@ def get_allowance(ctx: FamilyContext, wife_id: str, cycle_key: Optional[str]) ->
         .eq("cycle_key", cycle)
     )
     allocated = row.get("amount") if row else None
-    spent = (
+    # Every purchase of the cycle, page by page (PostgREST caps each answer).
+    spent = all_rows(lambda: (
         client.table("transactions")
-        .select("amount")
+        .select("id, amount")
         .eq("household_id", ctx.household_id)
         .eq("nafaqah_spouse_id", wife_id)
         .eq("nafaqah_class", WIFE_PERSONAL)
         .eq("cycle_key", cycle)
-        .execute()
-    ).data or []
+    ))
     return {
         "household_id": ctx.household_id,
         "member_user_id": wife_id,
