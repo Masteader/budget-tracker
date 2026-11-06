@@ -447,6 +447,43 @@ void main() {
       expect(find.text('Recorded SAR 100.00 via STC Pay'), findsOneWidget);
     });
 
+    testWidgets('a replayed retry reports what the server recorded, not what was typed again', (tester) async {
+      // The first answer was lost, but the server stored 100 via STC Pay. The user then types
+      // 50 and Cash: the same key replays the 100, and the app must say so.
+      var n = 0;
+      await tester.pumpWidget(_app(FamilyReimbursementCard(
+        householdId: 'hh',
+        summary: _summary(),
+        loadSummary: (_) async => _summary(),
+        recordFormerMemberDebtPayment: ({
+          required String debtId,
+          required double amount,
+          required String paymentMethod,
+          required String requestKey,
+        }) async {
+          n++;
+          if (n == 1) throw const NafaqahApiException('network', 'timeout', noResponse: true);
+          return FormerMemberDebtReceipt.fromMap({
+            'status': 'open', 'replayed': true, 'debt_id': debtId, 'event_id': 'e1',
+            'amount': 100, 'payment_method': 'stc_pay', 'remaining': 300,
+          });
+        },
+      )));
+      await tester.pumpAndSettle();
+      await _tapKey(tester, 'fmd_pay_d-open');
+      await tester.enterText(_k('fmd_amount_field'), '100');
+      await _tapKey(tester, 'fmd_pay_submit');
+      await _tapKey(tester, 'fmd_confirm_ok');
+      await tester.enterText(_k('fmd_amount_field'), '50');
+      await tester.tap(find.text('Cash'));
+      await tester.pumpAndSettle();
+      await _tapKey(tester, 'fmd_pay_submit');
+      await _tapKey(tester, 'fmd_confirm_ok');
+      expect(n, 2);
+      expect(find.text('Recorded SAR 100.00 via STC Pay'), findsOneWidget);
+      expect(find.textContaining('SAR 50.00 via Cash'), findsNothing);
+    });
+
     testWidgets('a retry after a refusal reuses the same key; a new sheet gets a new key', (tester) async {
       await tester.pumpWidget(_app(card(
         failWith: (n) => n == 1 ? const NafaqahApiException('network', 'x', statusCode: 400) : null,

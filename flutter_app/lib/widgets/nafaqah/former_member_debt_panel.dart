@@ -527,7 +527,8 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
     }
     if (!await _confirm(amt) || !mounted) return;
 
-    final method = _paymentMethod;
+    var method = _paymentMethod;
+    var recorded = amt;
     setState(() => _isSubmitting = true);
     try {
       final record = widget.recordPayment ??
@@ -539,7 +540,10 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
                 paymentMethod: paymentMethod,
                 requestKey: requestKey,
               );
-      await record(debtId: widget.debtId, amount: amt, paymentMethod: method, requestKey: _requestKey);
+      final receipt = await record(debtId: widget.debtId, amount: amt, paymentMethod: method, requestKey: _requestKey);
+      // A retry of a lost answer replays what the server stored first, whatever was typed since.
+      if (receipt.amount > 0) recorded = receipt.amount;
+      if (_knownMethods.contains(receipt.paymentMethod)) method = receipt.paymentMethod!;
     } catch (e) {
       // Never report a payment as recorded when the server did not say so.
       logFailure('FormerMemberDebt.pay', e);
@@ -564,7 +568,7 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
     if (!mounted) return;
     AppSnackBar.showSuccess(
       context,
-      context.trArgs('fmd_paid_success', {'amount': context.sar(amt), 'method': _methodLabel(context, method)}),
+      context.trArgs('fmd_paid_success', {'amount': context.sar(recorded), 'method': _methodLabel(context, method)}),
       title: context.tr('settle_recorded_title'),
       icon: Icons.check_circle_outline,
     );
