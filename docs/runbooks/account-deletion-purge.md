@@ -21,7 +21,16 @@ Each run, when enabled:
 
 Steps 3 and 4 also run when the purge is off: neither depends on purging, and the public page promises the 90 days.
 
-Reminders to the account holder are in the language of their request. Notices to the other members of a household being deleted are in Arabic, English and Urdu, in that order, because members have no stored language.
+Reminders to the account holder are in the language of their request. Notices to the other members of a household being deleted, and the `creditor_owed` notice below, are in Arabic, English and Urdu, in that order, because members have no stored language.
+
+## A wife who is still owed money
+
+In a family household, what a wife paid for shared things from her own money is a debt her husband owes her (rule 02). Her ledger goes with her account, so the debt is handled on its own (`20261105001200_account_deletion_former_member_debt.sql`):
+
+- **While her request is scheduled**, the creditor is told the amount still owed: the household's Nafaqah provider, or its admins when it has none. They see a notice on her Nafaqah card in the app, and the worker emails `creditor_owed` (both switches, like every other notice), once per request, from `list_former_member_debt_notices_due`. It never names her. Nothing is listed when nothing is owed, for a household she is deleting herself, or under an hour before the date.
+- **At the purge**, `prepare_account_purge` keeps one row in `former_member_debts` for each household that survives her and where something is still owed: the amount, the status and the dates, with no name, id, email or free text. It is taken before her membership ends, under the household locks the purge already holds, and it moves no balance or budget, so the ledger invariant is unaffected.
+- **Afterwards** the husband or any admin closes it in the app: a payment (amount up to what remains, plus a payment method, exactly like an ordinary reimbursement, so no account, budget or transaction changes) or her waiver (إبراء). Both are kept in `former_member_debt_events` with the date and amount. A repeated tap with the same request key records once. Members of the household can read both, as they could read her ledger.
+- **If the husband deletes his account later**, a household that survives keeps the record and his id leaves the history. A household deleted with him takes the record along.
 
 Every step is safe to repeat. A failure records a code, and the job retries with a growing delay (1, 2, 4, then 8 hours). After 5 attempts it stays `failed` until someone looks at it.
 
@@ -52,7 +61,7 @@ Run it this way first. It proves the service, key and migrations work without pu
 
 ## The email switch
 
-`ACCOUNT_DELETION_EMAILS_ENABLED=1` (that exact value) governs every email to an account holder or household member: T-7, T-1, completion, member marked and member T-7. These emails need both switches, because a reminder names a date, and with the purge off that date would not be met. To test purges first, turn on the purge switch alone.
+`ACCOUNT_DELETION_EMAILS_ENABLED=1` (that exact value) governs every email to an account holder or household member: T-7, T-1, completion, member marked, member T-7 and `creditor_owed`. These emails need both switches, because a reminder names a date, and with the purge off that date would not be met. To test purges first, turn on the purge switch alone.
 
 | Purge | Emails | A run does this |
 |---|---|---|
@@ -75,6 +84,7 @@ Turning it on does not send a burst of old reminders, because the database offer
 | `holder_t1` | From 1 day to 1 hour before the date |
 | `member_marked` | Until 1 hour before the date |
 | `member_t7` | After `member_marked`, while more than 2 days remain |
+| `creditor_owed` | While the request is scheduled and more than 1 hour remains, if something is still owed |
 
 So someone gets at most one holder reminder when it comes on, and none for a date that has passed or is under an hour away. In the normal hourly run these windows change nothing.
 
@@ -169,5 +179,5 @@ The address you pass with `--email` stays in your shell history, so clear it aft
   - **What it misses:**
     - `text[]` columns: the `keywords` of `cost_control_codes`, `cost_control_sub_categories` and `cost_control_templates`.
     - A length-limited `varchar(n)` value that the 14-character `deleted_member` would push past `n`. That can only happen with an address shorter than 14 characters, in a nearly full `transactions.sub_category` (50) or a sub-category or template name (100). Such a value keeps the address, so the purge does not fail.
-  - The page promises the address is replaced in other members' free text "wherever it appears", which these two cases do not meet. See the owner actions.
+  - The public page therefore says only that the address is removed "from household records", not that it is replaced wherever it appears (decided 2026-11-06).
 - Developer mailbox copies, Railway logs, Supabase backups and `auth.audit_log_entries` are out of reach. The public page and the privacy policy disclose this.
