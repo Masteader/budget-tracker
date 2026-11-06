@@ -28,10 +28,20 @@ from models import (
     NafaqahRepaymentRequestCreate,
     NafaqahRepaymentRequestDecline,
     NafaqahReversalRequest,
+    WifeAccountAssignRequest,
+    WifeAccountCreateRequest,
 )
 from nafaqah_service import (
     AccountForbidden,
     AppUpdateRequired,
+    CodedConflict,
+    WifeAccountForbidden,
+    WifeAccountInsufficientFunds,
+    WifeAccountRequired,
+    archive_wife_account,
+    assign_wife_account,
+    create_wife_account,
+    list_wife_accounts,
     InvalidCodedRequest,
     PendingExceedsOutstanding,
     RecordNotFound,
@@ -90,6 +100,16 @@ def nafaqah_http_error(exc: NafaqahError) -> HTTPException:
     if isinstance(exc, AppUpdateRequired):
         # Owner decision 2026-11-06: a repayment without an account is never recorded.
         return HTTPException(status_code=426, detail={"message": str(exc), "code": exc.code})
+    # The wife account (migration 20261105001300, section 12).
+    if isinstance(exc, (WifeAccountRequired, CodedConflict)):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"message": str(exc), "code": exc.code})
+    if isinstance(exc, WifeAccountInsufficientFunds):
+        detail = {"message": str(exc), "code": exc.code}
+        if exc.available is not None:
+            detail["available"] = exc.available
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+    if isinstance(exc, WifeAccountForbidden):
+        return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"message": str(exc), "code": exc.code})
     if isinstance(exc, WifeMustRequest):
         return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"message": str(exc), "code": exc.code})
     if isinstance(exc, (RequestNotFound, RecordNotFound)):
@@ -237,7 +257,7 @@ async def nafaqah_record_reimbursement(
         wife_id = resolve_wife_id(ctx, payload.wife_user_id, caller)
         return record_reimbursement(
             ctx, caller, wife_id, str(payload.amount), payload.payment_method, payload.notes,
-            account_id=payload.account_id, request_key=payload.request_key,
+            account_id=payload.account_id, request_key=payload.request_key, wife_account_id=payload.wife_account_id,
         )
 
     return await _run(work, public_message="Failed to record the reimbursement.")
@@ -316,6 +336,7 @@ async def nafaqah_create_repayment_request(
     def work():
         return create_reimbursement_request(
             load_family_context(household_id), caller, str(payload.amount), payload.payment_method, payload.request_key,
+            wife_account_id=payload.wife_account_id,
         )
 
     return await _run(work, public_message="Failed to send the request.")
@@ -361,6 +382,7 @@ async def nafaqah_approve_repayment_request(
     def work():
         return approve_reimbursement_request(
             load_family_context(household_id), caller, request_id, payload.account_id, payload.request_key,
+            wife_account_id=payload.wife_account_id,
         )
 
     return await _run(work, public_message="Failed to approve the request.")
@@ -386,6 +408,97 @@ async def nafaqah_decline_repayment_request(
         return decline_reimbursement_request(load_family_context(household_id), caller, request_id, payload.reason)
 
     return await _run(work, public_message="Failed to decline the request.")
+
+
+# ─── The wife account (migration 20261105001300, section 12) ─────────────────────
+# Her husband creates, owns and assigns it; its owner archives it. She spends from it; every
+# repayment to her credits one of hers. Seen by her, its owner and her ledger's managers only.
+
+
+@router.get(
+    "/households/{household_id}/nafaqah/wife-accounts",
+    tags=["nafaqah"],
+    summary="The wife accounts the caller sees (none for anyone else): hers, the ones he owns, all for her ledger's managers.",
+)
+async def nafaqah_list_wife_accounts(
+    household_id: str,
+    request: Request,
+    wife_user_id: Optional[str] = Query(None),
+    active_only: bool = Query(False),
+    _auth: str = Depends(verify_household_access),
+):
+    validate_uuid(household_id)
+    if wife_user_id:
+        validate_uuid(wife_user_id)
+    caller = get_current_user_id(request)
+
+    def work():
+        return list_wife_accounts(_family_context(household_id), caller, wife_user_id, active_only)
+
+    return await _run(work, public_message="Failed to load the wife accounts.")
+
+
+@router.post(
+    "/households/{household_id}/nafaqah/wife-accounts",
+    tags=["nafaqah"],
+    summary="Her husband creates a wife account for one wife (his, in SAR, empty).",
+)
+async def nafaqah_create_wife_account(
+    household_id: str,
+    payload: WifeAccountCreateRequest,
+    request: Request,
+    _auth: str = Depends(verify_household_access),
+):
+    validate_uuid(household_id)
+    caller = get_current_user_id(request)
+
+    def work():
+        return create_wife_account(_family_context(household_id), caller, payload.wife_user_id, payload.name)
+
+    return await _run(work, public_message="Failed to create the wife account.")
+
+
+@router.put(
+    "/households/{household_id}/nafaqah/wife-accounts/{account_id}/assignment",
+    tags=["nafaqah"],
+    summary="Her husband assigns a wife account he owns to another wife, before it has any history.",
+)
+async def nafaqah_assign_wife_account(
+    household_id: str,
+    account_id: str,
+    payload: WifeAccountAssignRequest,
+    request: Request,
+    _auth: str = Depends(verify_household_access),
+):
+    validate_uuid(household_id)
+    validate_uuid(account_id)
+    caller = get_current_user_id(request)
+
+    def work():
+        return assign_wife_account(_family_context(household_id), caller, account_id, payload.wife_user_id)
+
+    return await _run(work, public_message="Failed to assign the wife account.")
+
+
+@router.post(
+    "/households/{household_id}/nafaqah/wife-accounts/{account_id}/archive",
+    tags=["nafaqah"],
+    summary="Its owner archives a wife account; its balance and history stay.",
+)
+async def nafaqah_archive_wife_account(
+    household_id: str,
+    account_id: str,
+    request: Request,
+    _auth: str = Depends(verify_household_access),
+):
+    validate_uuid(household_id)
+    validate_uuid(account_id)
+    caller = get_current_user_id(request)
+
+    def work():
+        return archive_wife_account(_family_context(household_id), caller, account_id)
+
+    return await _run(work, public_message="Failed to archive the wife account.")
 
 
 @router.get(

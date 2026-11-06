@@ -391,6 +391,7 @@ async def record_household_reimbursement_endpoint(
                 lambda: record_reimbursement(
                     ctx, caller, wife_id, str(payload.amount), method, payload.notes,
                     account_id=payload.account_id, request_key=payload.request_key,
+                    wife_account_id=payload.wife_account_id,
                 )
             )
         except NafaqahError as exc:

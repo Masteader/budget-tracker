@@ -228,6 +228,45 @@ REVERSAL_REFUSALS = (
 )
 
 
+# ─── The wife account (migration 20261105001300, section 12) ───────────────────
+
+class WifeAccountRequired(NafaqahError):
+    """She has no wife account that is not archived, so a repayment has nowhere to go (HTTP 409):
+    the app offers her husband to create one."""
+
+    code = "wife_account_required"
+
+
+class WifeAccountInsufficientFunds(NafaqahError):
+    """A reversal would take back more than her wife account holds now (HTTP 409); ``available``
+    is what it holds."""
+
+    code = "wife_account_insufficient_funds"
+
+    def __init__(self, message: str, available: Optional[float] = None):
+        super().__init__(message)
+        self.available = available
+
+
+class WifeAccountForbidden(NafaqahForbidden):
+    """Not her husband (to create or assign one), or not its owner (to archive it) (HTTP 403)."""
+
+    code = "wife_account_forbidden"
+
+
+class CodedConflict(NafaqahError):
+    """A state the request does not fit, with a code the app translates (HTTP 409):
+    ``wife_account_has_history`` (assigned again only before it has any)."""
+
+    def __init__(self, message: str, code: str):
+        super().__init__(message)
+        self.code = code
+
+
+WIFE_ACCOUNT = "wife"
+WIFE_ACCOUNT_NAME_MAX = 60
+
+
 # ─── Money ────────────────────────────────────────────────────────────────────
 
 def _decimal(value: Any) -> Decimal:
@@ -827,6 +866,24 @@ def can_request_reimbursement(ctx: FamilyContext, actor_id: str, wife_id: Option
     return ctx.is_wife(actor_id) and (wife_id is None or str(actor_id) == str(wife_id))
 
 
+def can_view_wife_account(ctx: FamilyContext, actor_id: Optional[str], account: Optional[Dict[str, Any]]) -> bool:
+    """Who sees a wife account (its row, balance, history and transfers; owner decision 2026-11-06,
+    mirrors ``public.nafaqah_may_see_wife_account`` and the accounts read policy): its owner, the wife
+    it is assigned to, and her ledger's managers (her husband; an admin who is not a wife when he is
+    gone). Never a co-wife (even an admin), an ordinary member, or an admin while the husband is
+    there."""
+    if not account or not actor_id or str(account.get("account_type") or "") != WIFE_ACCOUNT:
+        return False
+    if str(account.get("household_id")) != ctx.household_id:
+        return False
+    actor = str(actor_id)
+    if actor == str(account.get("owner_user_id") or ""):
+        return True
+    if actor == str(account.get("assigned_wife_id") or "") and ctx.is_member(actor):
+        return True
+    return can_manage_wife_ledgers(ctx, actor)
+
+
 # ─── Cycle ────────────────────────────────────────────────────────────────────
 
 def current_cycle_key(household_id: str) -> str:
@@ -892,6 +949,19 @@ def _map_db_error(exc: Exception) -> Exception:
     details = fields.get("details", "")
     if hint == "app_update_required":
         return AppUpdateRequired("Repayments are now paid from an account: update the app.")
+    # The wife account (section 12).
+    if hint == "wife_account_required":
+        return WifeAccountRequired("She has no wife account to receive this: her husband creates one first.")
+    if hint in ("wife_account_invalid", "not_a_wife", "invalid_name"):
+        return InvalidCodedRequest("The database rejected the request.", hint)
+    if hint == "wife_account_insufficient_funds":
+        return WifeAccountInsufficientFunds("Her wife account no longer holds the amount.", available=_detail_amount(details))
+    if hint == "wife_account_forbidden":
+        return WifeAccountForbidden("Only her husband does this.")
+    if hint == "wife_account_has_history":
+        return CodedConflict("This wife account has history: make her a new one instead.", hint)
+    if hint == "account_not_found":
+        return RecordNotFound("No such wife account in this household.", hint)
     if hint == "wife_must_request":
         return WifeMustRequest("The wife asks for a repayment; the husband or an admin records it.")
     if hint == "request_not_found":
@@ -1047,7 +1117,7 @@ def _requests_of(client, ctx: FamilyContext, wife_id: str) -> List[Dict[str, Any
     """Her requests, newest first, each with its outcome ('pending' while it has none)."""
     rows = all_rows(lambda: (
         client.table("spouse_reimbursement_requests")
-        .select("id, amount, payment_method, created_at")
+        .select("id, amount, payment_method, created_at, wife_account_id")
         .eq("household_id", ctx.household_id)
         .eq("wife_user_id", wife_id)
     ))
@@ -1065,6 +1135,8 @@ def _requests_of(client, ctx: FamilyContext, wife_id: str) -> List[Dict[str, Any
             "amount": halalas_to_sar(to_halalas(r.get("amount"))),
             "payment_method": r.get("payment_method"),
             "created_at": r.get("created_at"),
+            # The wife account she said it went into (the approval credits it unless he picks another).
+            "wife_account_id": r.get("wife_account_id"),
             "status": (o or {}).get("outcome") or "pending",
             # Only a decline carries a reason; who decided is not shown.
             "reason": (o or {}).get("reason"),
@@ -1138,6 +1210,8 @@ def get_reimbursement_ledger(ctx: FamilyContext, wife_id: str, caller_id: Option
             # when the viewer can see that account).
             "moved_balance": bool(r.get("transfer_id")),
             "account_id": account,
+            # The wife account it credited (a reversal: took back from); none before the wife account.
+            "wife_account_id": r.get("wife_account_id"),
             "reverses_id": r.get("reverses_id"),
             "reversed": reversal is not None,
             "reversed_by_id": reversal,
@@ -1192,6 +1266,128 @@ def _require_key(request_key: Optional[str]) -> None:
         raise InvalidCodedRequest("A request key is required to move money.", "request_key_required")
 
 
+# ─── The wife account (migration 20261105001300, section 12) ───────────────────
+#
+# Owner decisions 2026-11-06: her husband creates, owns and assigns to one wife an account of kind
+# 'wife'. She spends from it (her personal purchases and her advances); he funds it; every
+# repayment to her credits one of hers, and a reversal takes it back. Who sees it: her, its owner,
+# her ledger's managers. The RPCs check everything again; the checks here answer early, clearly,
+# and before anything about an account is told to someone who may not see it.
+
+_WIFE_ACCOUNT_COLUMNS = ("id, household_id, owner_user_id, assigned_wife_id, name, account_type, balance, currency, "
+                         "is_archived, is_shared_pool, created_at")
+
+
+def _wife_accounts(ctx: FamilyContext) -> List[Dict[str, Any]]:
+    """Every wife account of the household (the server's read; callers filter by who sees it)."""
+    client = get_client()
+    return all_rows(lambda: (
+        client.table("accounts").select(_WIFE_ACCOUNT_COLUMNS)
+        .eq("household_id", ctx.household_id).eq("account_type", WIFE_ACCOUNT)
+    ))
+
+
+def _wife_account_view(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": row.get("id"),
+        "name": row.get("name"),
+        "account_type": row.get("account_type") or WIFE_ACCOUNT,
+        "balance": halalas_to_sar(to_halalas(row.get("balance") or 0)),
+        "currency": row.get("currency") or "SAR",
+        "assigned_wife_id": row.get("assigned_wife_id"),
+        "owner_user_id": row.get("owner_user_id"),
+        "is_archived": bool(row.get("is_archived")),
+        "created_at": row.get("created_at"),
+    }
+
+
+def _usable_wife_account(row: Dict[str, Any], wife_id: str) -> bool:
+    return (str(row.get("assigned_wife_id") or "") == str(wife_id) and not row.get("is_archived")
+            and str(row.get("currency") or "SAR") == "SAR")
+
+
+def _require_wife_account(ctx: FamilyContext, wife_id: str, wife_account_id: Optional[str]) -> None:
+    """The wife account a repayment credits, or her request names: one of hers, not archived. She
+    has none: WifeAccountRequired (the app offers her husband to create one). Another account, or
+    none named while she has some: wife_account_invalid. The caller has checked who acts."""
+    hers = [r for r in _wife_accounts(ctx) if _usable_wife_account(r, wife_id)]
+    if not hers:
+        raise WifeAccountRequired("She has no wife account to receive this: her husband creates one first.")
+    if not wife_account_id or str(wife_account_id) not in {str(r.get("id")) for r in hers}:
+        raise InvalidCodedRequest("Pick one of her wife accounts.", "wife_account_invalid")
+
+
+def list_wife_accounts(ctx: FamilyContext, caller_id: str, wife_id: Optional[str] = None,
+                       active_only: bool = False) -> Dict[str, Any]:
+    """The wife accounts the caller sees (an empty list for anyone who sees none: nothing tells
+    them one exists), optionally of one wife and only those that can still be used."""
+    _require_family(ctx)
+    _require_member(ctx, caller_id)
+    rows = [r for r in _wife_accounts(ctx) if can_view_wife_account(ctx, caller_id, r)]
+    if wife_id:
+        rows = [r for r in rows if str(r.get("assigned_wife_id") or "") == str(wife_id)]
+    if active_only:
+        rows = [r for r in rows if not r.get("is_archived")]
+    rows.sort(key=lambda r: (bool(r.get("is_archived")), str(r.get("created_at") or ""), str(r.get("id"))))
+    return {"accounts": [_wife_account_view(r) for r in rows]}
+
+
+def _visible_wife_account(ctx: FamilyContext, caller_id: str, account_id: str) -> Dict[str, Any]:
+    row = next((r for r in _wife_accounts(ctx) if str(r.get("id")) == str(account_id)), None)
+    if not can_view_wife_account(ctx, caller_id, row):
+        raise RecordNotFound("No such wife account in this household.", "account_not_found")
+    return row
+
+
+def create_wife_account(ctx: FamilyContext, actor_id: str, wife_id: Optional[str], name: Optional[str]) -> Dict[str, Any]:
+    """Her husband makes her a wife account: his, in SAR, empty, assigned to her."""
+    _require_family(ctx)
+    _require_member(ctx, actor_id)
+    if not ctx.ledger_husband_id or str(actor_id) != ctx.ledger_husband_id:
+        raise WifeAccountForbidden("Only her husband creates a wife account.")
+    if not wife_id or not ctx.is_wife(wife_id):
+        raise InvalidCodedRequest("A wife account is for a wife of this household.", "not_a_wife")
+    clean = (name or "").strip()
+    if not clean or len(clean) > WIFE_ACCOUNT_NAME_MAX:
+        raise InvalidCodedRequest("A name of 1 to 60 characters.", "invalid_name")
+    data = _rpc_mapped("create_wife_account", {
+        "p_household_id": ctx.household_id, "p_wife_user_id": str(wife_id), "p_name": clean, "p_actor_user_id": actor_id,
+    })
+    return _wife_account_view(data if isinstance(data, dict) else {})
+
+
+def assign_wife_account(ctx: FamilyContext, actor_id: str, account_id: str, wife_id: Optional[str]) -> Dict[str, Any]:
+    """Her husband corrects whom a wife account he owns is assigned to, before it has history."""
+    _require_family(ctx)
+    _require_member(ctx, actor_id)
+    row = _visible_wife_account(ctx, actor_id, account_id)
+    if not ctx.ledger_husband_id or str(actor_id) != ctx.ledger_husband_id or str(actor_id) != str(row.get("owner_user_id")):
+        raise WifeAccountForbidden("Her husband assigns the wife accounts he owns.")
+    if not wife_id or not ctx.is_wife(wife_id):
+        raise InvalidCodedRequest("A wife account is for a wife of this household.", "not_a_wife")
+    data = _rpc_mapped("assign_wife_account", {
+        "p_household_id": ctx.household_id, "p_account_id": account_id, "p_wife_user_id": str(wife_id),
+        "p_actor_user_id": actor_id,
+    })
+    data = data if isinstance(data, dict) else {}
+    return {"status": "success", "id": account_id, "assigned_wife_id": data.get("assigned_wife_id", wife_id),
+            "changed": bool(data.get("changed", True))}
+
+
+def archive_wife_account(ctx: FamilyContext, actor_id: str, account_id: str) -> Dict[str, Any]:
+    """Its owner archives a wife account: nobody spends from, credits or funds it any more."""
+    _require_family(ctx)
+    _require_member(ctx, actor_id)
+    row = _visible_wife_account(ctx, actor_id, account_id)
+    if str(actor_id) != str(row.get("owner_user_id")):
+        raise WifeAccountForbidden("A wife account is archived by its owner.")
+    data = _rpc_mapped("archive_wife_account", {
+        "p_household_id": ctx.household_id, "p_account_id": account_id, "p_actor_user_id": actor_id,
+    })
+    data = data if isinstance(data, dict) else {}
+    return {"status": "success", "id": account_id, "is_archived": True, "changed": bool(data.get("changed", True))}
+
+
 def _repayment_answer(ctx: FamilyContext, wife_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
     """What the app needs after a repayment, an approval or a reversal (a replay answers with what
     the first call stored)."""
@@ -1212,6 +1408,8 @@ def _repayment_answer(ctx: FamilyContext, wife_id: str, data: Dict[str, Any]) ->
         "replayed": bool(data.get("replayed")),
         "account_id": str(data["account_id"]) if data.get("account_id") else None,
         "balance_moved": bool(data.get("account_id")),
+        # The wife account it credited (a reversal: took back from), as the database answered.
+        "wife_account_id": str(data["wife_account_id"]) if data.get("wife_account_id") else None,
     }
 
 
@@ -1224,11 +1422,13 @@ def record_reimbursement(
     notes: Optional[str] = None,
     account_id: Optional[str] = None,
     request_key: Optional[str] = None,
+    wife_account_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    The husband (or an admin) records a partial or full repayment, paid from ``account_id``: the
-    database debits it by the amount as one transfer to no account (her account is never credited)
-    and refuses an overpayment, an account he may not use and one that does not hold the amount.
+    The husband (or an admin) records a partial or full repayment, paid from ``account_id`` into
+    her wife account ``wife_account_id`` (one of hers, not archived): the database moves the amount
+    from one to the other as one transfer and refuses an overpayment, an account he may not use and
+    one that does not hold the amount. She has no wife account: WifeAccountRequired.
     ``request_key`` is the client's idempotency key: the same key again is answered as the first
     time. Without an account the call comes from an app that predates this: AppUpdateRequired.
     """
@@ -1244,6 +1444,7 @@ def record_reimbursement(
     if method not in PAYMENT_METHODS:
         raise InvalidNafaqahRequest(f"Unsupported payment method {payment_method!r}.")
     _require_key(request_key)
+    _require_wife_account(ctx, wife_id, wife_account_id)
 
     data = _rpc_mapped("record_spouse_reimbursement", {
         "p_household_id": ctx.household_id,
@@ -1255,6 +1456,7 @@ def record_reimbursement(
         "p_actor_user_id": actor_id,
         "p_account_id": account_id,
         "p_request_key": request_key,
+        "p_wife_account_id": wife_account_id,
     })
     data = data if isinstance(data, dict) else {}
     if "amount" not in data:
@@ -1266,6 +1468,8 @@ def record_reimbursement(
                 "outstanding_before": halalas_to_sar(to_halalas(after) + to_halalas(value))}
     if "account_id" not in data:
         data = {**data, "account_id": account_id}
+    if "wife_account_id" not in data:
+        data = {**data, "wife_account_id": wife_account_id}
     return _repayment_answer(ctx, wife_id, data)
 
 
@@ -1285,10 +1489,12 @@ def _request_row(ctx: FamilyContext, request_id: str) -> Dict[str, Any]:
 
 
 def create_reimbursement_request(
-    ctx: FamilyContext, actor_id: str, amount: Any, payment_method: str, request_key: str
+    ctx: FamilyContext, actor_id: str, amount: Any, payment_method: str, request_key: str,
+    wife_account_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """She marks "I received X": a pending request. Nothing moves and nothing owed changes until
-    the husband or an admin approves it. Pending requests together never exceed what is owed."""
+    """She marks "I received X" into one of her wife accounts: a pending request. Nothing moves and
+    nothing owed changes until the husband or an admin approves it. Pending requests together never
+    exceed what is owed."""
     _require_family(ctx)
     _require_member(ctx, actor_id)
     if not can_request_reimbursement(ctx, actor_id):
@@ -1298,12 +1504,14 @@ def create_reimbursement_request(
     if method not in PAYMENT_METHODS:
         raise InvalidNafaqahRequest(f"Unsupported payment method {payment_method!r}.")
     _require_key(request_key)
+    _require_wife_account(ctx, str(actor_id), wife_account_id)
     data = _rpc_mapped("request_spouse_reimbursement", {
         "p_household_id": ctx.household_id,
         "p_amount": format(value, "f"),
         "p_payment_method": method,
         "p_request_key": request_key,
         "p_actor_user_id": actor_id,
+        "p_wife_account_id": wife_account_id,
     })
     data = data if isinstance(data, dict) else {}
     return {
@@ -1313,6 +1521,7 @@ def create_reimbursement_request(
         "replayed": bool(data.get("replayed")),
         "amount": halalas_to_sar(to_halalas(data.get("amount", value))),
         "payment_method": data.get("payment_method") or method,
+        "wife_account_id": data.get("wife_account_id") or wife_account_id,
         "outstanding": halalas_to_sar(to_halalas(data.get("outstanding"))),
     }
 
@@ -1352,11 +1561,13 @@ def decline_reimbursement_request(
 
 
 def approve_reimbursement_request(
-    ctx: FamilyContext, actor_id: str, request_id: str, account_id: Optional[str], request_key: Optional[str]
+    ctx: FamilyContext, actor_id: str, request_id: str, account_id: Optional[str], request_key: Optional[str],
+    wife_account_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """The husband or an admin approves her request from ``account_id``: the normal repayment of
-    exactly the requested amount (debit, idempotent, overpayment refused), linked to the request.
-    The database re-checks what is owed at that moment (RequestExceedsOutstanding)."""
+    exactly the requested amount (idempotent, overpayment refused), linked to the request, into the
+    wife account she named, or ``wife_account_id``, another of hers he picks (never an account
+    that is not hers). The database re-checks what is owed at that moment (RequestExceedsOutstanding)."""
     _require_family(ctx)
     row = _request_row(ctx, request_id)
     wife_id = str(row.get("wife_user_id"))
@@ -1366,12 +1577,15 @@ def approve_reimbursement_request(
     if not account_id:
         raise InvalidCodedRequest("An approval is paid from an account.", "account_required")
     _require_key(request_key)
+    if wife_account_id:
+        _require_wife_account(ctx, wife_id, wife_account_id)
     data = _rpc_mapped("approve_spouse_reimbursement_request", {
         "p_household_id": ctx.household_id,
         "p_request_id": request_id,
         "p_account_id": account_id,
         "p_request_key": request_key,
         "p_actor_user_id": actor_id,
+        "p_wife_account_id": wife_account_id,
     })
     data = data if isinstance(data, dict) else {}
     data.setdefault("request_id", request_id)

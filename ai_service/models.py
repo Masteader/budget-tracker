@@ -189,6 +189,7 @@ class HouseholdReimbursementRequest(BaseModel):
     # (app_update_required) instead of a validation error.
     account_id: Optional[str] = Field(default=None, description="Account the husband pays from (required in a family)")
     request_key: Optional[str] = Field(default=None, description="Client idempotency key (UUID), the same for every retry of one tap")
+    wife_account_id: Optional[str] = Field(default=None, description="Her wife account the repayment credits (family)")
 
     @field_validator("household_id")
     @classmethod
@@ -201,7 +202,7 @@ class HouseholdReimbursementRequest(BaseModel):
         # 422 for sub-halala input (FABLE2-API-04), like the Nafaqah repayment route.
         return _two_decimals(v)
 
-    @field_validator("account_id", "request_key")
+    @field_validator("account_id", "request_key", "wife_account_id")
     @classmethod
     def validate_optional_ids(cls, v: Optional[str]) -> Optional[str]:
         return None if v is None else _required_uuid(v)
@@ -227,6 +228,8 @@ class NafaqahReimbursementCreateRequest(BaseModel):
     # HTTP 426 (app_update_required) instead of a validation error.
     account_id: Optional[str] = Field(default=None, description="Account the repayment is paid from (required)")
     request_key: Optional[str] = Field(default=None, description="Client idempotency key (UUID), required")
+    # Section 12: her wife account the repayment credits (one of hers, not archived).
+    wife_account_id: Optional[str] = Field(default=None, description="Her wife account the repayment credits (required)")
 
     @field_validator("amount")
     @classmethod
@@ -238,7 +241,7 @@ class NafaqahReimbursementCreateRequest(BaseModel):
     def validate_wife_uuid(cls, v: Optional[str]) -> Optional[str]:
         return _uuid_validator(v)
 
-    @field_validator("account_id", "request_key")
+    @field_validator("account_id", "request_key", "wife_account_id")
     @classmethod
     def validate_optional_ids(cls, v: Optional[str]) -> Optional[str]:
         return None if v is None else _required_uuid(v)
@@ -260,6 +263,8 @@ class NafaqahRepaymentRequestCreate(BaseModel):
     amount: PositiveMoney = Field(..., description="What she received, in SAR")
     payment_method: str = Field(default="cash", pattern=r"^(stc_pay|urpay|bank_transfer|iban|cash|other)$")
     request_key: str = Field(..., description="Client idempotency key (UUID), the same for every retry of one tap")
+    # Section 12: the wife account she received it into (one of hers).
+    wife_account_id: Optional[str] = Field(default=None, description="Her wife account it went into (required)")
 
     @field_validator("amount")
     @classmethod
@@ -271,17 +276,54 @@ class NafaqahRepaymentRequestCreate(BaseModel):
     def validate_request_key(cls, v: str) -> str:
         return _required_uuid(v)
 
+    @field_validator("wife_account_id")
+    @classmethod
+    def validate_wife_account(cls, v: Optional[str]) -> Optional[str]:
+        return None if v is None else _required_uuid(v)
+
 
 class NafaqahRepaymentRequestApprove(BaseModel):
-    """Approving her request: the account the requested amount is paid from."""
+    """Approving her request: the account the requested amount is paid from, and optionally
+    another of her wife accounts than the one she named."""
     model_config = ConfigDict(extra="forbid")
 
     account_id: str = Field(..., description="Account the husband (or an admin) pays from")
     request_key: str = Field(..., description="Client idempotency key (UUID)")
+    wife_account_id: Optional[str] = Field(default=None, description="Another of her wife accounts to credit")
 
     @field_validator("account_id", "request_key")
     @classmethod
     def validate_ids(cls, v: str) -> str:
+        return _required_uuid(v)
+
+    @field_validator("wife_account_id")
+    @classmethod
+    def validate_wife_account(cls, v: Optional[str]) -> Optional[str]:
+        return None if v is None else _required_uuid(v)
+
+
+class WifeAccountCreateRequest(BaseModel):
+    """Her husband makes her a wife account (section 12 of 20261105001300)."""
+    model_config = ConfigDict(extra="forbid")
+
+    wife_user_id: str = Field(..., description="The wife it is assigned to")
+    name: str = Field(..., max_length=200, description="Its name, 1 to 60 characters once trimmed")
+
+    @field_validator("wife_user_id")
+    @classmethod
+    def validate_wife(cls, v: str) -> str:
+        return _required_uuid(v)
+
+
+class WifeAccountAssignRequest(BaseModel):
+    """Her husband corrects whom a wife account is assigned to, before it has history."""
+    model_config = ConfigDict(extra="forbid")
+
+    wife_user_id: str = Field(..., description="The wife it is assigned to")
+
+    @field_validator("wife_user_id")
+    @classmethod
+    def validate_wife(cls, v: str) -> str:
         return _required_uuid(v)
 
 
