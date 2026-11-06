@@ -347,3 +347,14 @@ def test_r3_01_the_decline_reason_is_not_in_a_co_wifes_answer(household):
     assert resp.status_code == 200
     assert Q_DECLINED not in resp.text and "Not received yet" not in resp.text
     assert {q["id"] for q in resp.json()["requests"]} == {COWIFE_REQUEST}
+
+
+def test_r3_01_with_no_wife_left_the_husband_is_owed_nothing_not_hidden(family):
+    """No wife left: nothing is owed, and the husband's settlement says 0, not 'not yours to see'."""
+    family.tables["household_memberships"][:] = [m for m in family.tables["household_memberships"] if m["user_id"] != WIFE]
+    v1 = client.get(f"/households/{HH}/settlement", headers=bearer(HUSBAND)).json()
+    v2 = client.get(f"/households/{HH}/settlement-v2", headers=bearer(HUSBAND)).json()
+    assert v1["nafaqah"] == {"gross_advanced": 0.0, "reimbursed": 0.0, "outstanding": 0.0}
+    assert v2["family_summary"]["wife_reimbursement_owed"] == 0.0
+    member = client.get(f"/households/{HH}/settlement-v2", headers=bearer(CHILD)).json()
+    assert member["family_summary"]["wife_reimbursement_owed"] is None

@@ -15,6 +15,7 @@ from salary_cycle import get_salary_cycle_dates
 from nafaqah_service import (
     FamilyContext,
     all_rows,
+    can_manage_wife_ledgers,
     can_view_wife_ledger,
     get_reimbursement_ledger,
     load_family_context,
@@ -342,9 +343,12 @@ def _nafaqah_balance(ctx: FamilyContext, wife_ids: List[str]) -> Dict[str, Any]:
     return {"gross_advanced": _to_sar(gross), "reimbursed": _to_sar(paid), "outstanding": _to_sar(outstanding)}
 
 
-def _visible_wives(ctx: FamilyContext, caller_user_id: Optional[str]) -> List[str]:
+def _visible_wives(ctx: FamilyContext, caller_user_id: Optional[str]) -> Optional[List[str]]:
     """The wives whose Nafaqah ledger the caller reads (review R3-01): a wife herself, her husband
-    (an admin who is not a wife when he is gone) every wife; anyone else none."""
+    (an admin who is not a wife when he is gone) every wife (none when no wife is left: nothing is
+    owed). None for anyone else: no Nafaqah figure is theirs to see."""
+    if not ctx.is_wife(caller_user_id) and not can_manage_wife_ledgers(ctx, caller_user_id):
+        return None
     return [w["id"] for w in ctx.wives if can_view_wife_ledger(ctx, caller_user_id, w["id"])]
 
 
@@ -474,7 +478,7 @@ def calculate_partner_settlement(
         # Nafaqah: husband carries 100% of shared family expenses; no spousal 50/50 split.
         # The debt is the ledger balance, so recorded repayments reduce it.
         wife_ids = _visible_wives(ctx, caller_user_id)
-        nafaqah_balance = _nafaqah_balance(ctx, wife_ids) if wife_ids else None
+        nafaqah_balance = _nafaqah_balance(ctx, wife_ids) if wife_ids is not None else None
         if nafaqah_balance is None:
             # No wife's ledger is the caller's to read (review R3-01): no Nafaqah total at all.
             fair_share_me, fair_share_partner = round(total_shared, 2), 0.0
@@ -868,7 +872,7 @@ def calculate_settlement_v2(
     family_summary = calculate_family_nafaqah(txs, husband_id=husband_id, wife_id=wife_id)
     if has_spouse:
         wife_ids = [w["id"] for w in ctx.wives] if caller_user_id is None else _visible_wives(ctx, caller_user_id)
-        if wife_ids:
+        if wife_ids is not None:
             balance = _nafaqah_balance(ctx, wife_ids)
             family_summary.update({
                 "wife_reimbursement_owed": balance["outstanding"],
