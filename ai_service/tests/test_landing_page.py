@@ -227,8 +227,127 @@ def test_served_web_bundle_posts_vip_signups_to_same_origin_endpoint():
     assert "vip_early_access" in bundle
     assert "company_website" in bundle  # honeypot
     assert "fmscoinfo@fmsco.com.sa" in bundle
-    # Built with VITE_API_BASE_URL= (same origin), so no hard-coded production host.
+    # Built with VITE_API_BASE_URL= (same origin), so no hard-coded production host. The minifier
+    # emits the default host on its own (E=`https://budget.fmsco.com.sa`), so look for the host
+    # itself, in every served file: a plain `npm run build` bundle must fail here.
     assert "budget.fmsco.com.sa/public/inquiries" not in bundle
+    hosts = [name for name, text in _static_texts().items() if "https://budget.fmsco.com.sa" in text]
+    assert hosts == [], f"built without VITE_API_BASE_URL= (see README): {hosts}"
+
+
+# ── The served build is refreshed with the web source (static/ is not stale) ───
+
+_TRANSLATIONS = WEB_APP / "src" / "i18n" / "translations.ts"
+_JS_ESCAPES = {"n": "\n", "r": "\r", "t": "\t", "b": "\b", "f": "\f", "v": "\v", "0": "\0"}
+
+
+def _ts_string_values(source: str) -> list[str]:
+    """The decoded value of every string literal in a TypeScript source, comments skipped.
+
+    A small lexer, not a regex: it follows quotes, escapes and comments, so an apostrophe inside a
+    double-quoted string or a quote inside a comment cannot shift it. A template literal with
+    `${…}` has no single value, so it raises rather than guess.
+    """
+    values: list[str] = []
+    i, n = 0, len(source)
+    while i < n:
+        if source.startswith("//", i):
+            i = source.find("\n", i)
+            i = n if i < 0 else i
+        elif source.startswith("/*", i):
+            end = source.find("*/", i + 2)
+            if end < 0:
+                raise ValueError("unterminated comment")
+            i = end + 2
+        elif source[i] in "'\"`":
+            quote, j, out = source[i], i + 1, []
+            while True:
+                if j >= n:
+                    raise ValueError(f"unterminated string at {i}")
+                c = source[j]
+                if c == quote:
+                    break
+                if c == "\\":
+                    nxt = source[j + 1]
+                    if nxt == "u" and source[j + 2] == "{":
+                        end = source.index("}", j)
+                        out.append(chr(int(source[j + 3 : end], 16)))
+                        j = end + 1
+                    elif nxt == "u":
+                        out.append(chr(int(source[j + 2 : j + 6], 16)))
+                        j += 6
+                    elif nxt == "x":
+                        out.append(chr(int(source[j + 2 : j + 4], 16)))
+                        j += 4
+                    elif nxt in "\r\n":  # line continuation
+                        j += 3 if source.startswith("\r\n", j + 1) else 2
+                    else:
+                        out.append(_JS_ESCAPES.get(nxt, nxt))
+                        j += 2
+                    continue
+                if quote == "`" and source.startswith("${", j):
+                    raise ValueError(f"template literal with ${{…}} at {i}: extend the extractor")
+                if quote != "`" and c in "\r\n":
+                    raise ValueError(f"line break in a string at {i}")
+                out.append(c)
+                j += 1
+            values.append("".join(out))
+            i = j + 1
+        else:
+            i += 1
+    return values
+
+
+def _translation_values() -> list[str]:
+    source = _TRANSLATIONS.read_text(encoding="utf-8")
+    start = source.index("export const translations")
+    return _ts_string_values(source[start:])
+
+
+def _js_literals(value: str) -> set[str]:
+    """The ways a minifier can write `value` as a JS string literal, quotes included."""
+    forms = set()
+    for quote in "\"'`":
+        body = value.replace("\\", "\\\\").replace(quote, "\\" + quote)
+        if quote == "`":
+            body = body.replace("${", "\\${")
+            forms.add(quote + body + quote)  # a template literal may keep a real line break
+        forms.add(quote + body.replace("\r", "\\r").replace("\n", "\\n") + quote)
+    return forms
+
+
+def test_the_translation_extractor_reads_every_kind_of_literal():
+    source = r"""
+    /* a 'quoted' comment */ export const translations = {
+      a: 'plain', // an "inline" comment's quote
+      b: "Don't stop",
+      c: 'it\'s',
+      d: `back ${'tick'.length ? '' : ''}`.length ? 'x' : 'y',
+    };"""
+    with pytest.raises(ValueError, match="template literal"):
+        _ts_string_values(source)
+    source = source.replace("`back ${'tick'.length ? '' : ''}`", "`back`")
+    assert _ts_string_values(source) == ["plain", "Don't stop", "it's", "back", "x", "y"]
+    assert _ts_string_values(r"""x = 'a\nb\u0041\u{1F600}\x41\\';""") == ["a\nbA\U0001F600A\\"]
+
+
+def test_the_translation_extractor_finds_both_dictionaries():
+    values = _translation_values()
+    assert len(values) > 200, len(values)
+    for known in ("الأسئلة", "FAQ", "Don't have an account? Sign up now", "Wife's Personal Allowance",
+                  _HOUSEHOLD_BUDGET_SENTENCE):
+        assert known in values, known
+    assert "ar" not in values  # the `Language` type above the dictionary is not read
+
+
+def test_served_bundle_carries_every_translation_string():
+    """A copy change in translations.ts must ship with a refreshed static/ (README: refresh step)."""
+    bundle = _served_bundle()
+    missing = [v for v in dict.fromkeys(_translation_values()) if not any(f in bundle for f in _js_literals(v))]
+    assert not missing, (
+        f"ai_service/static/ is stale: {len(missing)} translations.ts strings are not in the served "
+        f"bundle, e.g. {missing[:3]}. Rebuild with `VITE_API_BASE_URL= npm run build` and copy as in README.md."
+    )
 
 
 # ── Public copy: Nafaqah family mode, privacy and technical claims ─────────────

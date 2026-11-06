@@ -260,6 +260,11 @@ rm -rf ../ai_service/static/assets && cp -r dist/assets ../ai_service/static/
 cp dist/index.html dist/favicon.svg ../ai_service/static/
 ```
 
+Commit the refreshed `ai_service/static/` with the `web_app/` change. `ai_service/tests/test_landing_page.py`
+fails when any string in `web_app/src/i18n/translations.ts` is missing from the served bundle (a copy
+change shipped without a refresh), or when the bundle names `https://budget.fmsco.com.sa` (built
+without `VITE_API_BASE_URL=`).
+
 ### Web App (`web_app/.env`, Vite)
 
 | Variable | Description |
