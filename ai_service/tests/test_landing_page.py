@@ -125,18 +125,64 @@ def test_served_build_matches_the_web_app_page_head():
 
 
 # The one use of the old Arabic name that stays: in the portal's Budgets view it means "household
-# budget", not the brand. flutter_app/test/screens/brand_identity_test.dart pins it to that file.
-_HOUSEHOLD_BUDGET_PHRASE = "ضمن ميزانية الأسرة"
+# budget", not the brand. It is the ar `portal.subAllocationsDesc` value in
+# web_app/src/i18n/translations.ts (flutter_app/test/screens/brand_identity_test.dart pins it there),
+# so the served build may carry this sentence exactly once, in the app bundle, and nowhere else.
+_HOUSEHOLD_BUDGET_SENTENCE = "توزيع المخصصات المحددة للأبناء والمصاريف المستقلة ضمن ميزانية الأسرة"
 
 
-@pytest.mark.parametrize("path", _static_text_files(), ids=lambda p: p.relative_to(STATIC).as_posix())
-def test_served_build_has_neither_the_old_nor_the_withdrawn_name(path):
+def _app_bundle_name() -> str:
+    """The app script static/index.html loads, relative to static/ (e.g. assets/index-AbC123.js)."""
+    scripts = re.findall(r'src="/(assets/index-[^"]+\.js)"', (STATIC / "index.html").read_text(encoding="utf-8"))
+    assert len(scripts) == 1, scripts
+    return scripts[0]
+
+
+def _old_or_withdrawn_name_offenders(files: dict[str, str], app_bundle: str) -> list[str]:
+    """Served files (by path under static/) naming the app by an old or withdrawn name.
+
+    The household-budget sentence is allowed once, in the app bundle only; the bundle is an
+    offender if it does not carry that sentence exactly once.
+    """
     from test_qawam_money_branding import _has_old_name, _has_withdrawn_name
 
-    text = path.read_text(encoding="utf-8")
-    assert text.count(_HOUSEHOLD_BUDGET_PHRASE) <= 1, path.name
-    assert not _has_old_name(text.replace(_HOUSEHOLD_BUDGET_PHRASE, "")), path.name
-    assert not _has_withdrawn_name(text), path.name
+    offenders = []
+    for name, text in files.items():
+        if name == app_bundle:
+            if text.count(_HOUSEHOLD_BUDGET_SENTENCE) != 1:
+                offenders.append(name)
+                continue
+            text = text.replace(_HOUSEHOLD_BUDGET_SENTENCE, "", 1)
+        if _has_old_name(text) or _has_withdrawn_name(text):
+            offenders.append(name)
+    return offenders
+
+
+def _static_texts() -> dict[str, str]:
+    return {p.relative_to(STATIC).as_posix(): p.read_text(encoding="utf-8") for p in _static_text_files()}
+
+
+def test_served_build_has_neither_the_old_nor_the_withdrawn_name():
+    files = _static_texts()
+    assert len(files) >= 4, sorted(files)  # index.html, favicon.svg, the CSS and the JS chunks
+    assert _old_or_withdrawn_name_offenders(files, _app_bundle_name()) == []
+
+
+def test_the_household_budget_allowance_is_one_sentence_in_the_app_bundle():
+    files = _static_texts()
+    bundle = _app_bundle_name()
+
+    def offenders_with(name: str, text: str) -> list[str]:
+        return _old_or_withdrawn_name_offenders({**files, name: text}, bundle)
+
+    # A second, unrelated use is caught, in the app bundle or in any other served file.
+    assert offenders_with(bundle, files[bundle] + 'x="ميزانية الأسرة"') == [bundle]
+    assert offenders_with(bundle, files[bundle] + f'x="{_HOUSEHOLD_BUDGET_SENTENCE}"') == [bundle]
+    assert offenders_with("index.html", files["index.html"] + _HOUSEHOLD_BUDGET_SENTENCE) == ["index.html"]
+    # Shorter fragments of the sentence are not allowed on their own.
+    assert offenders_with("index.html", files["index.html"] + "ضمن ميزانية الأسرة") == ["index.html"]
+    # The allowance is the sentence, not the bundle: without it the bundle no longer passes.
+    assert offenders_with(bundle, files[bundle].replace(_HOUSEHOLD_BUDGET_SENTENCE, "")) == [bundle]
 
 
 def test_served_assets_are_all_referenced_by_the_build():

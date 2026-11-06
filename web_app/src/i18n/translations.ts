@@ -168,12 +168,31 @@ export interface TranslationDictionary {
     searchPlaceholder: string;
     allCategories: string;
     budgetsTitle: string;
+    budgetsSubtitle: string;
     budgetLimit: string;
     spent: string;
     remaining: string;
     wifeAllowanceTitle: string;
     wifeAllowanceSubtitle: string;
+    wifeAllowanceDesc: string;
+    approvedCategoriesTitle: string;
+    /** Default budget category names, by category code (OPEX-GROCERY → grocery). */
+    budgetCategories: {
+      grocery: string;
+      utilities: string;
+      dining: string;
+      fuel: string;
+      health: string;
+      shopping: string;
+      education: string;
+      misc: string;
+    };
     subAllocationsTitle: string;
+    subAllocationsDesc: string;
+    subAllocationsChildren: string;
+    subAllocationsDriver: string;
+    subAllocationsHome: string;
+    subAllocationsMonthly: string;
     noData: string;
     activePlans: string;
     monthlyDue: string;
@@ -413,12 +432,31 @@ export const translations: Record<Language, TranslationDictionary> = {
       searchPlaceholder: 'بحث في العمليات...',
       allCategories: 'جميع التصنيفات',
       budgetsTitle: 'مخصصات الميزانية الشهرية',
+      budgetsSubtitle: 'مخصصات الميزانية الشهرية وتوزيع البنود للأسرة وفق دورة الراتب الحالية',
       budgetLimit: 'المخصص المعتمد',
       spent: 'المصروف',
       remaining: 'المتبقي',
       wifeAllowanceTitle: 'مصروف الزوجة الشخصي',
       wifeAllowanceSubtitle: 'مخصص دوري محمي وفق أحكام النفقة الشرعية',
+      wifeAllowanceDesc:
+        'مخصص شهري خالص للزوجة يخصم منه ما تشتريه لنفسها (أحكام النفقة الشرعية)، ولا يعتبر ديناً ولا تشترك في مصاريف البيت المشتركة.',
+      approvedCategoriesTitle: 'بنود الميزانية المعتمدة',
+      budgetCategories: {
+        grocery: 'البقالة والتموين',
+        utilities: 'الفواتير والخدمات',
+        dining: 'المطاعم والكافيهات',
+        fuel: 'الوقود وصيانة السيارة',
+        health: 'الصحة والصيدلية',
+        shopping: 'التسوق والملابس',
+        education: 'التعليم ومصاريف المدارس',
+        misc: 'المصاريف العامة والطوارئ',
+      },
       subAllocationsTitle: 'التخصيصات الفرعية للأبناء والبنود',
+      subAllocationsDesc: 'توزيع المخصصات المحددة للأبناء والمصاريف المستقلة ضمن ميزانية الأسرة',
+      subAllocationsChildren: 'مصاريف الأبناء والمدارس',
+      subAllocationsDriver: 'السائق والوقود المشترك',
+      subAllocationsHome: 'طوارئ وصيانة المنزل',
+      subAllocationsMonthly: 'مخصص دوري معتمد',
       noData: 'لا توجد بيانات مسجلة حتى الآن.',
       activePlans: 'خطة نشطة',
       monthlyDue: 'القسط الشهري',
@@ -653,12 +691,31 @@ export const translations: Record<Language, TranslationDictionary> = {
       searchPlaceholder: 'Search transactions...',
       allCategories: 'All Categories',
       budgetsTitle: 'Monthly Budget Allocations',
+      budgetsSubtitle: 'Monthly budget category limits and sub-allocations for the current salary cycle',
       budgetLimit: 'Approved Budget',
       spent: 'Spent',
       remaining: 'Remaining',
       wifeAllowanceTitle: "Wife's Personal Allowance",
       wifeAllowanceSubtitle: 'Protected periodic allowance adhering to family expense rules',
+      wifeAllowanceDesc:
+        'A protected monthly personal allowance for the wife. Personal expenses are deducted from this allowance according to family expense rules.',
+      approvedCategoriesTitle: 'Approved Budget Categories',
+      budgetCategories: {
+        grocery: 'Groceries & Staples',
+        utilities: 'Bills & Utilities',
+        dining: 'Dining & Cafes',
+        fuel: 'Fuel & Transport',
+        health: 'Health & Pharmacy',
+        shopping: 'Shopping & Fashion',
+        education: 'Education & School',
+        misc: 'Miscellaneous',
+      },
       subAllocationsTitle: 'Sub-allocations for Dependents & Categories',
+      subAllocationsDesc: 'Sub-allocations defined for children and independent line-items within the household budget',
+      subAllocationsChildren: 'Children & School',
+      subAllocationsDriver: 'Driver & Fuel',
+      subAllocationsHome: 'Home Repairs & Emergencies',
+      subAllocationsMonthly: 'Monthly approved',
       noData: 'No records found yet.',
       activePlans: 'active plan(s)',
       monthlyDue: 'Monthly due',

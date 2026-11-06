@@ -159,6 +159,25 @@ bool _firstStrongIsRtl(String line) {
   return match != null && !RegExp('[A-Za-z]').hasMatch(match.group(0)!);
 }
 
+/// The one web use of the old Arabic name: in the portal Budgets view it means
+/// "household budget", not the brand. ai_service/tests/test_landing_page.py
+/// allows the same sentence, once, in the served bundle: keep the two in step.
+const _householdBudgetEntry =
+    "subAllocationsDesc: 'توزيع المخصصات المحددة للأبناء والمصاريف المستقلة ضمن ميزانية الأسرة',";
+
+const _translationsPath = 'src/i18n/translations.ts';
+
+/// Web files (by path under web_app/) that carry the old Arabic name outside that one entry,
+/// or translations.ts if the entry is not there exactly once.
+List<String> _householdBudgetOffenders(Map<String, String> sources) => [
+      for (final MapEntry(key: name, value: text) in sources.entries)
+        if (name == _translationsPath
+            ? _householdBudgetEntry.allMatches(text).length != 1 ||
+                text.replaceFirst(_householdBudgetEntry, '').contains(formerArabicAppName)
+            : text.contains(formerArabicAppName))
+          name,
+    ];
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -388,11 +407,38 @@ void main() {
     });
 
     test('the Arabic old name survives only where it means "household budget"', () {
-      final uses = [
-        for (final f in webFiles)
-          if (f.readAsStringSync().contains(formerArabicAppName)) f.path.replaceAll(r'\', '/').split('/').last,
-      ];
-      expect(uses, ['BudgetsView.tsx']);
+      final sources = {
+        for (final f in webFiles) f.path.replaceAll(r'\', '/').replaceFirst('../web_app/', ''): f.readAsStringSync(),
+      };
+      expect(_householdBudgetOffenders(sources), isEmpty);
+    });
+
+    test('the household-budget allowance is one phrase in one place', () {
+      final translations = File('../web_app/src/i18n/translations.ts').readAsStringSync();
+      expect(_householdBudgetOffenders({_translationsPath: translations}), isEmpty);
+      // A second, unrelated use is caught: in the same file, the same entry or another file.
+      expect(
+        _householdBudgetOffenders({_translationsPath: "$translations\n  tagline: '$formerArabicAppName',\n"}),
+        [_translationsPath],
+      );
+      expect(
+        _householdBudgetOffenders({
+          _translationsPath: translations.replaceFirst(
+            _householdBudgetEntry,
+            "subAllocationsDesc: 'توزيع ضمن ميزانية الأسرة ضمن ميزانية الأسرة',",
+          ),
+        }),
+        [_translationsPath],
+      );
+      expect(
+        _householdBudgetOffenders({_translationsPath: translations, 'src/components/portal/BudgetsView.tsx': "'ضمن $formerArabicAppName'"}),
+        ['src/components/portal/BudgetsView.tsx'],
+      );
+      // And the allowance itself is gone if the entry moves or is reworded.
+      expect(
+        _householdBudgetOffenders({_translationsPath: translations.replaceFirst(_householdBudgetEntry, '')}),
+        [_translationsPath],
+      );
     });
   });
 

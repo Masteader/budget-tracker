@@ -40,7 +40,7 @@ export const PortalShell: React.FC<PortalShellProps> = ({
           <TransactionsView dict={dict} lang={lang} />
         )}
         {activeTab === 'budgets' && (
-          <BudgetsView dict={dict} lang={lang} />
+          <BudgetsView dict={dict} />
         )}
       </main>
 
