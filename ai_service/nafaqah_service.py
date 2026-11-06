@@ -753,11 +753,18 @@ def can_view_installment_plan(
     ctx: FamilyContext, actor_id: Optional[str], plan: Dict[str, Any], purchases: Dict[str, Dict[str, Any]]
 ) -> bool:
     """Whether ``actor_id`` reads installment ``plan`` (mirrors the installment_plans policy,
-    migration 20261105001300 section 10e): an unlinked plan is read by every member; a plan linked
-    to a purchase (``original_transaction_id``) by whoever reads that purchase, so the plan of her
-    personal purchase only by her, her husband and an admin who is not a wife. ``purchases`` maps
-    the household's transaction ids to their ``nafaqah_class`` and ``nafaqah_spouse_id``; a linked
-    purchase missing from it (not in this household) is read by nobody, as under RLS."""
+    migration 20261105001300 section 10e): a plan linked to a purchase (``original_transaction_id``)
+    is read by whoever reads that purchase, so the plan of her personal purchase only by her, her
+    husband and an admin who is not a wife. ``purchases`` maps the household's transaction ids to
+    their ``nafaqah_class`` and ``nafaqah_spouse_id``; a linked purchase missing from it (not in this
+    household) is read by nobody, as under RLS. The plan also keeps whose personal purchase it was
+    (``personal_owner_id``, kept by the database) after her purchase is deleted or unlinked: while
+    she is a wife of the household, it is read only by her and by those who see allowances. Any
+    other unlinked plan is read by every member. Every read this filters selects
+    ``personal_owner_id`` (test_wife_transfer_privacy reads plans from a strict table)."""
+    owner = plan.get("personal_owner_id")
+    if owner and _is_spouse_member(ctx, owner) and not can_view_allowance(ctx, actor_id, owner):
+        return False
     tx_id = plan.get("original_transaction_id")
     if not tx_id:
         return True

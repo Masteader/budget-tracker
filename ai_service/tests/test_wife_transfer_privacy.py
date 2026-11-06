@@ -9,7 +9,10 @@ household admin who is not a wife, as the database's installment_plans policy (t
 shop, amounts, dates, schedule and payments are the plan's own fields. The API reads plans with the
 service role, so every answer checks the caller itself: the list, a payment, an edit, and a new plan
 linked to a purchase. A caller who does not read a plan gets "not found" and changes nothing.
-Every other plan (unlinked, of an ordinary purchase, of her advance) stays in every member's answers.
+The plan keeps whose it was (``personal_owner_id``, kept by the database) after her purchase is
+deleted, so it stays read by the same people (test 66). Every other plan (unlinked with no owner, of
+an ordinary purchase, of her advance, of a woman who is no longer a wife of the household) stays in
+every member's answers.
 
 Transfers (account_transfers) are read by the API in one place only: a repayment's own transfer
 inside her ledger, which only she and her husband read and which never involves her account. A
@@ -48,38 +51,59 @@ PLAN_O = "b6000000-0000-4000-8000-000000000004"
 PLAN_U = "b6000000-0000-4000-8000-000000000005"
 PLAN_R = "b6000000-0000-4000-8000-000000000006"
 PLAN_X = "b6000000-0000-4000-8000-000000000007"
+# Plans whose purchase was deleted: no link, the owner the database kept.
+PLAN_WD = "b6000000-0000-4000-8000-000000000008"
+PLAN_CD = "b6000000-0000-4000-8000-000000000009"
+PLAN_AD = "b6000000-0000-4000-8000-00000000000a"
+PLAN_LD = "b6000000-0000-4000-8000-00000000000b"
+# A woman who was a wife of the household and left it: no longer a wife here, her plans are everyone's.
+FORMER = "b2000000-0000-4000-8000-0000000000aa"
 # Read by no member: linked to a purchase that is not in the household (as under RLS).
 NOBODY = "nobody"
 
-# Each plan: (id, shop, linked purchase, whose personal purchase it is or None). Names are distinct,
-# so a leak shows in a response's text.
+# Each plan: (id, shop, linked purchase, whose personal purchase it is or None, the owner the
+# database keeps on it). Names are distinct, so a leak shows in a response's text.
 PLANS = [
-    (PLAN_W, "Tabby Boutique Wafa", "p-w1", WIFE),
-    (PLAN_C, "Tamara Salon Huda", "p-c1", COWIFE),
-    (PLAN_A, "Tabby Gold Mona", "p-a1", WIFE_ADMIN),
-    (PLAN_O, "Bank Danube Fridge", "o-1", None),
-    (PLAN_U, "Other Unlinked Sofa", None, None),
+    (PLAN_W, "Tabby Boutique Wafa", "p-w1", WIFE, WIFE),
+    (PLAN_C, "Tamara Salon Huda", "p-c1", COWIFE, COWIFE),
+    (PLAN_A, "Tabby Gold Mona", "p-a1", WIFE_ADMIN, WIFE_ADMIN),
+    (PLAN_O, "Bank Danube Fridge", "o-1", None, None),
+    (PLAN_U, "Other Unlinked Sofa", None, None, None),
     # Her wife_reimbursable advance (the family fixture's t1): an ordinary row for reading.
-    (PLAN_R, "Tabby Panda Advance", "t1", None),
-    (PLAN_X, "Bank Elsewhere Lamp", "tx-of-another-household", NOBODY),
+    (PLAN_R, "Tabby Panda Advance", "t1", None, None),
+    (PLAN_X, "Bank Elsewhere Lamp", "tx-of-another-household", NOBODY, None),
+    # Her purchase deleted: the plan stays hers.
+    (PLAN_WD, "Tabby Perfume Wafa", None, WIFE, WIFE),
+    (PLAN_CD, "Tamara Abaya Huda", None, COWIFE, COWIFE),
+    (PLAN_AD, "Tabby Ring Mona", None, WIFE_ADMIN, WIFE_ADMIN),
+    # She left the household: no longer a wife of it, so her plan is read like other rows.
+    (PLAN_LD, "Tabby Scarf Former", None, None, FORMER),
 ]
-OWNER = {pid: wife for pid, _shop, _tx, wife in PLANS}
-SHOP = {pid: shop for pid, shop, _tx, _wife in PLANS}
+OWNER = {pid: wife for pid, _shop, _tx, wife, _kept in PLANS}
+SHOP = {pid: shop for pid, shop, _tx, _wife, _kept in PLANS}
+PLAN_COLUMNS = {
+    "id", "household_id", "merchant", "provider", "total_amount", "installment_count", "monthly_amount",
+    "paid_installments", "day_of_month", "start_date", "frequency", "next_due_at", "status", "category_code",
+    "original_transaction_id", "notes", "created_at", "personal_owner_id",
+}
 
 
-def _plan_row(pid, shop, tx):
+def _plan_row(pid, shop, tx, kept):
     return {
         "id": pid, "household_id": HH, "merchant": shop, "provider": "Tabby", "total_amount": 800.0,
         "installment_count": 4, "monthly_amount": 200.0, "paid_installments": 1, "day_of_month": 27,
         "start_date": "2026-11-01", "frequency": "monthly", "next_due_at": "2026-12-01", "status": "ACTIVE",
         "category_code": "OPEX-SHOPPING", "original_transaction_id": tx, "notes": f"note {shop}",
-        "created_at": "2026-11-01T10:00:00+00:00",
+        "created_at": "2026-11-01T10:00:00+00:00", "personal_owner_id": kept,
     }
 
 
 @pytest.fixture()
 def plans(household):
-    household.tables["installment_plans"] = [_plan_row(pid, shop, tx) for pid, shop, tx, _w in PLANS]
+    household.tables["installment_plans"] = [_plan_row(pid, shop, tx, kept) for pid, shop, tx, _w, kept in PLANS]
+    # Strict, as PostgREST: only the selected columns come back, so a read that never selected the
+    # owner cannot pass by accident.
+    household.schemas["installment_plans"] = set(PLAN_COLUMNS)
     return household
 
 
@@ -113,15 +137,17 @@ def test_the_plan_list_holds_her_plans_only_for_who_reads_her_purchases(plans, w
     assert listed == expected, (who, plans.state)
     assert resp.json()["count"] == len(expected)
     # Nothing of a plan the caller does not read: its shop, note or linked purchase.
-    for pid, shop, tx, _wife in PLANS:
+    for pid, shop, tx, _wife, _kept in PLANS:
         if pid not in expected:
             assert shop not in resp.text and f"note {shop}" not in resp.text and f'"{tx}"' not in resp.text, (who, pid)
+    # The owner the database keeps is not part of the answer.
+    assert "personal_owner_id" not in resp.text
 
 
 # ─── A payment, an edit ───────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("who", list(CALLERS))
-@pytest.mark.parametrize("pid", [PLAN_W, PLAN_C, PLAN_A, PLAN_O, PLAN_U, PLAN_X])
+@pytest.mark.parametrize("pid", [PLAN_W, PLAN_C, PLAN_A, PLAN_O, PLAN_U, PLAN_X, PLAN_WD, PLAN_CD, PLAN_AD, PLAN_LD])
 def test_a_payment_on_her_plan_is_not_found_for_who_does_not_read_it(plans, who, pid):
     resp = client.post(f"/budgets/installments/{pid}/pay", headers=bearer(CALLERS[who]))
     if _gone_husband(plans, who, resp):
@@ -137,7 +163,7 @@ def test_a_payment_on_her_plan_is_not_found_for_who_does_not_read_it(plans, who,
 
 
 @pytest.mark.parametrize("who", list(CALLERS))
-@pytest.mark.parametrize("pid", [PLAN_W, PLAN_C, PLAN_A, PLAN_O, PLAN_U, PLAN_X])
+@pytest.mark.parametrize("pid", [PLAN_W, PLAN_C, PLAN_A, PLAN_O, PLAN_U, PLAN_X, PLAN_WD, PLAN_CD, PLAN_AD, PLAN_LD])
 def test_an_edit_of_her_plan_is_not_found_for_who_does_not_read_it(plans, who, pid):
     resp = client.put(f"/budgets/installments/{pid}", headers=bearer(CALLERS[who]), json={"notes": "edited"})
     if _gone_husband(plans, who, resp):

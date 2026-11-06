@@ -365,7 +365,7 @@ class InstallmentService:
         """Whether ``caller_id`` reads plan ``plan_id`` of ``household_id``. A plan the caller does
         not read is answered as not found, and nothing is done to it."""
         sb = supabase_client.get_client()
-        res = (sb.table("installment_plans").select("id, original_transaction_id")
+        res = (sb.table("installment_plans").select("id, original_transaction_id, personal_owner_id")
                .eq("id", plan_id).eq("household_id", household_id).limit(1).execute())
         rows = (res.data or []) if res is not None else []
         return bool(rows) and bool(cls.visible_plan_rows(household_id, caller_id, rows))
