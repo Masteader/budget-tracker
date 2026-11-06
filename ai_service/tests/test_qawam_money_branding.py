@@ -299,9 +299,20 @@ _OLD_NAME = re.compile(
     r"budget[\s_\-]*tracker|بجٹ\s*ٹریکر|بجت\s*تراكر|بدجت\s*تراكر|ميزانية\s*الأسرة",
     re.IGNORECASE,
 )
-# Plain "وفير" is left out on purpose: it is an ordinary word for "abundant", and it sits inside
-# "توفير" (saving). The forms here are not ordinary words, so they match anywhere, prefixed or not.
-_WITHDRAWN_NAME = re.compile(r"wa+f+(?:ee|ei|ie|i|y)r|وفيير|وفّير|وفییر|وافير|وافیر", re.IGNORECASE)
+# An Arabic-script letter or mark. Punctuation and digits (، ؟ ۔ ٣) are not, so a name next to them
+# is still a whole word.
+_AR_LETTER = "[ؐ-ؚؠ-ٟٮ-ۓە-ۯۺ-ۿ]"
+# Same pattern as flutter_app/test/support/brand_names.dart: keep the two in step.
+_WITHDRAWN_NAME = re.compile(
+    r"wa+f+(?:ee|ei|ie|i|y)r"
+    # Doubled ي/ی, a shadda or an alef: not ordinary words, so these match anywhere.
+    r"|وفّ?[يی]{2}ر|وفّ[يی]ر|وافّ?[يی]{1,2}ر"
+    # وفير/وفیر is also the ordinary word for "abundant", and sits inside توفير/توفیر (saving). It
+    # matches as a whole word with at most one attached proclitic (ب ل و ف ك, or وب ول فب فل):
+    # the ت of توفير is not one, so "saving" stays unflagged.
+    rf"|(?<!{_AR_LETTER})(?:[وف][بل]|[بلوفك])?وف[يی]ر(?!{_AR_LETTER})",
+    re.IGNORECASE,
+)
 # Identifiers, not display text. See the "must stay" tests below.
 _ALLOWED_IDENTIFIERS = (
     "budgettracker://",
@@ -538,19 +549,46 @@ def test_guard_allows_the_generic_phrase_only_in_chat_parser():
     [
         "Wafeer", "WAFEER", "wafeer", "WafeerApp", "Wafeer_Money", "myWafeer", "wafeer.money",
         "Wafir", "Waffeer", "Wafeir",
-        "وفيير", "لوفيير", "بوفيير", "ووفيير", "وفّير", "وافير",
+        # The standard spellings, Arabic ي (U+064A) and Persian/Urdu ی (U+06CC).
+        "وفير", "وفیر", "وفيير", "وفییر", "وفّير", "وافير", "وافیر",
+        # One attached proclitic (ب ل و ف ك) or two (وب ول فب فل).
+        "لوفير", "بوفير", "ووفير", "فوفير", "كوفير", "لوفیر", "بوفیر",
+        "وبوفير", "ولوفير", "فبوفير", "فلوفير",
+        "لوفيير", "بوفيير", "ووفيير",
     ],
 )
 def test_guard_catches_the_withdrawn_name(leak):
     assert _has_withdrawn_name(f"Welcome to {leak} support"), leak
+    assert _has_withdrawn_name(leak), leak
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["مرحباً بك في وفير", "رزق وفير", "(وفير)", "«وفير»", "وفير،", "وفير؟", "وفير.", "وفیر۔", "تطبيق وفير"],
+)
+def test_guard_catches_the_withdrawn_name_next_to_punctuation(text):
+    assert _has_withdrawn_name(text), text
 
 
 @pytest.mark.parametrize(
     "word",
-    ["رزق وفير", "توفير", "التوفير", "وفير", "وفیر", "wafer", "waffle", "Qawam Money", "قوام المال"],
+    [
+        "توفير", "التوفير", "توفیر", "التوفیر", "للتوفير", "بالتوفير", "وفيرة", "وفي التخزين", "يوفر",
+        "wafer", "waffle", "Qawam Money", "قوام المال",
+    ],
 )
 def test_withdrawn_name_guard_does_not_flag_ordinary_words(word):
     assert not _has_withdrawn_name(f"text {word} text"), word
+    assert not _has_withdrawn_name(word), word
+
+
+def test_withdrawn_name_in_the_real_support_agent_file_fails():
+    source = _read("support_agent.py")
+    assert not _has_withdrawn_name(source)
+    # The same real file with the withdrawn name in the Arabic fallback reply.
+    leaked = source.replace(f"لتطبيق {NAME_AR}!", f"لتطبيق {NAME_AR} (وفير)!", 1)
+    assert leaked != source
+    assert _has_withdrawn_name(leaked)
 
 
 # ── Identifiers that must stay: renaming these is a bug, not a cleanup ──────────
