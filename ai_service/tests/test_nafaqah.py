@@ -20,9 +20,12 @@ import time
 from decimal import Decimal
 from unittest.mock import patch
 
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from jose import jwt
+from postgrest.exceptions import APIError
 
 import nafaqah_service as ns
 from main import app
@@ -41,6 +44,17 @@ OUTSIDER = "00000000-0000-4000-8000-00000000000d"
 OUTSIDER_WIFE = "00000000-0000-4000-8000-00000000000e"
 PEER1 = "00000000-0000-4000-8000-0000000000f1"
 PEER2 = "00000000-0000-4000-8000-0000000000f2"
+# Since 20261105001300 every repayment leaves an account he picks, with a request key.
+HIS_ACCOUNT = "00000000-0000-4000-8000-0000000000c1"
+
+
+def paid(**body):
+    """A repayment body from his account, with a fresh request key."""
+    return {"account_id": HIS_ACCOUNT, "request_key": str(uuid.uuid4()), **body}
+
+
+def key():
+    return str(uuid.uuid4())
 
 client = TestClient(app)
 
@@ -55,6 +69,16 @@ def _install_rpcs(fake):
     """Minimal stand-ins for the SECURITY DEFINER RPCs (the DB suite proves the real ones)."""
 
     def record(params):
+        # As the database refuses: never more than is owed (advances less what is repaid).
+        advanced = sum(Decimal(str(t["amount"])) for t in fake.tables.get("transactions", [])
+                       if t.get("household_id") == params["p_household_id"]
+                       and t.get("nafaqah_spouse_id") == params["p_wife_user_id"]
+                       and t.get("nafaqah_class") == "wife_reimbursable")
+        repaid = sum(Decimal(str(r["amount"])) for r in fake.tables.get("spouse_reimbursements", [])
+                     if r["household_id"] == params["p_household_id"] and r["wife_user_id"] == params["p_wife_user_id"])
+        if Decimal(params["p_amount"]) > advanced - repaid:
+            raise APIError({"code": "22023", "hint": "overpayment", "details": str(advanced - repaid),
+                            "message": "Reimbursement exceeds the outstanding balance"})
         fake.tables.setdefault("spouse_reimbursements", []).append({
             "id": f"r{len(fake.tables.get('spouse_reimbursements', [])) + 1}",
             "household_id": params["p_household_id"],
@@ -214,28 +238,38 @@ def test_ledger_counts_only_this_wifes_shared_advances(family):
 
 def test_partial_then_full_reimbursement(family):
     ctx = ns.load_family_context(HH)
-    res = ns.record_reimbursement(ctx, HUSBAND, WIFE, Decimal("200"), "stc_pay", "partial")
+    res = ns.record_reimbursement(ctx, HUSBAND, WIFE, Decimal("200"), "stc_pay", "partial", HIS_ACCOUNT, key())
     assert res["outstanding_after"] == 300.5
     name, params = family.rpc_calls[-1]
     assert name == "record_spouse_reimbursement"
     assert params["p_actor_user_id"] == HUSBAND and params["p_amount"] == "200.00"
+    assert params["p_account_id"] == HIS_ACCOUNT
 
-    # the wife confirms the rest
-    res = ns.record_reimbursement(ctx, WIFE, WIFE, Decimal("300.50"), "cash", None)
+    # the wife no longer records it herself (she asks; test_wife_repayment_debit) ...
+    with pytest.raises(ns.WifeMustRequest):
+        ns.record_reimbursement(ctx, WIFE, WIFE, Decimal("300.50"), "cash", None, HIS_ACCOUNT, key())
+    # ... the husband pays the rest
+    res = ns.record_reimbursement(ctx, HUSBAND, WIFE, Decimal("300.50"), "cash", None, HIS_ACCOUNT, key())
     assert res["outstanding_after"] == 0.0
     ledger = ns.get_reimbursement_ledger(ctx, WIFE)
     assert ledger["balance"]["reimbursed"] == 500.5 and ledger["balance"]["outstanding"] == 0.0
     assert [h["type"] for h in ledger["history"]].count("reimbursement") == 2
 
     with pytest.raises(ns.OverpaymentError):
-        ns.record_reimbursement(ctx, HUSBAND, WIFE, Decimal("0.01"), "cash", None)
+        ns.record_reimbursement(ctx, HUSBAND, WIFE, Decimal("0.01"), "cash", None, HIS_ACCOUNT, key())
 
 
-def test_overpayment_is_rejected_before_the_database(family):
-    calls = len(family.rpc_calls)
-    with pytest.raises(ns.OverpaymentError):
-        ns.record_reimbursement(ns.load_family_context(HH), HUSBAND, WIFE, Decimal("500.51"), "cash", None)
-    assert len(family.rpc_calls) == calls
+def test_overpayment_is_refused_by_the_database_with_what_is_owed(family):
+    with pytest.raises(ns.OverpaymentError) as refused:
+        ns.record_reimbursement(ns.load_family_context(HH), HUSBAND, WIFE, Decimal("500.51"), "cash", None, HIS_ACCOUNT, key())
+    assert refused.value.outstanding == 500.5
+    assert "spouse_reimbursements" not in family.tables
+
+
+def test_a_repayment_without_an_account_is_never_recorded(family):
+    with pytest.raises(ns.AppUpdateRequired):
+        ns.record_reimbursement(ns.load_family_context(HH), HUSBAND, WIFE, Decimal("10"), "cash", None)
+    assert not [n for n, _ in family.rpc_calls if n == "record_spouse_reimbursement"]
 
 
 def test_database_overpayment_error_is_mapped(family):
@@ -247,12 +281,12 @@ def test_database_overpayment_error_is_mapped(family):
 
     family.rpc_handlers["record_spouse_reimbursement"] = racing
     with pytest.raises(ns.OverpaymentError):
-        ns.record_reimbursement(ns.load_family_context(HH), HUSBAND, WIFE, Decimal("100"), "cash", None)
+        ns.record_reimbursement(ns.load_family_context(HH), HUSBAND, WIFE, Decimal("100"), "cash", None, HIS_ACCOUNT, key())
 
 
-def test_only_husband_wife_or_admin_record_reimbursements(family):
+def test_only_the_husband_or_an_admin_record_reimbursements(family):
     with pytest.raises(ns.NafaqahForbidden):
-        ns.record_reimbursement(ns.load_family_context(HH), CHILD, WIFE, Decimal("10"), "cash", None)
+        ns.record_reimbursement(ns.load_family_context(HH), CHILD, WIFE, Decimal("10"), "cash", None, HIS_ACCOUNT, key())
 
 
 def test_reimbursement_requires_family_household(family):
@@ -309,7 +343,9 @@ def test_summary_for_wife(family):
     wife = body["wives"][0]
     assert wife["id"] == WIFE and wife["reimbursement"]["outstanding"] == 500.5
     assert wife["allowance"]["spent"] == 1700.0 and wife["allowance"]["cycle_key"] == "2026-11"
-    assert body["can_set_allowance"] is False and body["can_record_reimbursement"] is True
+    # She asks; the husband or an admin records (owner decision 2026-11-06).
+    assert body["can_set_allowance"] is False and body["can_record_reimbursement"] is False
+    assert body["can_request_reimbursement"] is True and wife["can_request"] is True and wife["can_decide"] is False
 
 
 def test_summary_for_husband_can_set_allowance(family):
@@ -331,20 +367,20 @@ def test_summary_for_roommates_is_not_family(family):
 
 def test_record_reimbursement_endpoint(family):
     resp = client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(HUSBAND),
-                       json={"amount": 200, "payment_method": "stc_pay"})
+                       json=paid(amount=200, payment_method="stc_pay"))
     assert resp.status_code == 200, resp.text
     assert resp.json()["outstanding_after"] == 300.5
     # overpayment
     resp = client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(HUSBAND),
-                       json={"amount": 300.51, "payment_method": "cash"})
+                       json=paid(amount=300.51, payment_method="cash"))
     assert resp.status_code == 409
     # sub-halala, zero and negative amounts
     for bad in (10.005, 0, -5):
         resp = client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(HUSBAND),
-                           json={"amount": bad, "payment_method": "cash"})
+                           json=paid(amount=bad, payment_method="cash"))
         assert resp.status_code == 422
     resp = client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(HUSBAND),
-                       json={"amount": 1, "payment_method": "bitcoin"})
+                       json=paid(amount=1, payment_method="bitcoin"))
     assert resp.status_code == 422
 
 
@@ -359,7 +395,7 @@ def test_record_reimbursement_idor(family):
     assert resp.status_code == 422
     # an ordinary member cannot record
     resp = client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(CHILD),
-                       json={"amount": 10, "payment_method": "cash"})
+                       json=paid(amount=10, payment_method="cash"))
     assert resp.status_code == 403
     assert "spouse_reimbursements" not in family.tables
 
@@ -395,9 +431,9 @@ def test_allowance_endpoints(family):
 
 
 def test_legacy_reimbursement_route_uses_nafaqah_ledger_in_family_mode(family):
-    resp = client.post(f"/households/{HH}/reimbursements", headers=bearer(HUSBAND), json={
+    resp = client.post(f"/households/{HH}/reimbursements", headers=bearer(HUSBAND), json=paid(**{
         "household_id": HH, "payer_id": "husband", "recipient_id": "wife", "amount": 100, "payment_method": "cash",
-    })
+    }))
     assert resp.status_code == 200, resp.text
     assert family.tables["spouse_reimbursements"][0]["amount"] == 100.0
     assert not any(t.get("is_settlement") for t in family.tables["transactions"])
@@ -559,9 +595,9 @@ def test_several_wives_require_an_explicit_wife(family):
     with pytest.raises(ns.InvalidNafaqahRequest):
         ns.resolve_wife_id(ctx, None)
     assert ns.resolve_wife_id(ctx, second) == second
-    # a wife may confirm only her own repayments
+    # a wife records no repayment, hers or another wife's
     with pytest.raises(ns.NafaqahForbidden):
-        ns.record_reimbursement(ctx, second, WIFE, Decimal("10"), "cash", None)
+        ns.record_reimbursement(ctx, second, WIFE, Decimal("10"), "cash", None, HIS_ACCOUNT, key())
     resp = client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(HUSBAND),
                        json={"amount": 10, "payment_method": "cash"})
     assert resp.status_code == 422
@@ -576,9 +612,9 @@ def test_legacy_route_refuses_wife_to_husband_settlement_in_family_mode(family):
 
 
 def test_legacy_route_overpayment_in_family_mode(family):
-    resp = client.post(f"/households/{HH}/reimbursements", headers=bearer(HUSBAND), json={
+    resp = client.post(f"/households/{HH}/reimbursements", headers=bearer(HUSBAND), json=paid(**{
         "household_id": HH, "payer_id": "husband", "recipient_id": "wife", "amount": 600, "payment_method": "cash",
-    })
+    }))
     assert resp.status_code == 409
 
 
@@ -655,9 +691,9 @@ def test_settlement_v2_finds_wife_and_roommates_through_memberships(family):
 def test_partner_settlement_reflects_recorded_reimbursements(family):
     from settlement_engine import calculate_partner_settlement
 
-    resp = client.post(f"/households/{HH}/reimbursements", headers=bearer(HUSBAND), json={
+    resp = client.post(f"/households/{HH}/reimbursements", headers=bearer(HUSBAND), json=paid(**{
         "household_id": HH, "payer_id": "husband", "recipient_id": "wife", "amount": 200, "payment_method": "cash",
-    })
+    }))
     assert resp.status_code == 200, resp.text
 
     husband_view = calculate_partner_settlement(HH, cycle_start="2000-01-01", caller_user_id=HUSBAND)
@@ -674,14 +710,14 @@ def test_partner_settlement_reflects_recorded_reimbursements(family):
     assert v2["family_summary"]["reimbursed_total"] == 200.0
 
     # Paying off all but 0.30 SAR: still owed to the halala (no 0.5 SAR "settled" window).
-    ns.record_reimbursement(ns.load_family_context(HH), HUSBAND, WIFE, Decimal("300.20"), "cash")
+    ns.record_reimbursement(ns.load_family_context(HH), HUSBAND, WIFE, Decimal("300.20"), "cash", None, HIS_ACCOUNT, key())
     small = calculate_partner_settlement(HH, cycle_start="2000-01-01", caller_user_id=WIFE)
     assert small["owed_to_me"] == 0.3 and small["who_owes"] == "partner_owes_me"
 
 
 def test_partner_settlement_route_matches_nafaqah_summary(family):
     resp = client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(HUSBAND),
-                       json={"amount": 100, "payment_method": "cash"})
+                       json=paid(amount=100, payment_method="cash"))
     assert resp.status_code == 200, resp.text
     summary = client.get(f"/households/{HH}/nafaqah", headers=bearer(WIFE)).json()
     settlement = client.get(f"/households/{HH}/settlement", headers=bearer(WIFE)).json()
@@ -771,13 +807,13 @@ def test_rpc_overpayment_race_returns_409(family):
 
     family.rpc_handlers["record_spouse_reimbursement"] = refuse
     resp = client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(HUSBAND),
-                       json={"amount": 10, "payment_method": "cash"})
+                       json=paid(amount=10, payment_method="cash"))
     assert resp.status_code == 409, resp.text
 
 
 def test_numeric_rpc_params_are_exact_decimal_strings(family):
     ctx = ns.load_family_context(HH)
-    ns.record_reimbursement(ctx, HUSBAND, WIFE, Decimal("123.40"), "cash")
+    ns.record_reimbursement(ctx, HUSBAND, WIFE, Decimal("123.40"), "cash", None, HIS_ACCOUNT, key())
     ns.set_allowance(ctx, HUSBAND, WIFE, "1234567890.10", "2026-11")
     amounts = {name: params["p_amount"] for name, params in family.rpc_calls}
     assert amounts == {"record_spouse_reimbursement": "123.40", "set_member_allowance": "1234567890.10"}

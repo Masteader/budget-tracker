@@ -357,7 +357,10 @@ async def record_household_reimbursement_endpoint(
     Roommate/partner households: a settlement transaction between members (unchanged).
     Family households (Nafaqah): the only debt is the husband's to his wife for her advances, so
     a repayment to the wife goes to the append-only Nafaqah ledger (overpayment rejected) and any
-    other direction is refused; nothing in a family is split between the spouses.
+    other direction is refused; nothing in a family is split between the spouses. Since migration
+    20261105001300 it needs the account it is paid from and a request key: without an account the
+    caller is an app that predates tracked repayments (HTTP 426, app_update_required), and the
+    wife asks through POST .../nafaqah/reimbursement-requests instead (403, wife_must_request).
     """
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")

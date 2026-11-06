@@ -3,7 +3,7 @@ What the husband still owes a wife who deleted her account (owner decision 2026-
 
 Migration 20261105001200_account_deletion_former_member_debt.sql keeps one anonymised record per
 household. The API shows it in the Nafaqah summary and closes it through two SECURITY DEFINER
-RPCs, passing the verified caller: a payment (amount plus payment method, exactly as an ordinary
+RPCs, passing the verified caller: a payment (amount, payment method and the account it leaves, as an ordinary
 reimbursement; the API itself touches no table, and paying from an account, which the database
 debits, is test_wife_repayment_debit's) or her waiver (إبراء). Before the
 deletion the creditor sees an in-app notice; the worker emails it ('creditor_owed').
@@ -46,6 +46,8 @@ DEBT = "a3000000-0000-4000-8000-000000000001"
 DEBT_CLOSED = "a3000000-0000-4000-8000-000000000002"
 DEBT_OTHER = "a3000000-0000-4000-8000-000000000003"
 KEY = "a4000000-0000-4000-8000-000000000001"
+# Since 20261105001300 every payment leaves an account (its debit is test_wife_repayment_debit's).
+ACCOUNT = "a5000000-0000-4000-8000-000000000001"
 
 client = TestClient(app)
 
@@ -130,7 +132,7 @@ def _calls(fake, name):
 
 
 def _pay(user, debt=DEBT, **body):
-    payload = {"amount": 30, "payment_method": "bank_transfer", "request_key": KEY, **body}
+    payload = {"amount": 30, "payment_method": "bank_transfer", "request_key": KEY, "account_id": ACCOUNT, **body}
     return client.post(f"/households/{HH}/nafaqah/former-member-debts/{debt}/payments", headers=bearer(user), json=payload)
 
 
@@ -210,7 +212,7 @@ def test_a_payment_goes_to_the_rpc_with_the_verified_caller_and_exact_amount(hou
     assert resp.status_code == 200, resp.text
     assert _calls(household, "record_former_member_debt_payment") == [{
         "p_household_id": HH, "p_debt_id": DEBT, "p_amount": "30.40", "p_payment_method": "bank_transfer",
-        "p_request_key": KEY, "p_actor_user_id": caller}]
+        "p_request_key": KEY, "p_actor_user_id": caller, "p_account_id": ACCOUNT}]
     body = resp.json()
     assert (body["status"], body["remaining"], body["replayed"]) == ("open", 69.6, False)
 

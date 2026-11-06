@@ -185,8 +185,9 @@ class HouseholdReimbursementRequest(BaseModel):
     payment_method: str = Field(default="stc_pay", max_length=20, description="Payment method: 'stc_pay', 'urpay', 'iban', 'cash'")
     notes: Optional[str] = Field(default=None, max_length=500)
     # Family households only (migration 20261105001300): the account the repayment is paid from,
-    # and the client's idempotency key, required with an account.
-    account_id: Optional[str] = Field(default=None, description="Account the husband pays from; omit when not tracked in the app")
+    # and the client's idempotency key. Optional here so an old app without them gets HTTP 426
+    # (app_update_required) instead of a validation error.
+    account_id: Optional[str] = Field(default=None, description="Account the husband pays from (required in a family)")
     request_key: Optional[str] = Field(default=None, description="Client idempotency key (UUID), the same for every retry of one tap")
 
     @field_validator("household_id")
@@ -221,10 +222,11 @@ class NafaqahReimbursementCreateRequest(BaseModel):
     payment_method: str = Field(default="cash", pattern=r"^(stc_pay|urpay|bank_transfer|iban|cash|other)$")
     notes: Optional[str] = Field(default=None, max_length=500)
     wife_user_id: Optional[str] = Field(default=None, description="Required only when the household has several wives")
-    # Migration 20261105001300: the account he pays from (his own, or a shared pool for an admin);
-    # omitted when not tracked in the app, which records the amount and method only.
-    account_id: Optional[str] = Field(default=None, description="Account the repayment is paid from; omit when not tracked in the app")
-    request_key: Optional[str] = Field(default=None, description="Client idempotency key (UUID), required with an account")
+    # Migration 20261105001300: the account he pays from (his own, or a shared pool for an admin)
+    # and the idempotency key, both required. Optional here so an old app that sends neither gets
+    # HTTP 426 (app_update_required) instead of a validation error.
+    account_id: Optional[str] = Field(default=None, description="Account the repayment is paid from (required)")
+    request_key: Optional[str] = Field(default=None, description="Client idempotency key (UUID), required")
 
     @field_validator("amount")
     @classmethod
@@ -250,16 +252,68 @@ def _required_uuid(v: str) -> str:
         raise ValueError("Invalid UUID")
 
 
+class NafaqahRepaymentRequestCreate(BaseModel):
+    """The wife's "I received X" (migration 20261105001300): a pending request the husband or an
+    admin approves or declines. Nothing moves until then."""
+    model_config = ConfigDict(extra="forbid")
+
+    amount: PositiveMoney = Field(..., description="What she received, in SAR")
+    payment_method: str = Field(default="cash", pattern=r"^(stc_pay|urpay|bank_transfer|iban|cash|other)$")
+    request_key: str = Field(..., description="Client idempotency key (UUID), the same for every retry of one tap")
+
+    @field_validator("amount")
+    @classmethod
+    def validate_amount_precision(cls, v: float) -> float:
+        return _two_decimals(v)
+
+    @field_validator("request_key")
+    @classmethod
+    def validate_request_key(cls, v: str) -> str:
+        return _required_uuid(v)
+
+
+class NafaqahRepaymentRequestApprove(BaseModel):
+    """Approving her request: the account the requested amount is paid from."""
+    model_config = ConfigDict(extra="forbid")
+
+    account_id: str = Field(..., description="Account the husband (or an admin) pays from")
+    request_key: str = Field(..., description="Client idempotency key (UUID)")
+
+    @field_validator("account_id", "request_key")
+    @classmethod
+    def validate_ids(cls, v: str) -> str:
+        return _required_uuid(v)
+
+
+class NafaqahRepaymentRequestDecline(BaseModel):
+    """Declining her request, with an optional short reason; nothing moves."""
+    model_config = ConfigDict(extra="forbid")
+
+    reason: Optional[str] = Field(default=None, max_length=200)
+
+
+class NafaqahReversalRequest(BaseModel):
+    """Reversing a tracked repayment or payment in full (the money goes back, the amount is owed again)."""
+    model_config = ConfigDict(extra="forbid")
+
+    request_key: str = Field(..., description="Client idempotency key (UUID)")
+
+    @field_validator("request_key")
+    @classmethod
+    def validate_request_key(cls, v: str) -> str:
+        return _required_uuid(v)
+
+
 class FormerMemberDebtPaymentRequest(BaseModel):
     """A payment of what was owed to a former member (migration 20261105001200). The same fields
     as an ordinary reimbursement: an amount, a payment method and, since 20261105001300, the account
-    it is paid from (omitted when not tracked in the app)."""
+    it is paid from (required; optional here so an old app gets HTTP 426, app_update_required)."""
     model_config = ConfigDict(extra="forbid")
 
     amount: PositiveMoney = Field(..., description="Payment in SAR (partial or full; never above what remains)")
     payment_method: str = Field(default="cash", pattern=r"^(stc_pay|urpay|bank_transfer|iban|cash|other)$")
     request_key: str = Field(..., description="Client idempotency key (UUID), the same for every retry of one tap")
-    account_id: Optional[str] = Field(default=None, description="Account the payment is paid from; omit when not tracked in the app")
+    account_id: Optional[str] = Field(default=None, description="Account the payment is paid from (required)")
 
     @field_validator("account_id")
     @classmethod
