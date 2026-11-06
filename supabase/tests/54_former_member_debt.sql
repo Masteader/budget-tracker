@@ -120,11 +120,22 @@ BEGIN
 END;
 $$;
 
--- An ordinary repayment, through today's RPC.
+-- The account a member pays from (20261105001300: every repayment leaves one): their first
+-- personal account in the household, or a random id when they have none (refused before it matters).
+CREATE FUNCTION pg_temp.wallet(p_hh int, p_owner int) RETURNS uuid LANGUAGE sql AS $$
+    SELECT COALESCE((SELECT a.id FROM public.accounts a
+                     WHERE a.household_id = pg_temp.h(p_hh) AND a.owner_user_id = pg_temp.u(p_owner) AND NOT a.is_shared_pool
+                     ORDER BY a.id LIMIT 1), gen_random_uuid());
+$$;
+GRANT EXECUTE ON FUNCTION pg_temp.wallet(int, int) TO PUBLIC;
+CREATE FUNCTION pg_temp.bal(p_n int) RETURNS text LANGUAGE sql
+AS $$ SELECT balance::text FROM public.accounts WHERE id = pg_temp.a(p_n) $$;
+
+-- An ordinary repayment, through today's RPC, from the actor's account.
 CREATE FUNCTION pg_temp.repay(p_hh int, p_wife int, p_amount numeric, p_actor int) RETURNS void LANGUAGE plpgsql AS $$
 DECLARE
-    v_res text := pg_temp.svc(format('SELECT public.record_spouse_reimbursement(%L, %L, %s, %L, NULL, %L)::text',
-                                     pg_temp.h(p_hh), pg_temp.u(p_wife), p_amount, 'cash', pg_temp.u(p_actor)));
+    v_res text := pg_temp.svc(format('SELECT public.record_spouse_reimbursement(%L, %L, %s, %L, NULL, %L, %L::uuid, gen_random_uuid())::text',
+                                     pg_temp.h(p_hh), pg_temp.u(p_wife), p_amount, 'cash', pg_temp.u(p_actor), pg_temp.wallet(p_hh, p_actor)));
 BEGIN
     IF v_res LIKE 'ERR:%' THEN RAISE EXCEPTION 'repayment refused: %', v_res; END IF;
 END;
@@ -207,8 +218,8 @@ GRANT EXECUTE ON FUNCTION pg_temp.debt(int) TO PUBLIC;
 CREATE FUNCTION pg_temp.pay(p_actor int, p_hh int, p_amount text, p_key int, p_method text DEFAULT 'bank_transfer', p_debt uuid DEFAULT NULL)
 RETURNS text LANGUAGE sql AS $$
     SELECT pg_temp.call(pg_temp.u(p_actor), NULL,
-        format('SELECT public.record_former_member_debt_payment(%L, %L, %s, %L, %L)::text',
-               pg_temp.h(p_hh), COALESCE(p_debt, pg_temp.debt(p_hh)), p_amount, p_method, pg_temp.k(p_key)));
+        format('SELECT public.record_former_member_debt_payment(%L, %L, %s, %L, %L, NULL, %L::uuid)::text',
+               pg_temp.h(p_hh), COALESCE(p_debt, pg_temp.debt(p_hh)), p_amount, p_method, pg_temp.k(p_key), pg_temp.wallet(p_hh, p_actor)));
 $$;
 CREATE FUNCTION pg_temp.waive(p_actor int, p_hh int, p_key int, p_debt uuid DEFAULT NULL)
 RETURNS text LANGUAGE sql AS $$
@@ -285,6 +296,9 @@ BEGIN
     PERFORM pg_temp.acct(3, 1, 1, false, 300);   -- H personal
     PERFORM pg_temp.acct(4, 3, 8, true, 700);    -- F3 pool
     PERFORM pg_temp.acct(5, 3, 7, false, 200);   -- P personal
+    PERFORM pg_temp.acct(6, 1, 4, false, 500);   -- C personal (20261105001300: payments leave an account)
+    PERFORM pg_temp.acct(7, 2, 5, false, 500);   -- O personal
+    PERFORM pg_temp.acct(8, 7, 18, false, 500);  -- the F7 provider's personal account
 
     INSERT INTO public.budgets (id, household_id, month, category_code, allocated_amount, cycle_key, account_id) VALUES
         ('e54b0000-0000-0000-0000-000000000001', pg_temp.h(1), v_month, 'OPEX-GROCERY', 900, v_cycle, NULL),
@@ -434,7 +448,11 @@ BEGIN
     PERFORM pg_temp.expect('sub-halala refused', pg_temp.pay(1, 1, '10.001', 1), 'ERR:invalid_amount');
     PERFORM pg_temp.expect('unknown method refused', pg_temp.pay(1, 1, '10', 1, 'gold'), 'ERR:invalid_payment_method');
     PERFORM pg_temp.expect('no request key refused',
-        pg_temp.call(pg_temp.u(1), NULL, format('SELECT public.record_former_member_debt_payment(%L, %L, 10, %L, NULL)::text', pg_temp.h(1), pg_temp.debt(1), 'cash')), 'ERR:request_key_required');
+        pg_temp.call(pg_temp.u(1), NULL, format('SELECT public.record_former_member_debt_payment(%L, %L, 10, %L, NULL, NULL, %L::uuid)::text',
+            pg_temp.h(1), pg_temp.debt(1), 'cash', pg_temp.a(3))), 'ERR:request_key_required');
+    PERFORM pg_temp.expect('the amount-only signature refused (20261105001300)',
+        pg_temp.call(pg_temp.u(1), NULL, format('SELECT public.record_former_member_debt_payment(%L, %L, 10, %L, %L)::text',
+            pg_temp.h(1), pg_temp.debt(1), 'cash', pg_temp.k(1))), 'ERR:app_update_required');
     PERFORM pg_temp.expect('overpayment refused', pg_temp.pay(1, 1, '170.01', 1), 'ERR:overpayment');
     PERFORM pg_temp.expect('nothing recorded by refusals', pg_temp.state(1), '170.00/0.00/open/false');
 
@@ -468,8 +486,13 @@ BEGIN
     PERFORM pg_temp.expect('another household reads none',
         pg_temp.call(pg_temp.u(16), NULL, 'SELECT count(*)::text FROM public.former_member_debt_events'), '0');
 
-    -- As an ordinary reimbursement: no account, no budget, no transaction.
-    PERFORM pg_temp.expect('no balance or budget moved by payments', pg_temp.ledger(ARRAY[pg_temp.h(1)]), v_before);
+    -- As an ordinary reimbursement (20261105001300): each payer's account went down by what he paid,
+    -- nothing else moved, and no budget or transaction.
+    PERFORM pg_temp.expect('no budget moved by payments', split_part(pg_temp.ledger(ARRAY[pg_temp.h(1)]), ' | ', 2), split_part(v_before, ' | ', 2));
+    PERFORM pg_temp.expect('the payers'' accounts went down by what each paid', pg_temp.bal(3) || '/' || pg_temp.bal(6), '200.00/400.00');
+    PERFORM pg_temp.expect('no other balance moved',
+        regexp_replace(regexp_replace(split_part(pg_temp.ledger(ARRAY[pg_temp.h(1)]), ' | ', 1), pg_temp.a(3)::text || '=[0-9.]+', ''), pg_temp.a(6)::text || '=[0-9.]+', ''),
+        regexp_replace(regexp_replace(split_part(v_before, ' | ', 1), pg_temp.a(3)::text || '=[0-9.]+', ''), pg_temp.a(6)::text || '=[0-9.]+', ''));
     PERFORM pg_temp.expect('no transaction written',
         (SELECT count(*) FROM public.transactions)::text, v_tx::text);
     RAISE NOTICE 'PASSED: partial then full payment, overpayment refused, a replay changes nothing, no money moves.';
@@ -487,9 +510,8 @@ BEGIN
         pg_temp.u(7)::text || ':40.00');
     PERFORM pg_temp.purge(9);
     PERFORM pg_temp.expect('F3 record', pg_temp.state(3), '40.00/0.00/open/false');
+    PERFORM pg_temp.expect('the husband pays part', (pg_temp.pay(7, 3, '10', 10, 'cash')::jsonb ->> 'remaining') || '/' || pg_temp.bal(5), '30.00/190.00');
     v_before := pg_temp.ledger(ARRAY[pg_temp.h(3)]);
-
-    PERFORM pg_temp.expect('the husband pays part', (pg_temp.pay(7, 3, '10', 10, 'cash')::jsonb ->> 'remaining'), '30.00');
     PERFORM pg_temp.expect('a member may not waive', pg_temp.waive(14, 3, 11), 'ERR:forbidden');
     PERFORM pg_temp.expect('anon cannot waive',
         pg_temp.call(NULL, NULL, format('SELECT public.waive_former_member_debt(%L, %L, %L)::text', pg_temp.h(3), pg_temp.debt(3), pg_temp.k(11)), 'anon'), 'ERR:42501');

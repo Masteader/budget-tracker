@@ -24,6 +24,19 @@
 
 BEGIN;
 
+-- 20261105001300: every repayment leaves an account. The actor's own account in the household,
+-- made with enough in it for the repayments here.
+CREATE FUNCTION pg_temp.repay_account(p_household uuid, p_owner uuid) RETURNS uuid LANGUAGE plpgsql AS $$
+DECLARE
+    v_id uuid;
+BEGIN
+    INSERT INTO public.accounts (household_id, owner_user_id, name, account_type, balance, is_shared_pool)
+    VALUES (p_household, p_owner, 'Repayments', 'bank', 10000, false)
+    RETURNING id INTO v_id;
+    RETURN v_id;
+END;
+$$;
+
 -- Helpers ----------------------------------------------------------------------
 CREATE FUNCTION pg_temp.as_user(p_sub text, p_sql text)
 RETURNS text
@@ -416,7 +429,7 @@ BEGIN
     VALUES ('25f00000-0000-0000-0000-000000000001', '25aa0000-0000-0000-0000-000000000001', '25000000-0000-0000-0000-0000000000a2',
             300.00, 'Panda', 'OPEX-GROCERY', '2026-11-10 12:00+03', 'manual', 'wife_reimbursable', '25000000-0000-0000-0000-0000000000a2');
     PERFORM public.record_spouse_reimbursement('25aa0000-0000-0000-0000-000000000001', '25000000-0000-0000-0000-0000000000a2',
-        200, 'cash', NULL, '25000000-0000-0000-0000-0000000000a1');
+        200, 'cash', NULL, '25000000-0000-0000-0000-0000000000a1', pg_temp.repay_account('25aa0000-0000-0000-0000-000000000001', '25000000-0000-0000-0000-0000000000a1'), gen_random_uuid());
 
     PERFORM pg_temp.expect('edit 300 -> 100 refused', pg_temp.state_hint($q$
         UPDATE public.transactions SET amount = 100 WHERE id = '25f00000-0000-0000-0000-000000000001'$q$),

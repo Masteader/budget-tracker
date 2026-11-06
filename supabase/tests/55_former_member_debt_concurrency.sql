@@ -55,6 +55,8 @@ BEGIN
     DELETE FROM public.account_deletion_requests WHERE id::text LIKE 'e55f%' OR user_id = ANY (v_users);
     DELETE FROM public.spouse_reimbursements WHERE household_id = ANY (v_hhs);
     DELETE FROM public.transactions WHERE household_id = ANY (v_hhs);
+    DELETE FROM public.account_transfers WHERE household_id = ANY (v_hhs);
+    DELETE FROM public.accounts WHERE household_id = ANY (v_hhs);
     DELETE FROM public.household_memberships WHERE household_id = ANY (v_hhs) AND role <> 'admin';
     DELETE FROM public.household_memberships WHERE household_id = ANY (v_hhs);
     DELETE FROM public.households WHERE id = ANY (v_hhs);
@@ -132,8 +134,11 @@ BEGIN
 END;
 $$;
 
+-- 20261105001300: a payment leaves an account; both admins pay from the shared pool here.
+CREATE FUNCTION pg_temp.pool() RETURNS uuid LANGUAGE sql AS $$ SELECT 'e55c0000-0000-0000-0000-000000000001'::uuid $$;
 CREATE FUNCTION pg_temp.pay_sql(p_debt uuid, p_amount numeric, p_key uuid) RETURNS text LANGUAGE sql AS $$
-    SELECT format('SELECT public.record_former_member_debt_payment(%L, %L, %s, %L, %L)::text', pg_temp.h(1), p_debt, p_amount, 'cash', p_key);
+    SELECT format('SELECT public.record_former_member_debt_payment(%L, %L, %s, %L, %L, NULL, %L::uuid)::text',
+                  pg_temp.h(1), p_debt, p_amount, 'cash', p_key, pg_temp.pool());
 $$;
 
 SELECT pg_temp.cleanup();
@@ -155,6 +160,8 @@ BEGIN
     UPDATE public.users SET financial_role = 'spouse' WHERE id = pg_temp.u(3);
     INSERT INTO public.former_member_debts (id, household_id, original_amount)
     SELECT pg_temp.d(n), pg_temp.h(1), 100 FROM generate_series(1, 3) AS n;
+    INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, is_shared_pool)
+    VALUES (pg_temp.pool(), pg_temp.h(1), pg_temp.u(1), 'T55 pool', 'shared_pool', 10000, true);
     -- W: 90 advanced, nothing repaid yet; her request is claimed and due.
     INSERT INTO public.transactions (household_id, user_id, amount, merchant, category_code, timestamp, source, spent_by, nafaqah_class, nafaqah_spouse_id)
     VALUES (pg_temp.h(1), pg_temp.u(3), 90, 'T55 Grocer', 'OPEX-GROCERY', now(), 'manual', 'me', 'wife_reimbursable', pg_temp.u(3));
@@ -274,8 +281,8 @@ BEGIN
     PERFORM pg_temp.as_user('rp', pg_temp.u(1));
     -- The husband's repayment of 25, not yet committed.
     PERFORM t55_dblink.dblink_exec('rp', 'BEGIN');
-    v_repay := (SELECT r FROM t55_dblink.dblink('rp', format('SELECT public.record_spouse_reimbursement(%L, %L, 25, %L)::text',
-        pg_temp.h(1), pg_temp.u(3), 'cash')) AS t(r text));
+    v_repay := (SELECT r FROM t55_dblink.dblink('rp', format('SELECT public.record_spouse_reimbursement(%L, %L, 25, %L, NULL, NULL, %L::uuid, %L::uuid)::text',
+        pg_temp.h(1), pg_temp.u(3), 'cash', pg_temp.pool(), pg_temp.k(41))) AS t(r text));
     PERFORM t55_dblink.dblink_send_query('pg', format('SELECT public.prepare_account_purge(%L)::text', pg_temp.r(3)));
     PERFORM pg_temp.expect('the purge waits for the repayment', pg_temp.wait('pg', v_pg_pid), 'blocked');
     PERFORM t55_dblink.dblink_exec('rp', 'COMMIT');
