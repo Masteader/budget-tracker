@@ -749,27 +749,23 @@ def transactions_visible_to(
     return visible_transactions(load_family_context(household_id), actor_id, rows)
 
 
-def can_view_installment_plan(
-    ctx: FamilyContext, actor_id: Optional[str], plan: Dict[str, Any], purchases: Dict[str, Dict[str, Any]]
-) -> bool:
+def can_view_installment_plan(ctx: FamilyContext, actor_id: Optional[str], plan: Dict[str, Any]) -> bool:
     """Whether ``actor_id`` reads installment ``plan`` (mirrors the installment_plans policy,
-    migration 20261105001300 section 10e): a plan linked to a purchase (``original_transaction_id``)
-    is read by whoever reads that purchase, so the plan of her personal purchase only by her, her
-    husband and an admin who is not a wife. ``purchases`` maps the household's transaction ids to
-    their ``nafaqah_class`` and ``nafaqah_spouse_id``; a linked purchase missing from it (not in this
-    household) is read by nobody, as under RLS. The plan also keeps whose personal purchase it was
-    (``personal_owner_id``, kept by the database) after her purchase is deleted or unlinked: while
-    she is a wife of the household, it is read only by her and by those who see allowances. Any
-    other unlinked plan is read by every member. Every read this filters selects
-    ``personal_owner_id`` (test_wife_transfer_privacy reads plans from a strict table)."""
+    migration 20261105001300 section 10e). The database keeps on the plan whose personal purchase it
+    is (``personal_owner_id``, while linked and after her purchase is deleted or unlinked) and
+    whether it was the plan of a wife whose account was deleted (``former_member_personal``, which
+    names nobody), so the plan's own row decides and no purchase is looked up (review R3B-03): the
+    plan of her personal purchase is read, while she is a wife of the household, only by her and by
+    those who see allowances (her husband, an admin who is not a wife); a deleted wife's only by
+    those who see allowances (owner decision 2026-11-06). Every other plan is read by every member.
+    Every read this filters selects both columns (test_wife_transfer_privacy reads plans from a
+    strict table)."""
     owner = plan.get("personal_owner_id")
     if owner and _is_spouse_member(ctx, owner) and not can_view_allowance(ctx, actor_id, owner):
         return False
-    tx_id = plan.get("original_transaction_id")
-    if not tx_id:
-        return True
-    row = purchases.get(str(tx_id))
-    return row is not None and can_view_personal_purchase(ctx, actor_id, row)
+    if plan.get("former_member_personal") and not can_see_allowances(ctx, actor_id):
+        return False
+    return True
 
 
 def can_manage_wife_ledgers(ctx: FamilyContext, actor_id: Optional[str]) -> bool:
@@ -815,15 +811,15 @@ def can_record_reimbursement(ctx: FamilyContext, actor_id: str, wife_id: Optiona
 
 
 def can_reverse_repayment(ctx: FamilyContext, actor_id: Optional[str], account: Optional[Dict[str, Any]]) -> bool:
-    """Who reverses a repayment (or a former member's payment) follows the account it left (review
-    R1-07): its owner while he is a member and not a wife, whatever his role now; a shared pool's,
-    the husband if he is an admin, or an admin who is not a wife when he is gone (review R3-01).
-    The database checks the same under its locks."""
-    if not ctx.is_member(actor_id) or ctx.is_wife(actor_id) or not _account_usable_by(ctx, account, actor_id):
+    """Who reverses a repayment (or a former member's payment): a current manager of her ledger
+    only (her husband; an admin who is not a wife when he is gone), from the account it left as the
+    account rules say: a personal account as its owner, a shared pool as an admin (review R3B-06,
+    owner decision 2026-11-06, superseding R1-07). A replaced husband or a demoted admin no longer
+    reverses, even his own account's repayment, which nobody reverses then. The database checks the
+    same (``reverse_spouse_reimbursement``, ``reverse_former_member_debt_payment``)."""
+    if not ctx.is_member(actor_id) or ctx.is_wife(actor_id) or not can_manage_wife_ledgers(ctx, actor_id):
         return False
-    if (account or {}).get("is_shared_pool"):
-        return can_manage_wife_ledgers(ctx, actor_id)
-    return True
+    return _account_usable_by(ctx, account, actor_id)
 
 
 def can_request_reimbursement(ctx: FamilyContext, actor_id: str, wife_id: Optional[str] = None) -> bool:
@@ -1117,8 +1113,8 @@ def get_reimbursement_ledger(ctx: FamilyContext, wife_id: str, caller_id: Option
         str(r.get("id")): (transfers.get(str(r.get("transfer_id"))) or {}).get("from")
         for r in repayments if r.get("transfer_id") and str(r.get("kind") or KIND_PAYMENT) == KIND_PAYMENT
     }
-    # Who may reverse follows the account it left (review R1-07), never a wife.
-    may_reverse = bool(caller_id) and ctx.is_member(caller_id) and not ctx.is_wife(caller_id)
+    # Only her ledger's manager reverses, from the account it left (review R3B-06), never a wife.
+    may_reverse = bool(caller_id) and ctx.is_member(caller_id) and can_manage_wife_ledgers(ctx, caller_id)
     accounts = _accounts(client, paid_from.values()) if may_reverse else {}
 
     def repayment_entry(r: Dict[str, Any]) -> Dict[str, Any]:
@@ -1383,12 +1379,15 @@ def approve_reimbursement_request(
 
 
 def _require_reverser(ctx: FamilyContext, actor_id: str, transfer_id: Any, *, reversal: bool = False) -> None:
-    """Never a wife (review R1-01). Otherwise who reverses follows the account the payment left
-    (review R1-07): an early, clear refusal for one the caller may not use. A row with no transfer,
-    or a reversal, is left to the database, which names why it cannot be reversed."""
+    """Never a wife (review R1-01); only her ledger's manager (review R3B-06: a replaced husband
+    or a demoted admin is refused, even for his own account). Within that, the account the payment
+    left: an early, clear refusal for one the caller may not use. A row with no transfer, or a
+    reversal, is left to the database, which names why it cannot be reversed."""
     _require_member(ctx, actor_id)
     if ctx.is_wife(actor_id):
         raise NafaqahForbidden("A wife does not reverse a repayment.")
+    if not can_manage_wife_ledgers(ctx, actor_id):
+        raise NafaqahForbidden("A repayment is reversed by the husband, or by an admin who is not a wife when he is gone.")
     if not transfer_id or reversal:
         return
     client = get_client()
@@ -1403,9 +1402,9 @@ def _require_reverser(ctx: FamilyContext, actor_id: str, transfer_id: Any, *, re
 
 def reverse_reimbursement(ctx: FamilyContext, actor_id: str, reimbursement_id: str, request_key: Optional[str]) -> Dict[str, Any]:
     """Reverses a tracked repayment in full: the money goes back to the account it left and the
-    amount back to what is owed. The original stays, marked reversed. Who reverses follows the
-    account (review R1-07): its owner while he is a member and not a wife, whatever his role now; a
-    pool's repayment, any admin who is not a wife. Once per repayment."""
+    amount back to what is owed. The original stays, marked reversed. Who reverses: her ledger's
+    manager only, from the account it left as its owner (a personal account) or as an admin (a
+    pool) (review R3B-06). Once per repayment."""
     _require_family(ctx)
     row = first_row(
         get_client()
@@ -1503,8 +1502,8 @@ def list_former_member_debts(ctx: FamilyContext, caller_id: Optional[str] = None
     # Every column: transfer_id and reverses_event_id exist once 20261105001300 has run.
     events = rows_in(client, "former_member_debt_events", "*", "debt_id", [r.get("id") for r in rows])
     transfers = _transfers(client, [e.get("transfer_id") for e in events])
-    # Who may reverse follows the account the payment left (review R1-07), never a wife.
-    may_reverse = bool(caller_id) and ctx.is_member(caller_id) and not ctx.is_wife(caller_id)
+    # Only the record's manager reverses, from the account the payment left (review R3B-06).
+    may_reverse = bool(caller_id) and ctx.is_member(caller_id) and can_manage_wife_ledgers(ctx, caller_id)
     sources = [(transfers.get(str(e.get("transfer_id"))) or {}).get("from") for e in events if e.get("kind") == "payment"]
     accounts = _accounts(client, sources) if may_reverse else {}
     by_debt: Dict[str, List[Dict[str, Any]]] = {}

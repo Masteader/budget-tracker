@@ -248,25 +248,29 @@ def test_r1_04_a_reused_key_is_a_conflict_with_its_code(family, rpc, call):
     assert resp.status_code == 409 and resp.json()["detail"]["code"] == "request_key_reused"
 
 
-# ─── R1-07: reversal by the account's owner, whatever his role now ─────────────
+# ─── R1-07, as review R3B-06 left it: the owner, while he manages her ledger ─────
+# Owner decision 2026-11-06 (review R3B-06, superseding R1-07): a personal account's repayment is
+# reversed by its owner only while he is a manager of her ledger; a demoted admin or a replaced
+# husband no longer reverses, even his own, and nobody else does (test_wife_privacy_r3b).
 
-def test_r1_07_a_former_co_admin_reverses_his_own_repayment(demoted):
+def test_r1_07_a_former_co_admin_no_longer_reverses_his_own_repayment(demoted):
     resp = _reverse(COADMIN, R_COADMIN)
-    assert resp.status_code == 200, resp.text
-    assert [p["p_actor_user_id"] for p in _calls(demoted, "reverse_spouse_reimbursement")] == [COADMIN]
-    # He reads none of her ledger while the husband is there (review R3-01); the reversal of his
-    # own account's repayment stays his (R1-07), the husband's account stays the husband's.
+    assert resp.status_code == 403, resp.text
+    assert _calls(demoted, "reverse_spouse_reimbursement") == []
+    # He reads none of her ledger while the husband is there (review R3-01), and reverses none of
+    # it (review R3B-06), his own account's repayment included; the husband's account stays his.
     assert client.get(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(COADMIN)).status_code == 403
     ctx = ns.load_family_context(HH)
     accounts = {a["id"]: a for a in demoted.tables["accounts"]}
     own = next(a for a in demoted.tables["accounts"] if a.get("owner_user_id") == COADMIN and not a.get("is_shared_pool"))
-    assert ns.can_reverse_repayment(ctx, COADMIN, own) is True
+    assert ns.can_reverse_repayment(ctx, COADMIN, own) is False
     assert ns.can_reverse_repayment(ctx, COADMIN, accounts[ACCOUNT]) is False, "the husband's account is his"
 
 
-def test_r1_07_a_former_co_admin_reverses_his_own_former_member_payment(demoted):
+def test_r1_07_a_former_co_admin_no_longer_reverses_his_own_former_member_payment(demoted):
     resp = _fmd(f"{DEBT}/payments/{E_COADMIN}/reversal", COADMIN, request_key=KEY)
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 403, resp.text
+    assert _calls(demoted, "reverse_former_member_debt_payment") == []
     # The record is the husband's to read (review R3-01); the husband sees which he may reverse.
     assert client.get(f"/households/{HH}/nafaqah", headers=bearer(COADMIN)).json()["former_member_debts"] == []
     debts = {d["id"]: d for d in client.get(f"/households/{HH}/nafaqah", headers=bearer(HUSBAND)).json()["former_member_debts"]}
@@ -275,18 +279,19 @@ def test_r1_07_a_former_co_admin_reverses_his_own_former_member_payment(demoted)
     assert events[E_TRACKED]["can_reverse"] is True
 
 
-def test_r1_07_a_former_husband_reverses_his_own_repayment(family):
+def test_r1_07_a_former_husband_no_longer_reverses_his_own_repayment(family):
     for m in family.tables["household_memberships"]:
         if m["user_id"] == HUSBAND:
             m["role"] = "member"
     family.tables["households"][0].update(owner_user_id=COADMIN, nafaqah_provider_user_id=CHILD)
-    assert _reverse(HUSBAND).status_code == 200
-    assert [p["p_actor_user_id"] for p in _calls(family, "reverse_spouse_reimbursement")] == [HUSBAND]
+    assert _reverse(HUSBAND).status_code == 403
+    assert _calls(family, "reverse_spouse_reimbursement") == []
 
 
 def test_r1_07_a_member_cannot_reverse_another_members_account(family):
     resp = _reverse(CHILD)
-    assert resp.status_code == 403 and resp.json()["detail"]["code"] == "account_forbidden"
+    # Not her ledger's manager: refused before the account is looked at (review R3B-06).
+    assert resp.status_code == 403 and "account_forbidden" not in resp.text
     assert _calls(family, "reverse_spouse_reimbursement") == []
 
 

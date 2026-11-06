@@ -58,8 +58,6 @@ PLAN_AD = "b6000000-0000-4000-8000-00000000000a"
 PLAN_LD = "b6000000-0000-4000-8000-00000000000b"
 # A woman who was a wife of the household and left it: no longer a wife here, her plans are everyone's.
 FORMER = "b2000000-0000-4000-8000-0000000000aa"
-# Read by no member: linked to a purchase that is not in the household (as under RLS).
-NOBODY = "nobody"
 
 # Each plan: (id, shop, linked purchase, whose personal purchase it is or None, the owner the
 # database keeps on it). Names are distinct, so a leak shows in a response's text.
@@ -71,7 +69,10 @@ PLANS = [
     (PLAN_U, "Other Unlinked Sofa", None, None, None),
     # Her wife_reimbursable advance (the family fixture's t1): an ordinary row for reading.
     (PLAN_R, "Tabby Panda Advance", "t1", None, None),
-    (PLAN_X, "Bank Elsewhere Lamp", "tx-of-another-household", NOBODY, None),
+    # Linked to a purchase outside the household: refused when made or linked since review R3B-05;
+    # one from before is read by what it keeps (no owner), as the database's policy reads it, which
+    # looks no purchase up (review R3B-03).
+    (PLAN_X, "Bank Elsewhere Lamp", "tx-of-another-household", None, None),
     # Her purchase deleted: the plan stays hers.
     (PLAN_WD, "Tabby Perfume Wafa", None, WIFE, WIFE),
     (PLAN_CD, "Tamara Abaya Huda", None, COWIFE, COWIFE),
@@ -84,7 +85,7 @@ SHOP = {pid: shop for pid, shop, _tx, _wife, _kept in PLANS}
 PLAN_COLUMNS = {
     "id", "household_id", "merchant", "provider", "total_amount", "installment_count", "monthly_amount",
     "paid_installments", "day_of_month", "start_date", "frequency", "next_due_at", "status", "category_code",
-    "original_transaction_id", "notes", "created_at", "personal_owner_id",
+    "original_transaction_id", "notes", "created_at", "personal_owner_id", "former_member_personal",
 }
 
 
@@ -94,7 +95,7 @@ def _plan_row(pid, shop, tx, kept):
         "installment_count": 4, "monthly_amount": 200.0, "paid_installments": 1, "day_of_month": 27,
         "start_date": "2026-11-01", "frequency": "monthly", "next_due_at": "2026-12-01", "status": "ACTIVE",
         "category_code": "OPEX-SHOPPING", "original_transaction_id": tx, "notes": f"note {shop}",
-        "created_at": "2026-11-01T10:00:00+00:00", "personal_owner_id": kept,
+        "created_at": "2026-11-01T10:00:00+00:00", "personal_owner_id": kept, "former_member_personal": False,
     }
 
 
@@ -109,7 +110,7 @@ def plans(household):
 
 def _reads(state, who, pid):
     wife = OWNER[pid]
-    return wife is None or (wife != NOBODY and _sees(state, who, wife))
+    return wife is None or _sees(state, who, wife)
 
 
 def _gone_husband(plans, who, resp):

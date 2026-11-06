@@ -271,19 +271,26 @@ def member_role(household_id: str, user_id: str) -> Optional[str]:
 def assert_can_modify_transaction(household_id: str, transaction_id: str, actor_user_id: Optional[str]) -> Dict[str, Any]:
     """
     Load ``transaction_id`` inside ``household_id`` and check the actor may edit or delete it.
-    Raises TransactionNotFoundError (not in this household) or PermissionDeniedError.
+    Raises TransactionNotFoundError (not in this household, or a wife's personal purchase the actor
+    does not read: a caller who cannot read a row cannot have it edited either, review R3B-01, as
+    the database's UPDATE and DELETE policies) or PermissionDeniedError.
     """
     if not actor_user_id:
         raise PermissionDeniedError(TRANSACTION_FORBIDDEN)
     tx = first_row(
         supabase_client.get_client()
         .table("transactions")
-        .select("id, household_id, user_id")
+        .select("id, household_id, user_id, nafaqah_class, nafaqah_spouse_id")
         .eq("id", transaction_id)
         .eq("household_id", household_id)
     )
     if not tx:
         raise TransactionNotFoundError("Transaction not found in this household.")
+    if str(tx.get("nafaqah_class") or "").strip().lower() == "wife_personal":
+        from nafaqah_service import can_view_personal_purchase, load_family_context
+
+        if not can_view_personal_purchase(load_family_context(household_id), actor_user_id, tx):
+            raise TransactionNotFoundError("Transaction not found in this household.")
     role = member_role(household_id, actor_user_id)
     if not can_modify_transaction(actor_user_id, role, tx.get("user_id")):
         raise PermissionDeniedError(TRANSACTION_FORBIDDEN)
