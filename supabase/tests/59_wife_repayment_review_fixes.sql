@@ -538,6 +538,13 @@ BEGIN
             pg_temp.a(11), pg_temp.a(11))),
         '9');
 
+    -- Another admin with the very same call from the same pool: still not his to replay.
+    PERFORM pg_temp.check('R1-04 a pool repayment', pg_temp.j(pg_temp.repay(7, 2, 8, '3', 14, 240), 'success'), 'true');
+    PERFORM pg_temp.check('R1-04 its key, same pool and amount, another admin', pg_temp.repay(9, 2, 8, '3', 14, 240), 'ERR:request_key_reused');
+    PERFORM pg_temp.check('R1-04 a former member payment from the pool', pg_temp.j(pg_temp.fpay(7, 2, '4', 14, 241), 'success'), 'true');
+    PERFORM pg_temp.check('R1-04 its key, same pool and amount, another admin', pg_temp.fpay(9, 2, '4', 14, 241), 'ERR:request_key_reused');
+    PERFORM pg_temp.check('R1-04 the pool moved once each', pg_temp.bal(14), '4993.00');
+
     -- The waiver: the same key by another actor.
     PERFORM pg_temp.check('R1-04 a waiver', pg_temp.j(pg_temp.waive(7, 2, 222), 'status'), 'waived');
     PERFORM pg_temp.check('R1-04 its key by another actor', pg_temp.waive(9, 2, 222), 'ERR:request_key_reused');
