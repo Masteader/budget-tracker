@@ -2,8 +2,9 @@
 -- Migration: 20261105001300_wife_repayment_debit.sql
 -- Proof tests: supabase/tests/56_wife_repayment_debit.sql, 57_wife_repayment_debit_concurrency.sql,
 --              58_wife_repayment_requests_and_reversals.sql, 59_wife_repayment_review_fixes.sql,
---              60_wife_repayment_r2_fixes.sql, 61_wife_repayment_r2_concurrency.sql
--- Rule: .agents/rules/02-saudi-fintech-and-islamic-compliance.md, family mode rule 2
+--              60_wife_repayment_r2_fixes.sql, 61_wife_repayment_r2_concurrency.sql,
+--              62_wife_repayment_r3_fixes.sql, 63_wife_allowance_access.sql
+-- Rule: .agents/rules/02-saudi-fintech-and-islamic-compliance.md, family mode rules 2 and 3
 --
 -- Owner decisions 2026-11-06. Repaying the wife for shared things she paid (wife_reimbursable):
 --
@@ -58,6 +59,11 @@
 --   6. A client cannot delete an account a repayment or a reversal used (review R3-05,
 --      account_has_repayments): it is archived instead, so the reversal stays possible and its
 --      history stays in the household's books. The purge (no JWT subject) still deletes it.
+--   7. Her allowance (rule 3; owner decision 2026-11-06, section 10c) is read by her (her own),
+--      her husband (as in point 5) and an admin who is not a wife; never by a co-wife, even an
+--      admin, nor an ordinary member (the read policy of member_allowances through
+--      nafaqah_caller_sees_allowances, and get_member_allowance_status). It is set as before by the
+--      husband or an admin, never by a wife: set_member_allowance refuses a wife who is an admin.
 --
 -- What is owed is advances less repayments plus reversals (nafaqah_net_repaid); pending requests
 -- never count. get_spouse_reimbursement_balance, former_member_debt_outstanding (the purge's
@@ -96,6 +102,8 @@
 --
 -- Replaces: record_spouse_reimbursement (both signatures), record_former_member_debt_payment (both),
 -- get_spouse_reimbursement_balance (20261020300000) and its policy spouse_reimbursements_select_household,
+-- get_member_allowance_status, set_member_allowance and their table's policy
+-- member_allowances_select_household (20261020300000),
 -- guard_wife_reimbursable_ledger and remove_nafaqah_ledger_on_membership_end (20261020900000),
 -- former_member_debt_outstanding and prepare_account_purge (20261105001200). Re-running 001200 after
 -- this file puts its own versions back (an amount-only 6-argument payment among them, which both
@@ -116,6 +124,10 @@
 --   CREATE POLICY spouse_reimbursements_select_household ON public.spouse_reimbursements
 --       FOR SELECT TO authenticated
 --       USING (household_id = (SELECT public.get_auth_user_household_id()));
+--   DROP POLICY member_allowances_select_household ON public.member_allowances;
+--   CREATE POLICY member_allowances_select_household ON public.member_allowances
+--       FOR SELECT TO authenticated
+--       USING (household_id = (SELECT public.get_auth_user_household_id()));
 --   DROP FUNCTION public.request_spouse_reimbursement(uuid, numeric, text, uuid, uuid),
 --     public.cancel_spouse_reimbursement_request(uuid, uuid, uuid),
 --     public.decline_spouse_reimbursement_request(uuid, uuid, text, uuid),
@@ -132,9 +144,12 @@
 --     public.nafaqah_request_close(public.spouse_reimbursement_requests, text, text, uuid),
 --     public.nafaqah_close_unfit_requests(uuid, uuid, numeric),
 --     public.nafaqah_may_repay(uuid, uuid),
---     public.nafaqah_refuse_account_delete();
---   Then run these CREATE OR REPLACE statements: record_spouse_reimbursement and
---   get_spouse_reimbursement_balance from 20261020300000; guard_wife_reimbursable_ledger and
+--     public.nafaqah_refuse_account_delete(),
+--     public.nafaqah_caller_sees_allowances(),
+--     public.nafaqah_may_see_allowances(uuid, uuid);
+--   Then run these CREATE OR REPLACE statements: record_spouse_reimbursement,
+--   get_spouse_reimbursement_balance, get_member_allowance_status and set_member_allowance from
+--   20261020300000 (they keep their privileges); guard_wife_reimbursable_ledger and
 --   remove_nafaqah_ledger_on_membership_end from 20261020900000; record_former_member_debt_payment,
 --   former_member_debt_outstanding and prepare_account_purge from 20261105001200. (The amount-only
 --   payment keeps 001200's privilege, the service role only: this file never grants it to a client.)
@@ -1945,7 +1960,180 @@ CREATE TRIGGER trg_accounts_keep_repayment_history
 BEFORE DELETE ON public.accounts
 FOR EACH ROW EXECUTE FUNCTION public.nafaqah_refuse_account_delete();
 
+-- 10c. Her allowance: who sees it and who sets it (owner decision 2026-11-06) ------------------
+-- Her allowance (member_allowances; allocated, spent and remaining for a cycle) is read by the wife
+-- herself (her own only), by her husband (001200's nafaqah_ledger_husband_id: the provider while
+-- he is a current member who is not a wife) and by an admin of the household who is not a wife.
+-- A co-wife (even an admin) and an ordinary member read nothing of it: no row, no figure. It is set
+-- as before by the husband (an admin or not) or an admin, but never by a wife: a wife who is an
+-- admin no longer sets a co-wife's. Replaces 20261020300000's read policy (any member of the
+-- household), get_member_allowance_status (any member) and set_member_allowance (any admin).
+
+-- Who sees every wife's allowance in the household (beside each wife, who sees her own).
+CREATE OR REPLACE FUNCTION public.nafaqah_may_see_allowances(p_household_id uuid, p_actor uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.household_memberships m
+        WHERE m.household_id = p_household_id
+          AND m.user_id = p_actor
+          AND m.financial_role IS DISTINCT FROM 'spouse'
+          AND (m.role = 'admin' OR p_actor = public.nafaqah_ledger_husband_id(p_household_id))
+    );
+$$;
+
+-- The half of the read rule that depends on the caller only (their active household), evaluated
+-- once per statement in the policy below.
+CREATE OR REPLACE FUNCTION public.nafaqah_caller_sees_allowances()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    SELECT COALESCE(public.nafaqah_may_see_allowances(public.get_auth_user_household_id(), auth.uid()), false);
+$$;
+
+DROP POLICY IF EXISTS member_allowances_select_household ON public.member_allowances;
+CREATE POLICY member_allowances_select_household ON public.member_allowances
+    FOR SELECT TO authenticated
+    USING (household_id = (SELECT public.get_auth_user_household_id())
+           AND (member_user_id = (SELECT auth.uid()) OR (SELECT public.nafaqah_caller_sees_allowances())));
+
+-- 20261020300000's body, with the read rule before anything about her is looked at.
+CREATE OR REPLACE FUNCTION public.get_member_allowance_status(
+    p_household_id uuid,
+    p_member_user_id uuid,
+    p_cycle_key text DEFAULT NULL,
+    p_actor_user_id uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_actor uuid := public.nafaqah_resolve_actor(p_actor_user_id);
+    v_cycle text;
+    v_allocated numeric(14, 2);
+    v_spent numeric(14, 2);
+    v_count int;
+BEGIN
+    PERFORM public.nafaqah_require_member(p_household_id, v_actor);
+    -- She reads her own; her husband and an admin who is not a wife read every wife's. Nobody
+    -- else gets a figure (owner decision 2026-11-06).
+    IF v_actor IS DISTINCT FROM p_member_user_id AND NOT public.nafaqah_may_see_allowances(p_household_id, v_actor) THEN
+        RAISE EXCEPTION 'Forbidden: only she, her husband, or an admin who is not a wife, reads this allowance'
+            USING ERRCODE = '42501', HINT = 'forbidden';
+    END IF;
+    IF NOT public.nafaqah_is_spouse_member(p_household_id, p_member_user_id) THEN
+        RAISE EXCEPTION 'Allowances apply to a spouse member of this household' USING ERRCODE = '22023';
+    END IF;
+
+    v_cycle := COALESCE(NULLIF(trim(p_cycle_key), ''), public.nafaqah_current_cycle_key(p_household_id));
+    IF v_cycle !~ '^[0-9]{4}-(0[1-9]|1[0-2])$' THEN
+        RAISE EXCEPTION 'Invalid cycle_key %', v_cycle USING ERRCODE = '22023';
+    END IF;
+
+    SELECT a.amount INTO v_allocated
+    FROM public.member_allowances a
+    WHERE a.household_id = p_household_id AND a.member_user_id = p_member_user_id AND a.cycle_key = v_cycle;
+
+    SELECT COALESCE(sum(t.amount), 0), count(*) INTO v_spent, v_count
+    FROM public.transactions t
+    WHERE t.household_id = p_household_id
+      AND t.nafaqah_spouse_id = p_member_user_id
+      AND t.nafaqah_class = 'wife_personal'
+      AND t.cycle_key = v_cycle;
+
+    RETURN jsonb_build_object(
+        'household_id', p_household_id,
+        'member_user_id', p_member_user_id,
+        'cycle_key', v_cycle,
+        'is_set', v_allocated IS NOT NULL,
+        'allocated', COALESCE(v_allocated, 0),
+        'spent', v_spent,
+        'remaining', COALESCE(v_allocated, 0) - v_spent,
+        'transaction_count', v_count
+    );
+END;
+$$;
+
+-- 20261020300000's body, refusing every wife as the one who sets it.
+CREATE OR REPLACE FUNCTION public.set_member_allowance(
+    p_household_id uuid,
+    p_member_user_id uuid,
+    p_amount numeric,
+    p_cycle_key text DEFAULT NULL,
+    p_actor_user_id uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_actor uuid := public.nafaqah_resolve_actor(p_actor_user_id);
+    v_cycle text;
+    v_is_admin boolean;
+BEGIN
+    PERFORM public.nafaqah_require_member(p_household_id, v_actor);
+    IF NOT public.nafaqah_is_spouse_member(p_household_id, p_member_user_id) THEN
+        RAISE EXCEPTION 'Allowances apply to a spouse member of this household' USING ERRCODE = '22023';
+    END IF;
+    IF v_actor = p_member_user_id THEN
+        RAISE EXCEPTION 'Forbidden: the allowance is set by the husband or a household admin' USING ERRCODE = '42501';
+    END IF;
+    -- Never a wife: not a co-wife, even an admin (owner decision 2026-11-06).
+    IF public.nafaqah_is_spouse_member(p_household_id, v_actor) THEN
+        RAISE EXCEPTION 'Forbidden: the allowance is set by the husband or a household admin who is not a wife'
+            USING ERRCODE = '42501', HINT = 'forbidden';
+    END IF;
+
+    SELECT EXISTS (
+        SELECT 1 FROM public.household_memberships m
+        WHERE m.household_id = p_household_id AND m.user_id = v_actor AND m.role = 'admin'
+    ) INTO v_is_admin;
+    IF NOT v_is_admin AND v_actor IS DISTINCT FROM public.nafaqah_husband_id(p_household_id) THEN
+        RAISE EXCEPTION 'Forbidden: the allowance is set by the husband or a household admin' USING ERRCODE = '42501';
+    END IF;
+
+    IF p_amount IS NULL OR p_amount < 0 OR p_amount <> round(p_amount, 2) OR p_amount > 999999999999.99 THEN
+        RAISE EXCEPTION 'Allowance must be a non-negative SAR amount with at most 2 decimals' USING ERRCODE = '22023';
+    END IF;
+
+    v_cycle := COALESCE(NULLIF(trim(p_cycle_key), ''), public.nafaqah_current_cycle_key(p_household_id));
+    IF v_cycle !~ '^[0-9]{4}-(0[1-9]|1[0-2])$' THEN
+        RAISE EXCEPTION 'Invalid cycle_key %', v_cycle USING ERRCODE = '22023';
+    END IF;
+
+    INSERT INTO public.member_allowances (household_id, member_user_id, cycle_key, amount, set_by)
+    VALUES (p_household_id, p_member_user_id, v_cycle, p_amount, v_actor)
+    ON CONFLICT (household_id, member_user_id, cycle_key)
+    DO UPDATE SET amount = EXCLUDED.amount, set_by = EXCLUDED.set_by, updated_at = now();
+
+    RETURN public.get_member_allowance_status(p_household_id, p_member_user_id, v_cycle, v_actor);
+END;
+$$;
+
 -- 11. Privileges ---------------------------------------------------------------------------------
+-- Her allowance: the helper is internal; the policy's half runs as the caller; both RPCs keep
+-- 20261020300000's privileges (CREATE OR REPLACE keeps them; stated again for a fresh replay).
+REVOKE ALL ON FUNCTION public.nafaqah_may_see_allowances(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.nafaqah_may_see_allowances(uuid, uuid) TO service_role;
+REVOKE ALL ON FUNCTION public.nafaqah_caller_sees_allowances() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.nafaqah_caller_sees_allowances() TO authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.get_member_allowance_status(uuid, uuid, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.set_member_allowance(uuid, uuid, numeric, text, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_member_allowance_status(uuid, uuid, text, uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.set_member_allowance(uuid, uuid, numeric, text, uuid) TO authenticated, service_role;
 REVOKE EXECUTE ON FUNCTION public.nafaqah_refuse_account_delete() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.nafaqah_net_repaid(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.nafaqah_outstanding(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
