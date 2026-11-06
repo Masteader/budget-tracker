@@ -12,7 +12,8 @@
 --
 -- Verifies:
 --   1. A repayment from his account: his balance goes down by exactly the amount, hers up by the
---      same, one account_transfers row linked from the ledger row; no budget, no transaction.
+--      same, one account_transfers row linked from the ledger row; no budget, no transaction, and
+--      her allowance untouched.
 --   2. Her account follows the payment method (cash to her cash account), else her oldest one;
 --      never an archived account.
 --   3. Not tracked in the app: nothing moves, no transfer.
@@ -291,6 +292,10 @@ BEGIN
     PERFORM pg_temp.advance(1, 10, 40);
     PERFORM pg_temp.advance(3, 9, 200);
     PERFORM pg_temp.advance(2, 6, 50);
+    -- Her allowance (rule 3): 15 spent this cycle, which no repayment may touch.
+    INSERT INTO public.transactions (household_id, user_id, amount, merchant, category_code, timestamp, source, spent_by,
+                                     nafaqah_class, nafaqah_spouse_id)
+    VALUES (pg_temp.h(1), pg_temp.u(2), 15, 'T56 Perfume', 'OPEX-SHOPPING', now(), 'manual', 'me', 'wife_personal', pg_temp.u(2));
 END $$;
 
 SELECT pg_temp.keep('budgets', pg_temp.budgets());
@@ -336,6 +341,8 @@ BEGIN
     PERFORM pg_temp.expect('her cash up', pg_temp.bal(6), '50.00');
     PERFORM pg_temp.expect('her bank as before', pg_temp.bal(2), '500.00');
     PERFORM pg_temp.expect('no budget moved (cash)', pg_temp.budgets(), pg_temp.kept('budgets'));
+    PERFORM pg_temp.expect('her allowance is untouched',
+        pg_temp.svc(format('SELECT (public.get_member_allowance_status(%L, %L, NULL, %L)->>''spent'')', pg_temp.h(1), pg_temp.u(2), pg_temp.u(1))), '15.00');
     RAISE NOTICE 'PASSED: his account goes down and hers up by exactly the amount, as a transfer; no budget moves.';
 END $$;
 
