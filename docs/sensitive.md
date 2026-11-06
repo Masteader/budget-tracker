@@ -37,7 +37,8 @@ The following paths in the repository are classified as sensitive by default:
 ### Islamic Compliance & Nafaqah
 - `ai_service/nafaqah_service.py` (Wife allowance, personal spend, reimbursement ledger, a deleted wife's outstanding record)
 - `flutter_app/lib/widgets/nafaqah/former_member_debt_panel.dart` (Payments and waiver of what a deleted wife was owed)
-- `flutter_app/lib/widgets/nafaqah/repayment_account_picker.dart` and `flutter_app/lib/widgets/dashboard/family_reimbursement_card.dart` (Which account a repayment to the wife is paid from; it moves balances)
+- `flutter_app/lib/widgets/nafaqah/repayment_account_picker.dart` and `flutter_app/lib/widgets/dashboard/family_reimbursement_card.dart` (Which account a repayment to the wife is paid from, her requests and their approval, and reversals; every one of them moves balances)
+- `supabase/migrations/20261105001300_wife_repayment_debit.sql` (Tracked repayments, the wife's requests and reversals: debits and credits accounts, changes what is owed, closes requests at the purge)
 - `flutter_app/lib/models/nafaqah_account.dart` (Wife account debiting isolation)
 - `flutter_app/lib/widgets/settlement/` (Spousal reimbursement & roommate settlement)
 
