@@ -1,5 +1,42 @@
 ﻿key,where_it_appears,english,arabic,urdu,reviewer_notes
 app_title_short,app,Qawam Money,قوام المال,Qawam Money,
+fmd_title,app,Outstanding owed to a former member,مبلغ مستحق لعضوة سابقة,سابق رکن کی واجب الادا رقم,
+fmd_subtitle,app,"Kept after her account was deleted, without her name.",حُفظ بعد حذف حسابها، دون اسمها.,ان کا اکاؤنٹ حذف ہونے کے بعد، ان کے نام کے بغیر محفوظ۔,
+fmd_remaining,app,Still owed,المتبقي لها,ابھی واجب,
+fmd_status_settled,app,Settled,مُسدَّد,ادا شدہ,
+fmd_status_waived,app,Waived by her,أبرأت الذمّة,انہوں نے معاف کر دیا,
+fmd_closed_on,app,Closed on {date},أُغلق في {date},{date} کو بند ہوا,
+fmd_original_total,app,Owed at deletion: {amount},المستحق عند الحذف: {amount},حذف کے وقت واجب: {amount},
+fmd_paid_total,app,Paid: {amount},المدفوع: {amount},ادا شدہ: {amount},
+fmd_waived_total,app,Waived: {amount},المُبرأ منه: {amount},معاف: {amount},
+fmd_record_payment,app,Record payment,تسجيل دفعة,ادائیگی درج کریں,
+fmd_waive_action,app,Waived by her,أبرأت الذمّة,انہوں نے معاف کر دیا,
+fmd_history_title,app,Record history,سجل المبلغ,ریکارڈ کی تاریخ,
+fmd_history_opened,app,Owed when her account was deleted,المستحق عند حذف حسابها,اکاؤنٹ حذف ہونے پر واجب,
+fmd_history_payment,app,Paid via {method},دُفع عبر {method},{method} کے ذریعے ادا,
+fmd_history_waiver,app,She waived what remained,أبرأت الذمّة مما تبقّى,باقی رقم معاف کر دی (ابراء),
+fmd_pay_title,app,Record a payment,تسجيل دفعة,ادائیگی درج کریں,
+fmd_pay_desc,app,"Money paid towards what she was owed. No account, balance or budget changes.",ما دُفع مما كان مستحقاً لها. لا يتغير أي حساب أو رصيد أو ميزانية.,ان کی واجب رقم میں سے ادا شدہ رقم۔ کوئی اکاؤنٹ، بیلنس یا بجٹ نہیں بدلے گا۔,
+fmd_pay_over,app,That is more than remains ({amount}).,المبلغ أكبر من المتبقي ({amount}).,یہ رقم باقی ({amount}) سے زیادہ ہے۔,
+fmd_pay_confirm_title,app,Confirm the payment,تأكيد الدفعة,ادائیگی کی تصدیق,
+fmd_pay_confirm_body,app,Record a payment of {amount} via {method}?,تسجيل دفعة بقيمة {amount} عبر {method}؟,{method} کے ذریعے {amount} کی ادائیگی درج کریں؟,
+fmd_pay_confirm_ok,app,Record,تسجيل,درج کریں,
+fmd_paid_success,app,Recorded {amount} via {method},سُجّلت دفعة {amount} عبر {method},{method} کے ذریعے {amount} درج ہو گئے,
+fmd_waive_title,app,She waived it (إبراء),إبراء الذمّة,معافی (ابراء),
+fmd_waive_body,app,This closes the record as waived by her (إبراء): {amount} is no longer owed. No money moves.,يُغلق هذا السجل على أنها أبرأت الذمّة (إبراء): لم يعد {amount} مستحقاً. لا تنتقل أي أموال.,یہ ریکارڈ اس طرح بند ہوگا کہ انہوں نے معاف کر دیا (ابراء): {amount} اب واجب نہیں۔ کوئی رقم منتقل نہیں ہوگی۔,
+fmd_waive_ok,app,Record waiver,تسجيل الإبراء,معافی درج کریں,
+fmd_waived_success,app,Recorded as waived by her.,سُجّل الإبراء وأُغلق السجل.,معافی درج ہو گئی اور ریکارڈ بند ہو گیا۔,
+fmd_waive_failed,app,The waiver was not recorded.,لم يُسجَّل الإبراء.,معافی درج نہیں ہوئی۔,
+fmd_unconfirmed_msg,app,We could not confirm this. Trying again is safe: it is recorded only once.,تعذّر علينا التأكيد. إعادة المحاولة آمنة: لن يُسجَّل إلا مرة واحدة.,ہم تصدیق نہیں کر سکے۔ دوبارہ کوشش محفوظ ہے: یہ صرف ایک بار درج ہوگا۔,
+fmd_err_closed,app,This record is already settled or waived.,هذا السجل مُسدَّد أو مُبرأ منه بالفعل.,یہ ریکارڈ پہلے ہی ادا یا معاف ہو چکا ہے۔,
+fmd_err_not_found,app,This record no longer exists. Refresh and try again.,لم يعد هذا السجل موجوداً. حدّث الصفحة وحاول مجدداً.,یہ ریکارڈ اب موجود نہیں۔ تازہ کر کے دوبارہ کوشش کریں۔,
+fmd_err_key_reused,app,"This was already sent with different details. Close this, check the record, then try again.",أُرسلت هذه العملية من قبل بتفاصيل مختلفة. أغلق النافذة وراجع السجل ثم حاول مجدداً.,یہ پہلے مختلف تفصیلات کے ساتھ بھیجا جا چکا ہے۔ اسے بند کریں، ریکارڈ دیکھیں، پھر دوبارہ کوشش کریں۔,
+fmd_err_forbidden,app,Only the husband or a household admin can close this record.,إغلاق هذا السجل للزوج أو مشرف المنزل فقط.,یہ ریکارڈ صرف شوہر یا گھرانے کا ایڈمن بند کر سکتا ہے۔,
+fmd_err_invalid,app,The amount or payment method is not valid.,المبلغ أو طريقة الدفع غير صحيحة.,رقم یا ادائیگی کا طریقہ درست نہیں۔,
+fmd_notice_title,app,Account deletion scheduled,حذف حساب مُجدوَل,اکاؤنٹ حذف کرنا طے ہے,
+fmd_notice_body,app,{name} has scheduled her account to be deleted on {date}. {amount} is still owed to her. Settle it before then; after the deletion the household keeps an anonymised record of what remains.,جدولت {name} حذف حسابها في {date}. لا يزال لها {amount}. سدّده قبل ذلك؛ فبعد الحذف يحتفظ المنزل بسجل مجهول الاسم لما تبقّى.,{name} نے {date} کو اپنا اکاؤنٹ حذف کرنا طے کیا ہے۔ ان کے {amount} ابھی واجب ہیں۔ اس سے پہلے ادا کر دیں؛ حذف کے بعد گھرانہ باقی رقم کا ایک گمنام ریکارڈ رکھے گا۔,
+fmd_notice_your_wife,app,Your wife,زوجتك,آپ کی اہلیہ,
+fmd_notice_the_wife,app,The wife,الزوجة,اہلیہ,
 sign_out_unsynced_title,app,Unsynced Transactions,معاملات غير متزامنة,غیر مطابقت پذیر لین دین,
 auth_sign_in_unverified,app,We could not verify your sign-in. Please sign in again or request a new link.,تعذر التحقق من تسجيل دخولك. سجّل الدخول مرة أخرى أو اطلب رابطًا جديدًا.,آپ کے سائن ان کی تصدیق نہیں ہو سکی۔ براہ کرم دوبارہ سائن ان کریں یا نیا لنک طلب کریں۔,
 sba_save_failed,app,The budget was not saved. Check your connection and try again.,لم تُحفظ الميزانية. تحقق من الاتصال وحاول مرة أخرى.,بجٹ محفوظ نہیں ہوا۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔,
@@ -33,7 +70,7 @@ del_cancel_only_note,app,Signing in does not cancel the deletion. Only the Cance
 del_personal_data,app,"Your profile, your personal accounts and their entries are deleted.",يُحذف ملفك الشخصي وحساباتك الشخصية وقيودها.,آپ کا پروفائل، ذاتی اکاؤنٹس اور ان کے اندراجات حذف ہو جائیں گے۔,
 del_shared_rows,app,"Expenses you recorded in a household that stays are kept for its members and shown as ""Deleted member"". Your notes on them are removed and their receipt images are deleted.","تبقى المصروفات التي سجلتها في منزل مستمر لأعضائه وتظهر باسم ""عضو محذوف"". تُزال ملاحظاتك عليها وتُحذف صور إيصالاتها.","جو گھرانہ باقی رہے گا اس میں آپ کے درج کردہ اخراجات اس کے ارکان کے لیے رہیں گے اور ""حذف شدہ رکن"" کے نام سے دکھیں گے۔ ان پر آپ کے نوٹس ہٹا دیے جائیں گے اور رسید کی تصاویر حذف ہو جائیں گی۔",
 del_settlement_warning,app,"Debts between the people who stay can change: what you paid stops counting in their settlements, and roommates' equal shares for this cycle are worked out again. Account balances and budget spending do not change.",قد تتغير الديون بين من يبقون: لا يعود ما دفعته محسوبًا في تسوياتهم، وتُعاد حساب الحصص المتساوية بين شركاء السكن لهذه الدورة. لا تتغير أرصدة الحسابات ولا إنفاق الميزانيات.,باقی رہنے والوں کے درمیان قرض بدل سکتے ہیں: آپ کی ادائیگی ان کے حساب میں شمار نہیں رہے گی، اور روم میٹس کے برابر حصے اس سائیکل کے لیے دوبارہ نکالے جائیں گے۔ اکاؤنٹ بیلنس اور بجٹ کے اخراجات نہیں بدلیں گے۔,
-del_wife_ledger_member,app,"If you are the wife in a family household, your allowance and reimbursement records there are deleted.",إن كنتِ الزوجة في منزل عائلي، تُحذف سجلات مصروفك ومستحقاتك فيه.,اگر آپ کسی خاندانی گھرانے میں بیوی ہیں تو وہاں آپ کے الاؤنس اور واپسی کے ریکارڈ حذف ہو جائیں گے۔,
+del_wife_ledger_member,app,"If you are the wife in a family household, your allowance and reimbursement records there are deleted. If your husband still owes you money, he is shown the amount once you schedule this, and the household keeps only that amount, with no name.",إن كنتِ الزوجة في منزل عائلي، تُحذف سجلات مصروفك ومستحقاتك فيه. وإن كان زوجك ما زال مديناً لكِ، يُعرض عليه المبلغ بمجرد جدولة الحذف، ولا يبقى في المنزل إلا هذا المبلغ دون اسم.,اگر آپ کسی خاندانی گھرانے میں بیوی ہیں تو وہاں آپ کے الاؤنس اور واپسی کے ریکارڈ حذف ہو جائیں گے۔ اگر آپ کے شوہر پر ابھی آپ کی کوئی رقم واجب ہے تو حذف طے کرتے ہی انہیں یہ رقم دکھائی جاتی ہے، اور گھرانے میں صرف یہی رقم بغیر نام کے رہتی ہے۔,
 del_household_delete_warning,app,"Deleting a household removes everything in it for everyone: shared accounts, all members' account entries in it, budgets, and the wife's allowance and reimbursement ledger. Members keep their logins but no longer belong to it. Export what you need first.",حذف المنزل يزيل كل ما فيه للجميع: الحسابات المشتركة، وقيود حسابات جميع الأعضاء فيه، والميزانيات، وسجل مصروف الزوجة ومستحقاتها. يحتفظ الأعضاء بحساباتهم لكنهم لا يعودون ينتمون إليه. صدّر ما تحتاجه أولًا.,گھرانہ حذف کرنے سے اس کی ہر چیز سب کے لیے ختم ہو جاتی ہے: مشترکہ اکاؤنٹس، اس میں تمام ارکان کے اکاؤنٹ اندراجات، بجٹ، اور بیوی کا الاؤنس اور واپسی کا کھاتہ۔ ارکان کا لاگ ان باقی رہے گا لیکن وہ اس کا حصہ نہیں رہیں گے۔ پہلے جو ضروری ہو ایکسپورٹ کر لیں۔,
 del_your_households,app,Your households,منازلك,آپ کے گھرانے,
 del_pos_member,app,{name}: you leave this household. It stays for the other members.,{name}: تغادر هذا المنزل، ويبقى لبقية الأعضاء.,{name}: آپ یہ گھرانہ چھوڑ دیں گے۔ یہ باقی ارکان کے لیے رہے گا۔,
@@ -136,7 +173,7 @@ web.delete_account.deleted.items.1,web,"Your personal accounts, the income recor
 web.delete_account.deleted.items.2,web,"The notes you wrote on your entries, income and transfers.",الملاحظات التي كتبتها على مصروفاتك ودخلك وتحويلاتك.,آپ کے اندراجات، آمدنی اور منتقلیوں پر آپ کے لکھے ہوئے نوٹس۔,
 web.delete_account.deleted.items.3,web,Receipt images attached to your entries.,صور الفواتير المرفقة بمصروفاتك.,آپ کے اندراجات سے منسلک رسیدوں کی تصاویر۔,
 web.delete_account.deleted.items.4,web,"Your membership of every household, and any dependent entry linked to you.",عضويتك في كل المنازل، وأي تابع مرتبط بك.,ہر گھرانے میں آپ کی رکنیت، اور آپ سے منسلک کوئی زیرِ کفالت اندراج۔,
-web.delete_account.deleted.items.5,web,"If you are the wife in a family household: your personal expense entries, your set allowance and the ledger of what you are owed.",إذا كنتِ الزوجة في منزل أسرة: مصروفاتك الشخصية ومصروفك الشخصي المحدد ودفتر المستحق لك.,اگر آپ کسی خاندانی گھرانے میں بیوی ہیں: آپ کے ذاتی اخراجات کے اندراجات، آپ کا مقررہ جیب خرچ اور آپ کے واجبات کا کھاتہ۔,
+web.delete_account.deleted.items.5,web,"If you are the wife in a family household: your personal expense entries, your set allowance and the ledger of what you are owed. If your husband still owes you money, the app shows him the amount when you schedule the deletion (and we may email him), or shows the household’s admins if no husband is set; after the deletion the household keeps only the amount still owed, with no name, until he or an admin records it as paid or as waived by you.",إذا كنتِ الزوجة في منزل أسرة: مصروفاتك الشخصية ومصروفك الشخصي المحدد ودفتر المستحق لك. وإن كان زوجك ما زال مديناً لكِ بمبلغ، يعرض التطبيق عليه المبلغ عند جدولة الحذف (وقد نرسله إليه بالبريد)، أو يعرضه على مديري المنزل إن لم يُحدَّد الزوج؛ وبعد الحذف لا يبقى في المنزل إلا المبلغ المستحق دون اسم، حتى يسجّله هو أو أحد المديرين مدفوعاً أو أنكِ أبرأتِه منه.,اگر آپ کسی خاندانی گھرانے میں بیوی ہیں: آپ کے ذاتی اخراجات کے اندراجات، آپ کا مقررہ جیب خرچ اور آپ کے واجبات کا کھاتہ۔ اگر آپ کے شوہر پر ابھی آپ کی کوئی رقم واجب ہے تو حذف طے کرتے وقت ایپ انہیں یہ رقم دکھاتی ہے (اور ہم انہیں ای میل بھی کر سکتے ہیں)، یا شوہر مقرر نہ ہو تو گھرانے کے منتظمین کو دکھاتی ہے؛ حذف کے بعد گھرانے میں صرف واجب الادا رقم بغیر نام کے رہتی ہے، جب تک وہ یا کوئی منتظم اسے ادا شدہ یا آپ کی طرف سے معاف شدہ درج نہ کر دے۔,
 web.delete_account.deleted.items.6,web,Messages you sent us from this email address through the contact and support forms.,الرسائل التي أرسلتها إلينا من هذا البريد عبر نماذج التواصل والدعم.,اس ای میل پتے سے رابطہ اور سپورٹ فارمز کے ذریعے ہمیں بھیجے گئے پیغامات۔,
 web.delete_account.deleted.items.7,web,"Any household where you are the only member, with everything in it.",أي منزل أنت عضوه الوحيد، بكل ما فيه.,کوئی بھی گھرانہ جس کے آپ واحد رکن ہیں، اس کی ہر چیز سمیت۔,
 web.delete_account.kept.title,web,"What stays, without your name",ما الذي يبقى دون اسمك,کیا آپ کے نام کے بغیر باقی رہتا ہے,
@@ -146,7 +183,7 @@ web.delete_account.kept.items.2,web,"Shared pools you own pass to another admin,
 web.delete_account.kept.items.3,web,"Settlements in that household can change: entries you paid are no longer counted and equal splits in the current cycle are divided again, so other members’ debts can change. Account balances and budget spending do not change.",قد تتغير التسويات في ذلك المنزل: لا تُحتسب المصروفات التي دفعتها أنت، وتُعاد قسمة المصروفات المتساوية في الدورة الحالية، فقد تتغير ديون الأعضاء الآخرين. أرصدة الحسابات ومصروف الميزانيات لا تتغير.,اس گھرانے میں تصفیے بدل سکتے ہیں: آپ کے ادا کردہ اندراجات شمار نہیں ہوتے اور موجودہ سائیکل کی برابر تقسیم دوبارہ ہوتی ہے، اس لیے دوسرے ارکان کے قرض بدل سکتے ہیں۔ اکاؤنٹس کے بیلنس اور بجٹ کے اخراجات نہیں بدلتے۔,
 web.delete_account.kept.items.4,web,"A record with no name, email or user ID, showing that a deletion was completed.",سجل لا يحوي اسماً ولا بريداً ولا معرّف مستخدم، يبيّن أن عملية حذف قد اكتملت.,ایک ریکارڈ جس میں نہ نام ہے، نہ ای میل، نہ یوزر آئی ڈی، اور جو صرف یہ بتاتا ہے کہ ایک حذف مکمل ہوا۔,
 web.delete_account.notEdited.title,web,What is not edited,ما الذي لا يُعدَّل,کس چیز میں ترمیم نہیں ہوتی,
-web.delete_account.notEdited.items.0,web,"Free text other members typed, such as a note mentioning you by name, stays as they wrote it, except that your email address is replaced wherever it appears.",النصوص التي كتبها الأعضاء الآخرون، مثل ملاحظة تذكرك بالاسم، تبقى كما كتبوها، إلا أن بريدك الإلكتروني يُستبدل أينما ورد.,دوسرے ارکان کی لکھی ہوئی عبارت، جیسے آپ کا نام لینے والا نوٹ، ویسی ہی رہتی ہے، البتہ آپ کا ای میل پتہ جہاں بھی ہو بدل دیا جاتا ہے۔,
+web.delete_account.notEdited.items.0,web,"Free text other members typed, such as a note mentioning you by name, stays as they wrote it. We also remove your email address from household records.",النصوص التي كتبها الأعضاء الآخرون، مثل ملاحظة تذكرك بالاسم، تبقى كما كتبوها. ونزيل أيضاً بريدك الإلكتروني من سجلات المنزل.,دوسرے ارکان کی لکھی ہوئی عبارت، جیسے آپ کا نام لینے والا نوٹ، ویسی ہی رہتی ہے۔ ہم گھرانے کے ریکارڈ سے آپ کا ای میل پتہ بھی ہٹا دیتے ہیں۔,
 web.delete_account.notEdited.items.1,web,"Household names stay as they are, even if one includes your name, except that your email address is replaced there too.",أسماء المنازل تبقى كما هي، حتى لو تضمن أحدها اسمك، إلا أن بريدك الإلكتروني يُستبدل فيها أيضاً.,گھرانوں کے نام جوں کے توں رہتے ہیں، چاہے کسی میں آپ کا نام شامل ہو، البتہ ان میں بھی آپ کا ای میل پتہ بدل دیا جاتا ہے۔,
 web.delete_account.outOfReach.title,web,What we cannot remove,ما لا نستطيع حذفه,جو ہم نہیں ہٹا سکتے,
 web.delete_account.outOfReach.intro,web,"Deletion does not reach these, and we cannot remove individual records from them:",لا يصل الحذف إلى ما يلي، ولا نستطيع إزالة سجلات بعينها منه:,حذف ان تک نہیں پہنچتا، اور ہم ان میں سے الگ الگ ریکارڈ نہیں ہٹا سکتے:,
@@ -326,4 +363,21 @@ Export anything you want to keep before that date.
 اس کا سارا ڈیٹا ہٹا دیا جائے گا، جس میں اس گھرانے میں آپ کے اکاؤنٹس اور اندراجات بھی شامل ہیں۔ آپ کا اپنا اکاؤنٹ برقرار رہے گا اور آپ سائن ان کر سکیں گے۔
 
 جو کچھ رکھنا چاہتے ہیں اسے اس تاریخ سے پہلے ایکسپورٹ کر لیں۔
+",
+email.creditor_owed.subject,email,Qawam Money: a member of your household will delete her account on {date},قوام المال: عضوة في منزلك ستحذف حسابها بتاريخ {date},قوام المال: آپ کے گھرانے کی ایک رکن {date} کو اپنا اکاؤنٹ حذف کریں گی,
+email.creditor_owed.body,email,"A member of your household in Qawam Money has scheduled her account to be deleted on {date}.
+
+The household's Nafaqah records show SAR {amount} still owed to her for shared expenses she paid from her own money.
+
+Please settle it with her before that date. After the deletion, the household keeps one record with no name: ""Outstanding owed to a former member: SAR {amount}"". You or a household admin can then record what is paid, or record that she waived it.
+","جدولت عضوة في منزلك في قوام المال حذف حسابها بتاريخ {date}.
+
+تُظهر سجلات النفقة في المنزل مبلغ {amount} ريال ما زال مستحقاً لها عن مصروفات مشتركة دفعتها من مالها الخاص.
+
+يُرجى تسوية المبلغ معها قبل هذا التاريخ. بعد الحذف يحتفظ المنزل بسجل واحد بلا اسم: ""مستحق لعضو سابق: {amount} ريال"". ويمكنك أنت أو مدير المنزل بعدها تسجيل ما يُدفع، أو تسجيل أنها أبرأت منه.
+","قوام المال میں آپ کے گھرانے کی ایک رکن نے {date} کو اپنا اکاؤنٹ حذف کرنا طے کیا ہے۔
+
+گھرانے کے نفقہ ریکارڈ کے مطابق مشترکہ اخراجات کے {amount} ریال، جو انہوں نے اپنی رقم سے ادا کیے تھے، ابھی تک انہیں واجب الادا ہیں۔
+
+براہ کرم اس تاریخ سے پہلے ان کے ساتھ یہ رقم طے کر لیں۔ حذف کے بعد گھرانے میں بغیر نام کے ایک ریکارڈ رہے گا: ""سابق رکن کا واجب الادا: {amount} ریال""۔ اس کے بعد آپ یا گھرانے کا منتظم ادا کی گئی رقم درج کر سکتا ہے، یا یہ درج کر سکتا ہے کہ انہوں نے اسے معاف کر دیا۔
 ",

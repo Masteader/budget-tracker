@@ -874,7 +874,7 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
         'الملاحظات التي كتبتها على مصروفاتك ودخلك وتحويلاتك.',
         'صور الفواتير المرفقة بمصروفاتك.',
         'عضويتك في كل المنازل، وأي تابع مرتبط بك.',
-        'إذا كنتِ الزوجة في منزل أسرة: مصروفاتك الشخصية ومصروفك الشخصي المحدد ودفتر المستحق لك.',
+        'إذا كنتِ الزوجة في منزل أسرة: مصروفاتك الشخصية ومصروفك الشخصي المحدد ودفتر المستحق لك. وإن كان زوجك ما زال مديناً لكِ بمبلغ، يعرض التطبيق عليه المبلغ عند جدولة الحذف (وقد نرسله إليه بالبريد)، أو يعرضه على مديري المنزل إن لم يُحدَّد الزوج؛ وبعد الحذف لا يبقى في المنزل إلا المبلغ المستحق دون اسم، حتى يسجّله هو أو أحد المديرين مدفوعاً أو أنكِ أبرأتِه منه.',
         'الرسائل التي أرسلتها إلينا من هذا البريد عبر نماذج التواصل والدعم.',
         'أي منزل أنت عضوه الوحيد، بكل ما فيه.',
       ],
@@ -892,7 +892,7 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
     notEdited: {
       title: 'ما الذي لا يُعدَّل',
       items: [
-        'النصوص التي كتبها الأعضاء الآخرون، مثل ملاحظة تذكرك بالاسم، تبقى كما كتبوها، إلا أن بريدك الإلكتروني يُستبدل أينما ورد.',
+        'النصوص التي كتبها الأعضاء الآخرون، مثل ملاحظة تذكرك بالاسم، تبقى كما كتبوها. ونزيل أيضاً بريدك الإلكتروني من سجلات المنزل.',
         'أسماء المنازل تبقى كما هي، حتى لو تضمن أحدها اسمك، إلا أن بريدك الإلكتروني يُستبدل فيها أيضاً.',
       ],
     },
@@ -1047,7 +1047,7 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
         'The notes you wrote on your entries, income and transfers.',
         'Receipt images attached to your entries.',
         'Your membership of every household, and any dependent entry linked to you.',
-        'If you are the wife in a family household: your personal expense entries, your set allowance and the ledger of what you are owed.',
+        'If you are the wife in a family household: your personal expense entries, your set allowance and the ledger of what you are owed. If your husband still owes you money, the app shows him the amount when you schedule the deletion (and we may email him), or shows the household’s admins if no husband is set; after the deletion the household keeps only the amount still owed, with no name, until he or an admin records it as paid or as waived by you.',
         'Messages you sent us from this email address through the contact and support forms.',
         'Any household where you are the only member, with everything in it.',
       ],
@@ -1065,7 +1065,7 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
     notEdited: {
       title: 'What is not edited',
       items: [
-        'Free text other members typed, such as a note mentioning you by name, stays as they wrote it, except that your email address is replaced wherever it appears.',
+        'Free text other members typed, such as a note mentioning you by name, stays as they wrote it. We also remove your email address from household records.',
         'Household names stay as they are, even if one includes your name, except that your email address is replaced there too.',
       ],
     },
@@ -1220,7 +1220,7 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
         'آپ کے اندراجات، آمدنی اور منتقلیوں پر آپ کے لکھے ہوئے نوٹس۔',
         'آپ کے اندراجات سے منسلک رسیدوں کی تصاویر۔',
         'ہر گھرانے میں آپ کی رکنیت، اور آپ سے منسلک کوئی زیرِ کفالت اندراج۔',
-        'اگر آپ کسی خاندانی گھرانے میں بیوی ہیں: آپ کے ذاتی اخراجات کے اندراجات، آپ کا مقررہ جیب خرچ اور آپ کے واجبات کا کھاتہ۔',
+        'اگر آپ کسی خاندانی گھرانے میں بیوی ہیں: آپ کے ذاتی اخراجات کے اندراجات، آپ کا مقررہ جیب خرچ اور آپ کے واجبات کا کھاتہ۔ اگر آپ کے شوہر پر ابھی آپ کی کوئی رقم واجب ہے تو حذف طے کرتے وقت ایپ انہیں یہ رقم دکھاتی ہے (اور ہم انہیں ای میل بھی کر سکتے ہیں)، یا شوہر مقرر نہ ہو تو گھرانے کے منتظمین کو دکھاتی ہے؛ حذف کے بعد گھرانے میں صرف واجب الادا رقم بغیر نام کے رہتی ہے، جب تک وہ یا کوئی منتظم اسے ادا شدہ یا آپ کی طرف سے معاف شدہ درج نہ کر دے۔',
         'اس ای میل پتے سے رابطہ اور سپورٹ فارمز کے ذریعے ہمیں بھیجے گئے پیغامات۔',
         'کوئی بھی گھرانہ جس کے آپ واحد رکن ہیں، اس کی ہر چیز سمیت۔',
       ],
@@ -1238,7 +1238,7 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
     notEdited: {
       title: 'کس چیز میں ترمیم نہیں ہوتی',
       items: [
-        'دوسرے ارکان کی لکھی ہوئی عبارت، جیسے آپ کا نام لینے والا نوٹ، ویسی ہی رہتی ہے، البتہ آپ کا ای میل پتہ جہاں بھی ہو بدل دیا جاتا ہے۔',
+        'دوسرے ارکان کی لکھی ہوئی عبارت، جیسے آپ کا نام لینے والا نوٹ، ویسی ہی رہتی ہے۔ ہم گھرانے کے ریکارڈ سے آپ کا ای میل پتہ بھی ہٹا دیتے ہیں۔',
         'گھرانوں کے نام جوں کے توں رہتے ہیں، چاہے کسی میں آپ کا نام شامل ہو، البتہ ان میں بھی آپ کا ای میل پتہ بدل دیا جاتا ہے۔',
       ],
     },

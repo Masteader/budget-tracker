@@ -254,7 +254,7 @@ def source_counts() -> Dict[str, int]:
     english_web = ts[ts.index("export const deleteAccountTranslations"):]
     return {
         "app del_ and deleted_member": len(re.findall(r"^\s*'(?:del_\w+|deleted_member)'\s*:", english, re.M)),
-        "email parts": 2 * len(re.findall(r'^    "(?:holder|member)_\w+": \{$', templates, re.M)),
+        "email parts": 2 * len(re.findall(r'^    "(?:holder|member|creditor)_\w+": \{$', templates, re.M)),
         "web date settings": len(re.findall(r"^\s*dateLocale:", english_web, re.M)),
     }
 

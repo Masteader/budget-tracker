@@ -12,6 +12,8 @@
 |---|---|---|---|
 | A person whose account was deleted | Deleted member | عضو محذوف | حذف شدہ رکن |
 | The app's name | Qawam Money | قوام المال | قوام المال |
+| What the husband owes his wife for shared expenses she paid (family mode) | still owed to her | مستحق لها | واجب الادا |
+| She releases him from what remains | waived by her | أبرأت منه (إبراء) | معاف کر دیا (ابراء) |
 
 Tell us if you think one of these is wrong, and we'll change it everywhere at once.
 
@@ -24,6 +26,7 @@ Tell us if you think one of these is wrong, and we'll change it everywhere at on
 - `where_it_appears` says whether the text is in the app, on the website or in an email. The `key` is our name for the string. It may hint at where the string is used, and you can ignore it otherwise.
 - Keys ending in `.one`, `.two`, `.few`, `.many`, `.other` or `.zero` are plural forms of one sentence.
 - Dates appear as `{date}`. In emails they are written like 2026-12-06.
-- The emails to other members of a household (`email.member_*`) go out in all three languages in one email: Arabic, then English, then Urdu, because we don't know which language each member reads. The subjects are joined with " / ". So each language's text has to make sense on its own.
+- The emails to other members of a household (`email.member_*`), and the one to a husband whose wife is deleting her account while he still owes her (`email.creditor_owed`), go out in all three languages in one email: Arabic, then English, then Urdu, because we don't know which language each person reads. The subjects are joined with " / ". So each language's text has to make sense on its own.
+- `{amount}` is a SAR amount written like 1,234.50. The `fmd_*` app strings are about that same debt after her account is gone: the household keeps one record with no name, which the husband or an admin closes as paid or as waived by her.
 - The Urdu column is blank for `web.landing.*`, because that page has no Urdu. Nothing is needed there.
 - Line breaks inside a cell are intentional, so please keep them.
