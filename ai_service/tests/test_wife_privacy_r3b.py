@@ -263,3 +263,17 @@ def test_r3b_05_a_hidden_purchase_is_refused_as_one_that_does_not_exist(househol
     assert hidden.status_code == 404, hidden.text
     assert (hidden.status_code, hidden.json()) == (nothing.status_code, nothing.json())
     assert len(household.tables.get("installment_plans") or []) == before
+
+
+@pytest.mark.parametrize("who", list(CALLERS))
+def test_r3b_05_the_purchase_check_itself(household, who):
+    """InstallmentService.transaction_visible_to, the route's first check: a purchase the caller does
+    not read, one that does not exist, and another household's are all unreadable."""
+    from installment_service import InstallmentService
+
+    caller = CALLERS[who]
+    sees = who in ("wife", "admin") or (who == "husband" and household.state != "gone")
+    assert InstallmentService.transaction_visible_to("p-w1", HH, caller) is sees
+    assert InstallmentService.transaction_visible_to("tx-that-does-not-exist", HH, caller) is False
+    assert InstallmentService.transaction_visible_to("o-1", "b1000000-0000-4000-8000-0000000000ff", caller) is False
+    assert InstallmentService.transaction_visible_to("o-1", HH, caller) is True

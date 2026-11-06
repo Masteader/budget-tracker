@@ -300,6 +300,7 @@ BEGIN
         (pg_temp.t(8), pg_temp.h(1), pg_temp.u(7), 80, 'T67 Kohl W5', 'OPEX-SHOPPING', '2026-11-05 10:00+03', 'manual', 'me', 'wife_personal', pg_temp.u(7), NULL, NULL, 'n'),
         (pg_temp.t(9), pg_temp.h(1), pg_temp.u(7), 100, 'T67 Grocer W5', 'OPEX-GROCERY', '2026-11-05 10:00+03', 'manual', 'me', 'wife_reimbursable', pg_temp.u(7), NULL, NULL, 'n'),
         (pg_temp.t(10), pg_temp.h(1), pg_temp.u(6), 50, 'T67 Bakery WA', 'OPEX-GROCERY', '2026-11-05 10:00+03', 'manual', 'me', NULL, NULL, NULL, NULL, 'n'),
+        (pg_temp.t(12), pg_temp.h(1), pg_temp.u(6), 40, 'T67 Taxi WA', 'OPEX-GROCERY', '2026-11-05 10:00+03', 'manual', 'me', 'wife_reimbursable', pg_temp.u(6), NULL, NULL, 'n'),
         (pg_temp.t(11), pg_temp.h(2), pg_temp.u(10), 90, 'T67 Abaya V', 'OPEX-SHOPPING', '2026-11-05 10:00+03', 'manual', 'me', 'wife_personal', pg_temp.u(10), NULL, NULL, 'n');
 
     INSERT INTO storage.objects (bucket_id, name, owner) VALUES
@@ -321,22 +322,22 @@ END $$;
 -- ── R3B-01: transactions: a caller who cannot read a row neither updates nor deletes it ─────────
 DO $$
 BEGIN
-    PERFORM pg_temp.check('baseline: the wife-admin reads 5 of F1''s 9 rows',
-        pg_temp.call(pg_temp.u(6), format('SELECT count(*)::text FROM public.transactions WHERE household_id = %L', pg_temp.h(1))), '5');
+    PERFORM pg_temp.check('baseline: the wife-admin reads 6 of F1''s 10 rows',
+        pg_temp.call(pg_temp.u(6), format('SELECT count(*)::text FROM public.transactions WHERE household_id = %L', pg_temp.h(1))), '6');
     -- The wife-admin: an admin edits any row of the household, but none she does not read.
     PERFORM pg_temp.check('wife-admin: blind UPDATE ... WHERE true',
-        pg_temp.attempt(6, 'UPDATE public.transactions SET notes = ''blind'' WHERE true'), '5|same');
+        pg_temp.attempt(6, 'UPDATE public.transactions SET notes = ''blind'' WHERE true'), '6|same');
     PERFORM pg_temp.check('wife-admin: blind UPDATE, no WHERE',
-        pg_temp.attempt(6, 'UPDATE public.transactions SET merchant = ''blind'''), '5|same');
+        pg_temp.attempt(6, 'UPDATE public.transactions SET merchant = ''blind'''), '6|same');
     PERFORM pg_temp.check('wife-admin: blind DELETE',
-        pg_temp.attempt(6, 'DELETE FROM public.transactions'), '5|same');
+        pg_temp.attempt(6, 'DELETE FROM public.transactions'), '6|same');
     PERFORM pg_temp.check('wife-admin: blind DELETE ... WHERE true',
-        pg_temp.attempt(6, 'DELETE FROM public.transactions WHERE true'), '5|same');
+        pg_temp.attempt(6, 'DELETE FROM public.transactions WHERE true'), '6|same');
     -- A blind reclassification: it would also re-attribute W's advance (R3B-08), so it is refused whole.
     PERFORM pg_temp.check('wife-admin: blind reclassification',
         pg_temp.attempt(6, 'UPDATE public.transactions SET nafaqah_class = NULL, nafaqah_spouse_id = NULL'), 'ERR:42501|same');
     PERFORM pg_temp.check('wife-admin: blind amount change',
-        pg_temp.attempt(6, 'UPDATE public.transactions SET amount = amount + 1'), '5|same');
+        pg_temp.attempt(6, 'UPDATE public.transactions SET amount = amount + 1'), '6|same');
     -- By id, as before (the WHERE reads the row, so the read rule already applied).
     PERFORM pg_temp.check('wife-admin: update of her purchase by id',
         pg_temp.attempt(6, format('UPDATE public.transactions SET notes = %L WHERE id = %L', 'x', pg_temp.t(3))), '0|same');
@@ -359,15 +360,15 @@ BEGIN
         pg_temp.attempt(4, 'UPDATE public.transactions SET nafaqah_class = NULL, nafaqah_spouse_id = NULL'), 'ERR:42501|same');
     PERFORM pg_temp.check('co-wife: her own rows', pg_temp.attempt(3, format('UPDATE public.transactions SET notes = %L WHERE user_id = %L', 'own', pg_temp.u(3))), '1|same');
     -- Those who read every row edit them as before.
-    PERFORM pg_temp.check('husband: blind UPDATE reaches every row', pg_temp.attempt(1, 'UPDATE public.transactions SET notes = ''blind'' WHERE true'), '9|changed');
-    PERFORM pg_temp.check('admin who is not a wife: blind UPDATE reaches every row', pg_temp.attempt(5, 'UPDATE public.transactions SET notes = ''blind'' WHERE true'), '9|changed');
+    PERFORM pg_temp.check('husband: blind UPDATE reaches every row', pg_temp.attempt(1, 'UPDATE public.transactions SET notes = ''blind'' WHERE true'), '10|changed');
+    PERFORM pg_temp.check('admin who is not a wife: blind UPDATE reaches every row', pg_temp.attempt(5, 'UPDATE public.transactions SET notes = ''blind'' WHERE true'), '10|changed');
     PERFORM pg_temp.check('the wife: her own purchase', pg_temp.attempt(2, format('UPDATE public.transactions SET notes = %L WHERE id = %L', 'mine', pg_temp.t(3))), '1|same');
     PERFORM pg_temp.check('the wife: deletes her own purchase', pg_temp.attempt(2, format('DELETE FROM public.transactions WHERE id = %L', pg_temp.t(3))), '1|same');
     -- Nothing moved: the rows, and the budgets (her purchases never reached them).
-    PERFORM pg_temp.check('rows of F1 after the attempts', (SELECT count(*)::text FROM public.transactions WHERE household_id = pg_temp.h(1)), '9');
+    PERFORM pg_temp.check('rows of F1 after the attempts', (SELECT count(*)::text FROM public.transactions WHERE household_id = pg_temp.h(1)), '10');
     PERFORM pg_temp.check('budgets after the attempts',
         (SELECT string_agg(category_code || '=' || spent_amount, ',' ORDER BY category_code) FROM public.budgets WHERE household_id = pg_temp.h(1)),
-        'OPEX-GROCERY=550.00,OPEX-SHOPPING=0.00');
+        'OPEX-GROCERY=590.00,OPEX-SHOPPING=0.00');
     -- A blind reclassification that left her advance alone still reaches no purchase of hers.
     PERFORM pg_temp.check('wife-admin: blind declassification of personal purchases',
         pg_temp.attempt(6, 'UPDATE public.transactions SET nafaqah_class = NULL, nafaqah_spouse_id = NULL WHERE true AND nafaqah_class IS DISTINCT FROM ''wife_reimbursable'''),
@@ -388,8 +389,16 @@ BEGIN
     PERFORM pg_temp.check('co-wife clears W''s advance',
         pg_temp.attempt(3, format('UPDATE public.transactions SET nafaqah_class = NULL, nafaqah_spouse_id = NULL WHERE id = %L', pg_temp.t(2))), 'ERR:42501|same');
     -- What stays: other edits of her advance by an admin, her own clearing, the husband.
+    -- An edit that sends her advance's class and wife unchanged (as an app's whole-row save does).
+    PERFORM pg_temp.check('wife-admin edits the amount of W''s advance, class and wife sent unchanged',
+        pg_temp.attempt(6, format('UPDATE public.transactions SET amount = 301, nafaqah_class = %L, nafaqah_spouse_id = %L WHERE id = %L',
+                                  'wife_reimbursable', pg_temp.u(2), pg_temp.t(2))), '1|same');
     PERFORM pg_temp.check('wife-admin edits the note of W''s advance',
         pg_temp.attempt(6, format('UPDATE public.transactions SET notes = %L WHERE id = %L', 'n2', pg_temp.t(2))), '1|same');
+    PERFORM pg_temp.check('wife-admin hands her own advance to a co-wife',
+        pg_temp.attempt(6, format('UPDATE public.transactions SET nafaqah_spouse_id = %L WHERE id = %L', pg_temp.u(2), pg_temp.t(12))), 'ERR:42501|same');
+    PERFORM pg_temp.check('wife-admin clears her own advance',
+        pg_temp.attempt(6, format('UPDATE public.transactions SET nafaqah_class = NULL, nafaqah_spouse_id = NULL WHERE id = %L', pg_temp.t(12))), '1|same');
     PERFORM pg_temp.check('the wife clears her own advance',
         pg_temp.attempt(2, format('UPDATE public.transactions SET nafaqah_class = NULL, nafaqah_spouse_id = NULL WHERE id = %L', pg_temp.t(2))), '1|same');
     PERFORM pg_temp.check('the husband moves her advance to the co-wife',
@@ -505,6 +514,7 @@ BEGIN
     -- Not a member of the folder's household: the same answer for both, checked before anything.
     PERFORM pg_temp.check('another household''s member: her photo', pg_temp.hidden(10, 't67_w.jpg'), 'true');
     PERFORM pg_temp.check('another household''s member: a path of nothing', pg_temp.hidden(10, 't67_nope.jpg'), 'true');
+    PERFORM pg_temp.check('another household''s member: an ordinary photo', pg_temp.hidden(10, 't67_o.jpg'), 'true');
     -- Who reads it: never hidden.
     PERFORM pg_temp.check('the husband: her photo', pg_temp.hidden(1, 't67_w.jpg'), 'false');
     PERFORM pg_temp.check('the husband: a path of nothing', pg_temp.hidden(1, 't67_nope.jpg'), 'false');
@@ -651,6 +661,8 @@ BEGIN
     -- Prepared (she is no member any more): still only her husband and the admins who are not wives.
     PERFORM pg_temp.check('prepared: her linked plan', pg_temp.readers('installment_plans', pg_temp.p(4)), 'H,C');
     PERFORM pg_temp.check('prepared: her other plan', pg_temp.readers('installment_plans', pg_temp.p(5)), 'H,C');
+    PERFORM pg_temp.check('prepared: her id on no plan',
+        (SELECT count(*)::text FROM public.installment_plans p WHERE p::text LIKE '%' || pg_temp.u(7)::text || '%'), '0');
     PERFORM pg_temp.call(NULL, format('SELECT public.mark_account_purge_storage_done(%L)::text', v_req), 'service_role');
     DELETE FROM auth.users WHERE id = pg_temp.u(7);
     v_res := pg_temp.call(NULL, format('SELECT public.complete_account_purge(%L)::text', v_req), 'service_role');
@@ -724,7 +736,22 @@ BEGIN
          AND (t.to_account_id = pg_temp.a(2) OR t.from_account_id = pg_temp.a(2))), '0');
     PERFORM pg_temp.check('the budgets never moved for a repayment',
         (SELECT string_agg(category_code || '=' || spent_amount, ',' ORDER BY category_code) FROM public.budgets WHERE household_id = pg_temp.h(1)),
-        'OPEX-GROCERY=550.00,OPEX-SHOPPING=0.00');
+        'OPEX-GROCERY=590.00,OPEX-SHOPPING=0.00');
+END $$;
+
+-- ── R3B-08: the system's own cascade is no client edit ─────────────────────────────────────────
+-- An admin who is not a wife removes the co-wife while the husband is there: her leaving makes her
+-- advances household expenses (the membership trigger), which the advance guard lets through.
+DO $$
+BEGIN
+    INSERT INTO public.transactions (id, household_id, user_id, amount, merchant, category_code, timestamp, source,
+                                     spent_by, nafaqah_class, nafaqah_spouse_id, notes)
+    VALUES (pg_temp.t(13), pg_temp.h(1), pg_temp.u(3), 25, 'T67 Bread W2', 'OPEX-GROCERY', '2026-11-05 10:00+03', 'manual', 'me',
+            'wife_reimbursable', pg_temp.u(3), 'n');
+    PERFORM pg_temp.check('the admin removes the co-wife',
+        (left(pg_temp.call(pg_temp.u(5), format('SELECT public.remove_member(%L)::text', pg_temp.u(3))), 4) <> 'ERR:')::text, 'true');
+    PERFORM pg_temp.check('her advance is the household''s now',
+        (SELECT (nafaqah_class IS NULL AND nafaqah_spouse_id IS NULL)::text FROM public.transactions WHERE id = pg_temp.t(13)), 'true');
 END $$;
 
 -- ── The rules stated where they live ──────────────────────────────────────────────────────────
