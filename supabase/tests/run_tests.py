@@ -64,7 +64,7 @@ REPLAY_DEPENDENCIES = {
 ROLLOUT_BATCH = "20261105000000"
 ROLLOUT_HOTFIXES = ("20261105000500",)
 # Files an operator may run again while following the chain. Each must be harmless the second time.
-ROLLOUT_RERUN = ("20261105000500", "20261105000600", "20261105000700")
+ROLLOUT_RERUN = ("20261105000500", "20261105000600", "20261105000700", "20261105001200")
 # Run by hand on live (2026-11-05). Live has no cost_control_templates table.
 ROLLOUT_ALREADY_ON_LIVE = """
 REVOKE TRUNCATE ON public.inquiries FROM anon, authenticated;
@@ -73,7 +73,8 @@ REVOKE TRUNCATE ON public.inquiries FROM anon, authenticated;
 # neither function of 20261026120000. The drift scenario builds the chain without that file.
 DRIFT_MISSING = ("20261026120000",)
 # Tests that do not need what the drifted database lacks (42 and 43 test that migration's objects).
-DRIFT_TESTS = ("36_", "37_", "38_", "39_", "40_", "41_", "44_", "45_", "46_", "47_", "49_", "50_", "51_", "52_", "53_")
+DRIFT_TESTS = ("36_", "37_", "38_", "39_", "40_", "41_", "44_", "45_", "46_", "47_", "49_", "50_", "51_", "52_", "53_",
+               "54_", "55_")
 
 # Live as measured read-only on 2026-11-05: exactly these two older files never ran, 000500 and
 # REVOKE TRUNCATE on inquiries did, and cost_control_sub_categories holds 50 rows with no
