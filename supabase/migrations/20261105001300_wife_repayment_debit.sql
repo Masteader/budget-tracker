@@ -5,7 +5,7 @@
 --              60_wife_repayment_r2_fixes.sql, 61_wife_repayment_r2_concurrency.sql,
 --              62_wife_repayment_r3_fixes.sql, 63_wife_allowance_access.sql,
 --              64_wife_personal_privacy.sql, 65_wife_transfer_privacy.sql, 66_wife_plan_owner.sql,
---              67_wife_privacy_write_paths.sql
+--              67_wife_privacy_write_paths.sql, 68_wife_account.sql, 69_wife_account_concurrency.sql
 -- Rule: .agents/rules/02-saudi-fintech-and-islamic-compliance.md, family mode rules 2 and 3
 --
 -- Owner decisions 2026-11-06. Repaying the wife for shared things she paid (wife_reimbursable):
@@ -15,12 +15,15 @@
 --      any call without an account, including the old 6-argument signatures of
 --      record_spouse_reimbursement and record_former_member_debt_payment, is refused with HINT
 --      app_update_required and records nothing.
---   2. Her account is never credited. Each repayment writes one account_transfers row from the
---      payer's account to no account (to_account_id NULL, purpose 'wife_repayment' or
---      'former_member_payment', so the account's own history names it) and lowers its balance in
---      the same statement; no budget or transaction moves (her expense counted when she recorded
+--   2. Her wife account is credited (owner decisions 2026-11-06, point 11, superseding "her account
+--      is never credited"). Each repayment writes one account_transfers row from the payer's account
+--      to the wife account the payer picks (purpose 'wife_repayment', so each account's own history
+--      names it) and moves both balances by exactly the amount in the same statement; a former
+--      member's payment ('former_member_payment') still goes to no account. Her own accounts are
+--      never credited. No budget or transaction moves (her expense counted when she recorded
 --      it). The ledger row records who actually paid (paid_by_user_id: the payer, not always the
---      husband) and what was owed before and after it, which a replay answers again.
+--      husband), the wife account it credited (wife_account_id) and what was owed before and after
+--      it, which a replay answers again.
 --   3. The wife asks, the husband approves. She no longer records a repayment (wife_must_request).
 --      She marks "I received X": a pending request (spouse_reimbursement_requests) that moves no
 --      money and does not lower what is owed. Her husband (when he is gone, an admin who is not a
@@ -97,6 +100,15 @@
 --  10. A deleted wife's personal plans stay hidden (owner decision 2026-11-06): the purge clears
 --      her id from them and marks them a former wife's (installment_plans.former_member_personal,
 --      which names nobody); they are read only by her husband and the admins who are not wives.
+--  11. The wife account (owner decisions 2026-11-06, section 12): an account of kind 'wife' that her
+--      husband creates, owns and assigns to one wife (accounts.assigned_wife_id). Seen by her, its
+--      owner and her ledger's managers only; spent from only by her (her personal purchases and
+--      advances); funded by its owner or her ledger's managers; nothing is transferred out of it.
+--      Every repayment credits one of hers (the payer picks it; on her request she picks it, and the
+--      approval uses it or another of hers), none: wife_account_required. A reversal takes the
+--      amount back out of it (wife_account_insufficient_funds when she spent it; archived refused).
+--      Her leaving or her purge archives it (his, naming nobody); his purge passes it to the
+--      household's primary admin, or to her when that admin is a co-wife.
 --
 -- What is owed is advances less repayments plus reversals (nafaqah_net_repaid); pending requests
 -- never count. get_spouse_reimbursement_balance, former_member_debt_outstanding (the purge's
@@ -116,16 +128,18 @@
 -- account is deleted still answers the stored answer (review R2-06).
 --
 -- Lock order: the spouse_reimbursement advisory lock (as before), then a shared pool, the household
--- (KEY SHARE), a personal account, then the request rows or the former member's record row, and
+-- (KEY SHARE), the personal accounts (his and her wife account, in id order), then the request rows
+-- or the former member's record row, and
 -- last the request key (nafaqah_request_keys, whose insert waits for a call that claimed the same
 -- key and has not finished). The guard trigger, closing requests after a smaller advance, takes
 -- the advisory lock, then the household (KEY SHARE), then the request rows. Her request takes the
 -- advisory lock, then the household (KEY SHARE), and checks again that she is a wife of the
 -- household (review R2-05): a purge ending her membership meanwhile has closed her requests and
 -- her new one is refused.
--- prepare_account_purge locks pools, then households FOR UPDATE, and only then closes requests, so a
--- repayment, approval or reversal in flight either finishes before the purge or waits for it without
--- holding anything the purge needs.
+-- prepare_account_purge locks pools, then households FOR UPDATE, then the wife accounts of the
+-- person it deletes, and only then closes requests, so a repayment, approval or reversal in flight
+-- either finishes before the purge or waits for it without holding anything the purge needs.
+-- transfer_between_accounts locks pools first, then the other accounts in id order, the same way.
 --
 -- The purge (prepare_account_purge, replaced with 001200's body plus two steps): pending requests of
 -- the wife being deleted, and pending requests in households whose husband (provider) is being
@@ -142,7 +156,11 @@
 -- the write policies transactions_update_household and transactions_delete_household
 -- (20261020400000) and storage's receipts_delete_household (20261020100000),
 -- guard_wife_reimbursable_ledger and remove_nafaqah_ledger_on_membership_end (20261020900000),
--- former_member_debt_outstanding and prepare_account_purge (20261105001200). Re-running 001200 after
+-- former_member_debt_outstanding and prepare_account_purge (20261105001200); for the wife account
+-- (section 12): the policies accounts_select (20261020100000) and transactions_insert_household,
+-- transfer_between_accounts, transaction_account_matches, transaction_personal_account_writable and
+-- update_account_balance_on_transaction (20261020400000), enforce_wife_class_account (20261101000100)
+-- and the constraint accounts_account_type_check (20261026000000). Re-running 001200 after
 -- this file puts its own versions back (an amount-only 6-argument payment among them, which both
 -- files grant to the service role only, so no client can call it: review R1-11, R3-03): run this
 -- file again after it.
@@ -155,7 +173,50 @@
 --          OR EXISTS (SELECT 1 FROM public.former_member_debt_events WHERE kind = 'reversal') THEN
 --           RAISE EXCEPTION 'A reversal exists: without this file it would count as a repayment. Stop.';
 --       END IF;
+--       IF EXISTS (SELECT 1 FROM public.accounts WHERE account_type = 'wife') THEN
+--           RAISE EXCEPTION 'A wife account exists: without this file its kind is invalid and every member would read its transfers. Stop.';
+--       END IF;
 --   END $$;
+--   DROP TRIGGER trg_accounts_wife_account_guard ON public.accounts;
+--   DROP TRIGGER trg_wife_account_spending ON public.transactions;
+--   DROP POLICY "accounts_select" ON public.accounts;
+--   CREATE POLICY "accounts_select" ON public.accounts
+--       FOR SELECT
+--       TO authenticated
+--       USING (owner_user_id = (SELECT auth.uid())
+--           OR (is_shared_pool = true AND household_id = (SELECT public.get_auth_user_household_id())));
+--   DROP POLICY "transactions_insert_household" ON public.transactions;
+--   CREATE POLICY "transactions_insert_household" ON public.transactions
+--       FOR INSERT TO authenticated
+--       WITH CHECK (
+--           household_id = (SELECT public.get_auth_user_household_id())
+--           AND user_id = (SELECT auth.uid())
+--           AND (
+--               account_id IS NULL
+--               OR EXISTS (
+--                   SELECT 1 FROM public.accounts a
+--                   WHERE a.id = transactions.account_id
+--                     AND a.household_id = transactions.household_id
+--                     AND (a.is_shared_pool = true OR a.owner_user_id = (SELECT auth.uid()))
+--               )
+--           )
+--       );
+--   ALTER TABLE public.accounts DROP CONSTRAINT accounts_wife_account, DROP CONSTRAINT accounts_account_type_check,
+--     ADD CONSTRAINT accounts_account_type_check
+--     CHECK (account_type IN ('bank', 'e_wallet', 'crypto', 'cash', 'shared_pool', 'savings'));
+--   COMMENT ON CONSTRAINT accounts_account_type_check ON public.accounts IS
+--     'Enforces valid account types including savings vaults protected from daily budgets.';
+--   Then run these CREATE OR REPLACE statements: transfer_between_accounts,
+--   transaction_account_matches, transaction_personal_account_writable and
+--   update_account_balance_on_transaction from 20261020400000, and enforce_wife_class_account from
+--   20261101000100 (they keep their privileges). Then:
+--   DROP FUNCTION public.create_wife_account(uuid, uuid, text, uuid),
+--     public.assign_wife_account(uuid, uuid, uuid, uuid),
+--     public.archive_wife_account(uuid, uuid, uuid),
+--     public.nafaqah_guard_wife_account_row(),
+--     public.nafaqah_guard_wife_account_spending(),
+--     public.nafaqah_may_see_wife_account(uuid, uuid, uuid, uuid),
+--     public.account_deletion_wife_account_recipient(uuid, uuid);
 --   DROP TRIGGER trg_accounts_keep_repayment_history ON public.accounts;
 --   DROP POLICY spouse_reimbursements_select_household ON public.spouse_reimbursements;
 --   CREATE POLICY spouse_reimbursements_select_household ON public.spouse_reimbursements
@@ -220,23 +281,27 @@
 --   DROP TRIGGER trg_users_forget_transfer_owner ON public.users;
 --   DROP TRIGGER trg_installment_plans_personal_owner ON public.installment_plans;
 --   DROP TRIGGER trg_transactions_plan_owner ON public.transactions;
---   ALTER TABLE public.account_transfers DROP COLUMN personal_owner_ids;
+--   ALTER TABLE public.account_transfers DROP COLUMN personal_owner_ids, DROP COLUMN touches_wife_account;
+--   ALTER TABLE public.accounts DROP COLUMN assigned_wife_id;
 --   ALTER TABLE public.installment_plans DROP COLUMN personal_owner_id, DROP COLUMN former_member_personal;
 --   DROP FUNCTION public.nafaqah_transfer_personal_owners(), public.nafaqah_personal_owners_of(uuid, uuid),
 --     public.nafaqah_forget_transfer_owner(), public.nafaqah_plan_personal_owner(),
 --     public.nafaqah_transaction_plan_owner(), public.nafaqah_purchase_personal_owner(uuid, uuid);
---   DROP FUNCTION public.request_spouse_reimbursement(uuid, numeric, text, uuid, uuid),
+--   DROP FUNCTION public.request_spouse_reimbursement(uuid, numeric, text, uuid, uuid, uuid),
 --     public.cancel_spouse_reimbursement_request(uuid, uuid, uuid),
 --     public.decline_spouse_reimbursement_request(uuid, uuid, text, uuid),
---     public.approve_spouse_reimbursement_request(uuid, uuid, uuid, uuid, uuid),
+--     public.approve_spouse_reimbursement_request(uuid, uuid, uuid, uuid, uuid, uuid),
 --     public.reverse_spouse_reimbursement(uuid, uuid, uuid, uuid),
 --     public.reverse_former_member_debt_payment(uuid, uuid, uuid, uuid, uuid),
---     public.record_spouse_reimbursement(uuid, uuid, numeric, text, text, uuid, uuid, uuid),
+--     public.record_spouse_reimbursement(uuid, uuid, numeric, text, text, uuid, uuid, uuid, uuid),
 --     public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid, uuid),
---     public.nafaqah_repay_from_account(uuid, uuid, uuid, numeric, text, text, uuid, uuid, uuid),
+--     public.nafaqah_repay_from_account(uuid, uuid, uuid, numeric, text, text, uuid, uuid, uuid, uuid),
 --     public.nafaqah_repayment_debit(uuid, uuid, uuid, numeric, text),
 --     public.nafaqah_repayment_credit(uuid, uuid, uuid, numeric, text),
+--     public.nafaqah_repayment_transfer(uuid, uuid, uuid, uuid, numeric, text),
 --     public.nafaqah_repayment_lock_account(uuid, uuid, uuid),
+--     public.nafaqah_repayment_lock(uuid, uuid, uuid, uuid, uuid),
+--     public.nafaqah_require_wife_account(uuid, uuid, uuid),
 --     public.nafaqah_repayment_replay(public.spouse_reimbursements, uuid),
 --     public.nafaqah_request_close(public.spouse_reimbursement_requests, text, text, uuid),
 --     public.nafaqah_close_unfit_requests(uuid, uuid, numeric),
@@ -261,14 +326,17 @@
 --     DROP COLUMN reverses_event_id, DROP COLUMN transfer_id, DROP COLUMN account_id;
 --   ALTER TABLE public.spouse_reimbursements DROP CONSTRAINT spouse_reimbursements_kind,
 --     DROP COLUMN reverses_id, DROP COLUMN kind, DROP COLUMN transfer_id, DROP COLUMN request_key,
---     DROP COLUMN outstanding_before, DROP COLUMN outstanding_after, DROP COLUMN account_id;
+--     DROP COLUMN outstanding_before, DROP COLUMN outstanding_after, DROP COLUMN account_id, DROP COLUMN wife_account_id;
 --   ALTER TABLE public.account_transfers DROP CONSTRAINT account_transfers_purpose, DROP COLUMN purpose;
 --   (Their indexes go with the columns.) Balances already moved stay moved: the money did leave his
 --   account; the transfers stay in account_transfers as ordinary history. Data lost: requests and
 --   their outcomes, the ledger's links to the transfers, its request keys and stored outstanding
 --   figures, the transfers' labels and who owned their personal sides (personal_owner_ids), and
 --   whose personal purchase each installment plan was (personal_owner_id), and which were a
---   deleted wife's (former_member_personal: those plans become household-wide).
+--   deleted wife's (former_member_personal: those plans become household-wide), the wife account
+--   each repayment credited (wife_account_id) and which transfers had a wife account on them
+--   (touches_wife_account). The rollback refuses while a wife account exists: archive and settle
+--   them by hand first (a wife account's balance is her husband's money she has not spent).
 --   paid_by_user_id keeps whoever paid (a co-admin, say), where
 --   the old record_spouse_reimbursement wrote the husband. The keys this file's calls claimed stay
 --   in 001200's nafaqah_request_keys (ids only): 001200's own calls keep refusing them.
@@ -283,6 +351,12 @@ DROP FUNCTION IF EXISTS public.nafaqah_repayment_lock_accounts(uuid, uuid, uuid,
 -- and created again below on every run (nothing depends on them but the functions of this file).
 DROP FUNCTION IF EXISTS public.nafaqah_repayment_debit(uuid, uuid, uuid, numeric, text);
 DROP FUNCTION IF EXISTS public.nafaqah_repayment_credit(uuid, uuid, uuid, numeric, text);
+-- Before the wife account (owner decision 2026-11-06, section 12) these took no account of hers:
+-- each now takes the wife account a repayment credits as its last argument.
+DROP FUNCTION IF EXISTS public.record_spouse_reimbursement(uuid, uuid, numeric, text, text, uuid, uuid, uuid);
+DROP FUNCTION IF EXISTS public.request_spouse_reimbursement(uuid, numeric, text, uuid, uuid);
+DROP FUNCTION IF EXISTS public.approve_spouse_reimbursement_request(uuid, uuid, uuid, uuid, uuid);
+DROP FUNCTION IF EXISTS public.nafaqah_repay_from_account(uuid, uuid, uuid, numeric, text, text, uuid, uuid, uuid);
 
 -- 1. The wife's ledger: links to the transfer, request keys, reversals ------------------------
 ALTER TABLE public.spouse_reimbursements
@@ -441,6 +515,51 @@ FROM (
     SELECT q.household_id, q.request_key FROM public.spouse_reimbursement_requests q
 ) k
 ON CONFLICT (household_id, request_key) DO NOTHING;
+
+-- 3b. The wife account: its columns (owner decision 2026-11-06; the rules are in section 12) -----
+-- A personal (not shared) SAR account of kind 'wife' that the husband owns and assigns to one wife
+-- of the household. She spends from it; he funds it; every repayment to her credits one of them.
+-- assigned_wife_id names her while she is a wife of the household; it is cleared (and the account
+-- archived) when she leaves or her account is deleted, so a former wife's account names nobody
+-- (the former member pattern of 001200: an archived wife account with no one assigned).
+ALTER TABLE public.accounts ADD COLUMN IF NOT EXISTS assigned_wife_id uuid REFERENCES public.users(id) ON DELETE SET NULL;
+COMMENT ON COLUMN public.accounts.assigned_wife_id IS
+    'The wife a wife account (account_type ''wife'') is assigned to (20261105001300, section 12). Written only by its RPCs, never by a client; cleared when she leaves the household or her account is deleted (the account is archived then).';
+CREATE INDEX IF NOT EXISTS idx_accounts_assigned_wife ON public.accounts (assigned_wife_id) WHERE assigned_wife_id IS NOT NULL;
+ALTER TABLE public.accounts DROP CONSTRAINT IF EXISTS accounts_account_type_check;
+ALTER TABLE public.accounts ADD CONSTRAINT accounts_account_type_check
+    CHECK (account_type IN ('bank', 'e_wallet', 'crypto', 'cash', 'shared_pool', 'savings', 'wife'));
+COMMENT ON CONSTRAINT accounts_account_type_check ON public.accounts IS
+    'Enforces valid account types including savings vaults protected from daily budgets.';
+-- A wife account is personal, in SAR, and assigned to a wife unless archived; no other account is
+-- assigned to anyone.
+ALTER TABLE public.accounts DROP CONSTRAINT IF EXISTS accounts_wife_account;
+ALTER TABLE public.accounts ADD CONSTRAINT accounts_wife_account CHECK (
+    CASE WHEN account_type = 'wife'
+         THEN is_shared_pool IS FALSE AND currency = 'SAR' AND (assigned_wife_id IS NOT NULL OR is_archived IS TRUE)
+         ELSE assigned_wife_id IS NULL
+    END);
+
+-- Whether a transfer has a wife account on either side (kept on insert, like personal_owner_ids):
+-- such a row is read only by her, the account's owner, the owner of the other personal side and
+-- her ledger's managers (section 12).
+ALTER TABLE public.account_transfers ADD COLUMN IF NOT EXISTS touches_wife_account boolean NOT NULL DEFAULT false;
+COMMENT ON COLUMN public.account_transfers.touches_wife_account IS
+    'A wife account (20261105001300, section 12) is on either side. Set on insert by trg_account_transfers_personal_owners; never names anyone.';
+
+-- The wife account a repayment credited (a reversal: debited), as its call named it; kept after the
+-- account is deleted, for replays (like account_id).
+ALTER TABLE public.spouse_reimbursements ADD COLUMN IF NOT EXISTS wife_account_id uuid;
+COMMENT ON COLUMN public.spouse_reimbursements.wife_account_id IS
+    'The wife account the repayment credited (a reversal: took back from). NULL on rows from before the wife account.';
+-- The wife account she said the money went into; an approval uses it unless the payer names another
+-- of hers.
+ALTER TABLE public.spouse_reimbursement_requests
+    ADD COLUMN IF NOT EXISTS wife_account_id uuid REFERENCES public.accounts(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_spouse_reimbursement_requests_wife_account
+    ON public.spouse_reimbursement_requests (wife_account_id) WHERE wife_account_id IS NOT NULL;
+COMMENT ON COLUMN public.spouse_reimbursement_requests.wife_account_id IS
+    'The wife account she received it into (one of hers); the approval credits it unless the payer picks another of hers.';
 
 -- 4. What is owed ----------------------------------------------------------------------------
 
@@ -691,14 +810,56 @@ BEGIN
         nafaqah_spouse_id = NULL
     WHERE household_id = OLD.household_id
       AND nafaqah_spouse_id = OLD.user_id;
+
+    -- Her wife accounts here (section 12) stay their owner's, with their balance and history, as a
+    -- former wife's: archived (nobody spends from them or credits them) and naming nobody.
+    UPDATE public.accounts
+    SET is_archived = true,
+        assigned_wife_id = NULL,
+        updated_at = now()
+    WHERE household_id = OLD.household_id
+      AND assigned_wife_id = OLD.user_id;
     RETURN OLD;
 END;
 $$;
 
 -- 5. Helpers that move money (no client executes them) -----------------------------------------
 
--- Checks and locks the account a repayment leaves, or a reversal returns to. Returns its id.
-CREATE OR REPLACE FUNCTION public.nafaqah_repayment_lock_account(p_household_id uuid, p_actor uuid, p_account_id uuid)
+-- Her wife account for a repayment (section 12), before any lock: she has none that is not archived
+-- (wife_account_required: the app offers him to create one), or the one named is not one of hers
+-- (wife_account_invalid: not a wife account of this household assigned to her, archived, or none
+-- named). Never an account that is not hers. The caller has checked who acts.
+CREATE OR REPLACE FUNCTION public.nafaqah_require_wife_account(p_household_id uuid, p_wife_user_id uuid, p_wife_account_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM public.accounts a
+                   WHERE a.household_id = p_household_id AND a.account_type = 'wife'
+                     AND a.assigned_wife_id = p_wife_user_id AND a.is_archived IS NOT TRUE) THEN
+        RAISE EXCEPTION 'She has no wife account to receive this: create one for her first'
+            USING ERRCODE = '22023', HINT = 'wife_account_required';
+    END IF;
+    IF p_wife_account_id IS NULL OR NOT EXISTS (
+        SELECT 1 FROM public.accounts a
+        WHERE a.id = p_wife_account_id AND a.household_id = p_household_id AND a.account_type = 'wife'
+          AND a.assigned_wife_id = p_wife_user_id AND a.is_archived IS NOT TRUE AND a.currency = 'SAR'
+    ) THEN
+        RAISE EXCEPTION 'Pick one of her wife accounts'
+            USING ERRCODE = '22023', HINT = 'wife_account_invalid';
+    END IF;
+END;
+$$;
+
+-- Checks and locks the account a repayment leaves (or a reversal returns to) and, when named, her
+-- wife account it credits (or a reversal takes back from). Returns the payer's account id.
+-- Lock order, as the purge and transfer_between_accounts take them: a shared pool, the household
+-- (KEY SHARE), then the personal accounts (his and her wife account) in id order.
+CREATE OR REPLACE FUNCTION public.nafaqah_repayment_lock(p_household_id uuid, p_actor uuid, p_account_id uuid,
+                                                         p_wife_user_id uuid, p_wife_account_id uuid)
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -706,15 +867,27 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_acc public.accounts%ROWTYPE;
+    v_wife public.accounts%ROWTYPE;
     v_pass int;
 BEGIN
     FOR v_pass IN 1..2 LOOP
         -- Checked before any lock (a clear refusal locks nothing), and again under the locks.
         SELECT * INTO v_acc FROM public.accounts WHERE id = p_account_id;
         IF v_acc.id IS NULL OR v_acc.household_id IS DISTINCT FROM p_household_id
-           OR v_acc.is_archived IS TRUE OR v_acc.currency IS DISTINCT FROM 'SAR' THEN
+           OR v_acc.is_archived IS TRUE OR v_acc.currency IS DISTINCT FROM 'SAR'
+           OR v_acc.account_type = 'wife' THEN
+            -- A wife account is never the one a repayment leaves: it is hers to spend.
             RAISE EXCEPTION 'This account cannot be used in this household'
                 USING ERRCODE = 'P0002', HINT = 'account_unavailable';
+        END IF;
+        IF p_wife_account_id IS NOT NULL THEN
+            SELECT * INTO v_wife FROM public.accounts WHERE id = p_wife_account_id;
+            IF v_wife.id IS NULL OR v_wife.household_id IS DISTINCT FROM p_household_id
+               OR v_wife.account_type IS DISTINCT FROM 'wife' OR v_wife.is_archived IS TRUE
+               OR v_wife.currency IS DISTINCT FROM 'SAR' OR v_wife.assigned_wife_id IS DISTINCT FROM p_wife_user_id THEN
+                RAISE EXCEPTION 'Pick one of her wife accounts'
+                    USING ERRCODE = 'P0002', HINT = 'wife_account_invalid';
+            END IF;
         END IF;
         -- A spouse member never pays a repayment or takes one back, from a pool above all (review
         -- R1-01). The account is still never picked for anyone: the payer names it.
@@ -734,63 +907,95 @@ BEGIN
         IF v_pass = 2 THEN
             RETURN v_acc.id;
         END IF;
-        -- The purge's order: pools, then the household, then personal accounts.
+        -- The purge's order: pools, then the household, then personal accounts (in id order).
         IF v_acc.is_shared_pool IS TRUE THEN
             PERFORM 1 FROM public.accounts WHERE id = v_acc.id FOR UPDATE;
         END IF;
         PERFORM 1 FROM public.households WHERE id = p_household_id FOR KEY SHARE;
-        IF v_acc.is_shared_pool IS NOT TRUE THEN
-            PERFORM 1 FROM public.accounts WHERE id = v_acc.id FOR UPDATE;
-        END IF;
+        PERFORM 1 FROM public.accounts
+        WHERE (id = v_acc.id AND v_acc.is_shared_pool IS NOT TRUE) OR id = p_wife_account_id
+        ORDER BY id
+        FOR UPDATE;
     END LOOP;
     RETURN NULL;
 END;
 $$;
 
--- Money out of a locked account, into no account: one transfer, his balance down by the amount.
--- p_purpose labels it in the account's own history ('wife_repayment', 'former_member_payment').
+-- The account a payment leaves with no wife account (a former member's record), as before.
+CREATE OR REPLACE FUNCTION public.nafaqah_repayment_lock_account(p_household_id uuid, p_actor uuid, p_account_id uuid)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    RETURN public.nafaqah_repayment_lock(p_household_id, p_actor, p_account_id, NULL, NULL);
+END;
+$$;
+
+-- One transfer between locked accounts: p_from goes down by the amount (it must hold it), p_to up
+-- by the same amount, in one row, each side exactly once. Either side may be no account: a former
+-- member's payment leaves his account for no account, a reversal of a payment that credited
+-- nobody returns from no account. p_purpose labels it in each account's own history. A side that
+-- is a wife account and does not hold the amount (a reversal after she spent it) is refused as
+-- wife_account_insufficient_funds; any other as insufficient_funds.
+CREATE OR REPLACE FUNCTION public.nafaqah_repayment_transfer(p_household_id uuid, p_actor uuid, p_from uuid, p_to uuid,
+                                                             p_amount numeric, p_purpose text)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_from public.accounts%ROWTYPE;
+    v_now timestamptz := now();
+    v_id uuid;
+BEGIN
+    IF p_from IS NOT NULL THEN
+        SELECT * INTO v_from FROM public.accounts WHERE id = p_from;
+        IF v_from.balance IS NULL OR v_from.balance < p_amount THEN
+            IF v_from.account_type = 'wife' THEN
+                RAISE EXCEPTION 'Her wife account holds % now, less than the % to take back', v_from.balance, p_amount
+                    USING ERRCODE = '22000', HINT = 'wife_account_insufficient_funds', DETAIL = COALESCE(v_from.balance, 0)::text;
+            END IF;
+            RAISE EXCEPTION 'Insufficient funds: balance (%) is less than the repayment (%)', v_from.balance, p_amount
+                USING ERRCODE = '22000', HINT = 'insufficient_funds';
+        END IF;
+        UPDATE public.accounts SET balance = balance - p_amount, updated_at = v_now WHERE id = p_from;
+    END IF;
+    IF p_to IS NOT NULL THEN
+        UPDATE public.accounts SET balance = balance + p_amount, updated_at = v_now WHERE id = p_to;
+    END IF;
+    -- No free text: the purpose says what it is, and a former member's line names nobody.
+    INSERT INTO public.account_transfers (household_id, user_id, from_account_id, to_account_id, amount, fee, timestamp, notes, purpose, created_at)
+    VALUES (p_household_id, p_actor, p_from, p_to, p_amount, 0, v_now, NULL, p_purpose, v_now)
+    RETURNING id INTO v_id;
+    RETURN v_id;
+END;
+$$;
+
+-- Money out of a locked account, into no account (a former member's payment: she is gone).
 CREATE OR REPLACE FUNCTION public.nafaqah_repayment_debit(p_household_id uuid, p_actor uuid, p_account uuid, p_amount numeric, p_purpose text)
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-DECLARE
-    v_balance numeric(14, 2);
-    v_now timestamptz := now();
-    v_id uuid;
 BEGIN
-    SELECT balance INTO v_balance FROM public.accounts WHERE id = p_account;
-    IF v_balance IS NULL OR v_balance < p_amount THEN
-        RAISE EXCEPTION 'Insufficient funds: balance (%) is less than the repayment (%)', v_balance, p_amount
-            USING ERRCODE = '22000', HINT = 'insufficient_funds';
-    END IF;
-    UPDATE public.accounts SET balance = balance - p_amount, updated_at = v_now WHERE id = p_account;
-    -- No free text: the purpose says what it is, and a former member's line names nobody.
-    INSERT INTO public.account_transfers (household_id, user_id, from_account_id, to_account_id, amount, fee, timestamp, notes, purpose, created_at)
-    VALUES (p_household_id, p_actor, p_account, NULL, p_amount, 0, v_now, NULL, p_purpose, v_now)
-    RETURNING id INTO v_id;
-    RETURN v_id;
+    RETURN public.nafaqah_repayment_transfer(p_household_id, p_actor, p_account, NULL, p_amount, p_purpose);
 END;
 $$;
 
--- A reversal: money back into a locked account, from no account ('wife_repayment_reversal',
--- 'former_member_payment_reversal').
+-- Money back into a locked account, from no account (the reversal of a former member's payment, or
+-- of a repayment from before the wife account, which credited nobody).
 CREATE OR REPLACE FUNCTION public.nafaqah_repayment_credit(p_household_id uuid, p_actor uuid, p_account uuid, p_amount numeric, p_purpose text)
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-DECLARE
-    v_now timestamptz := now();
-    v_id uuid;
 BEGIN
-    UPDATE public.accounts SET balance = balance + p_amount, updated_at = v_now WHERE id = p_account;
-    INSERT INTO public.account_transfers (household_id, user_id, from_account_id, to_account_id, amount, fee, timestamp, notes, purpose, created_at)
-    VALUES (p_household_id, p_actor, NULL, p_account, p_amount, 0, v_now, NULL, p_purpose, v_now)
-    RETURNING id INTO v_id;
-    RETURN v_id;
+    RETURN public.nafaqah_repayment_transfer(p_household_id, p_actor, NULL, p_account, p_amount, p_purpose);
 END;
 $$;
 
@@ -799,6 +1004,8 @@ $$;
 -- it must still be pending, and its amount must not exceed what is owed now. The ledger row names
 -- who paid (the actor: his own account, or a pool he administers) and keeps what was owed before
 -- and after it; then her pending requests that no longer fit close (review R1-03, R1-05, R1-08).
+-- The money goes from his account into her wife account (section 12): one transfer, his side down
+-- and hers up by exactly the amount.
 CREATE OR REPLACE FUNCTION public.nafaqah_repay_from_account(
     p_household_id uuid,
     p_wife_user_id uuid,
@@ -808,7 +1015,8 @@ CREATE OR REPLACE FUNCTION public.nafaqah_repay_from_account(
     p_notes text,
     p_account_id uuid,
     p_request_key uuid,
-    p_request_id uuid
+    p_request_id uuid,
+    p_wife_account_id uuid
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -823,7 +1031,9 @@ DECLARE
     v_transfer uuid;
     v_id uuid;
 BEGIN
-    v_from := public.nafaqah_repayment_lock_account(p_household_id, p_actor, p_account_id);
+    -- Her wife account: she has one, and the one named is hers (a clear refusal, before any lock).
+    PERFORM public.nafaqah_require_wife_account(p_household_id, p_wife_user_id, p_wife_account_id);
+    v_from := public.nafaqah_repayment_lock(p_household_id, p_actor, p_account_id, p_wife_user_id, p_wife_account_id);
     -- Under the household lock: a purge that ended her membership meanwhile took her ledger with it.
     IF NOT public.nafaqah_is_spouse_member(p_household_id, p_wife_user_id) THEN
         RAISE EXCEPTION 'Reimbursements apply to a spouse member of this household' USING ERRCODE = '22023';
@@ -855,14 +1065,14 @@ BEGIN
     -- every lock this call takes (review R2-01).
     PERFORM public.nafaqah_claim_request_key(p_household_id, p_request_key);
 
-    v_transfer := public.nafaqah_repayment_debit(p_household_id, p_actor, v_from, v_amount, 'wife_repayment');
+    v_transfer := public.nafaqah_repayment_transfer(p_household_id, p_actor, v_from, p_wife_account_id, v_amount, 'wife_repayment');
 
     INSERT INTO public.spouse_reimbursements (household_id, wife_user_id, paid_by_user_id, amount, payment_method, notes,
                                               recorded_by, request_key, transfer_id, kind,
-                                              outstanding_before, outstanding_after, account_id)
+                                              outstanding_before, outstanding_after, account_id, wife_account_id)
     VALUES (p_household_id, p_wife_user_id, p_actor, v_amount, p_method, NULLIF(left(trim(p_notes), 500), ''),
             p_actor, p_request_key, v_transfer, 'payment',
-            v_outstanding, v_outstanding - v_amount, v_from)
+            v_outstanding, v_outstanding - v_amount, v_from, p_wife_account_id)
     RETURNING id INTO v_id;
 
     IF p_request_id IS NOT NULL THEN
@@ -884,6 +1094,7 @@ BEGIN
         'amount', v_amount,
         'payment_method', p_method,
         'account_id', v_from,
+        'wife_account_id', p_wife_account_id,
         'transfer_id', v_transfer,
         'outstanding_before', v_outstanding,
         'outstanding_after', v_outstanding - v_amount
@@ -917,6 +1128,7 @@ BEGIN
         'payment_method', p_row.payment_method,
         'account_id', COALESCE(p_row.account_id,
                                CASE WHEN p_row.kind = 'reversal' THEN v_transfer.to_account_id ELSE v_transfer.from_account_id END),
+        'wife_account_id', p_row.wife_account_id,
         'transfer_id', p_row.transfer_id,
         'outstanding_before', p_row.outstanding_before,
         'outstanding_after', p_row.outstanding_after);
@@ -932,7 +1144,8 @@ CREATE OR REPLACE FUNCTION public.record_spouse_reimbursement(
     p_notes text,
     p_actor_user_id uuid,
     p_account_id uuid,
-    p_request_key uuid
+    p_request_key uuid,
+    p_wife_account_id uuid DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -979,9 +1192,9 @@ BEGIN
     PERFORM pg_advisory_xact_lock(hashtextextended('spouse_reimbursement:' || p_household_id::text || ':' || p_wife_user_id::text, 0));
 
     -- The same tap again: answer as the first time, change nothing. Only the same call is a replay:
-    -- the same wife, amount, method and account (the stored one, even if it was deleted since:
-    -- review R2-06), by the same person, and not an approval's key (review R1-04). A key used
-    -- anywhere else in the household is refused when it is claimed (review R2-01).
+    -- the same wife, amount, method, account and wife account (the stored ones, even if deleted
+    -- since: review R2-06), by the same person, and not an approval's key (review R1-04). A key
+    -- used anywhere else in the household is refused when it is claimed (review R2-01).
     SELECT * INTO v_prev FROM public.spouse_reimbursements
     WHERE household_id = p_household_id AND request_key = p_request_key;
     IF v_prev.id IS NOT NULL THEN
@@ -989,6 +1202,7 @@ BEGIN
            OR v_prev.amount IS DISTINCT FROM p_amount OR v_prev.payment_method IS DISTINCT FROM v_method
            OR v_prev.recorded_by IS DISTINCT FROM v_actor
            OR v_prev.account_id IS DISTINCT FROM p_account_id
+           OR v_prev.wife_account_id IS DISTINCT FROM p_wife_account_id
            OR EXISTS (SELECT 1 FROM public.spouse_reimbursement_request_outcomes o WHERE o.reimbursement_id = v_prev.id) THEN
             RAISE EXCEPTION 'This request key was used for something else' USING ERRCODE = '22023', HINT = 'request_key_reused';
         END IF;
@@ -996,7 +1210,7 @@ BEGIN
     END IF;
 
     RETURN public.nafaqah_repay_from_account(p_household_id, p_wife_user_id, v_actor, p_amount, v_method, p_notes,
-                                             p_account_id, p_request_key, NULL);
+                                             p_account_id, p_request_key, NULL, p_wife_account_id);
 END;
 $$;
 
@@ -1023,13 +1237,15 @@ $$;
 
 -- 7. The wife's requests ----------------------------------------------------------------------------
 
--- "I received X": she asks; nothing moves and nothing owed changes until it is approved.
+-- "I received X": she asks; nothing moves and nothing owed changes until it is approved. She names
+-- which of her wife accounts it went into (section 12); the approval credits that one.
 CREATE OR REPLACE FUNCTION public.request_spouse_reimbursement(
     p_household_id uuid,
     p_amount numeric,
     p_payment_method text,
     p_request_key uuid,
-    p_actor_user_id uuid
+    p_actor_user_id uuid,
+    p_wife_account_id uuid DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -1073,6 +1289,8 @@ BEGIN
     SELECT * INTO v_req FROM public.spouse_reimbursement_requests
     WHERE household_id = p_household_id AND request_key = p_request_key;
     IF v_req.id IS NULL THEN
+        -- Into one of her own wife accounts (section 12), never anyone else's.
+        PERFORM public.nafaqah_require_wife_account(p_household_id, v_actor, p_wife_account_id);
         v_outstanding := public.nafaqah_outstanding(p_household_id, v_actor);
         SELECT COALESCE(sum(q.amount), 0) INTO v_pending
         FROM public.spouse_reimbursement_requests q
@@ -1087,24 +1305,28 @@ BEGIN
         PERFORM public.nafaqah_claim_request_key(p_household_id, p_request_key);
         -- The moment itself, not the transaction's start: the order she made them in decides which
         -- close first when less is owed (nafaqah_close_unfit_requests).
-        INSERT INTO public.spouse_reimbursement_requests (household_id, wife_user_id, amount, payment_method, request_key, created_at)
-        VALUES (p_household_id, v_actor, p_amount, v_method, p_request_key, clock_timestamp())
+        INSERT INTO public.spouse_reimbursement_requests (household_id, wife_user_id, amount, payment_method, request_key, created_at,
+                                                          wife_account_id)
+        VALUES (p_household_id, v_actor, p_amount, v_method, p_request_key, clock_timestamp(), p_wife_account_id)
         RETURNING * INTO v_req;
         RETURN jsonb_build_object(
             'success', true, 'replayed', false, 'request_id', v_req.id, 'status', 'pending',
             'amount', v_req.amount, 'payment_method', v_req.payment_method, 'created_at', v_req.created_at,
+            'wife_account_id', v_req.wife_account_id,
             'outstanding', v_outstanding, 'pending_requested', v_pending + v_req.amount);
     END IF;
 
-    -- Only the same request is a replay: hers, for the same amount and method (review R1-04).
+    -- Only the same request is a replay: hers, for the same amount, method and wife account
+    -- (review R1-04).
     IF v_req.wife_user_id IS DISTINCT FROM v_actor OR v_req.amount IS DISTINCT FROM p_amount
-       OR v_req.payment_method IS DISTINCT FROM v_method THEN
+       OR v_req.payment_method IS DISTINCT FROM v_method OR v_req.wife_account_id IS DISTINCT FROM p_wife_account_id THEN
         RAISE EXCEPTION 'This request key was used for something else' USING ERRCODE = '22023', HINT = 'request_key_reused';
     END IF;
     RETURN jsonb_build_object(
         'success', true, 'replayed', true, 'request_id', v_req.id,
         'status', COALESCE((SELECT o.outcome FROM public.spouse_reimbursement_request_outcomes o WHERE o.request_id = v_req.id), 'pending'),
         'amount', v_req.amount, 'payment_method', v_req.payment_method, 'created_at', v_req.created_at,
+        'wife_account_id', v_req.wife_account_id,
         'outstanding', public.nafaqah_outstanding(p_household_id, v_actor));
 END;
 $$;
@@ -1200,13 +1422,16 @@ BEGIN
 END;
 $$;
 
--- Approval: the normal repayment of exactly the requested amount, from the account he picks.
+-- Approval: the normal repayment of exactly the requested amount, from the account he picks, into
+-- the wife account she named; he may name another of hers instead (p_wife_account_id), never an
+-- account that is not hers (section 12).
 CREATE OR REPLACE FUNCTION public.approve_spouse_reimbursement_request(
     p_household_id uuid,
     p_request_id uuid,
     p_account_id uuid,
     p_request_key uuid,
-    p_actor_user_id uuid
+    p_actor_user_id uuid,
+    p_wife_account_id uuid DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -1218,6 +1443,7 @@ DECLARE
     v_actor uuid := public.nafaqah_resolve_actor(p_actor_user_id);
     v_req public.spouse_reimbursement_requests%ROWTYPE;
     v_prev public.spouse_reimbursements%ROWTYPE;
+    v_wife_account uuid;
 BEGIN
     PERFORM public.nafaqah_require_member(p_household_id, v_actor);
     SELECT * INTO v_req FROM public.spouse_reimbursement_requests WHERE id = p_request_id AND household_id = p_household_id;
@@ -1238,22 +1464,26 @@ BEGIN
 
     PERFORM pg_advisory_xact_lock(hashtextextended('spouse_reimbursement:' || p_household_id::text || ':' || v_req.wife_user_id::text, 0));
 
+    -- The wife account she named, unless he names another (checked to be hers below).
+    v_wife_account := COALESCE(p_wife_account_id, v_req.wife_account_id);
+
     SELECT * INTO v_prev FROM public.spouse_reimbursements
     WHERE household_id = p_household_id AND request_key = p_request_key;
     IF v_prev.id IS NOT NULL THEN
-        -- Only the same approval is a replay: this request, from the same account (the stored one,
-        -- review R2-06), by the same person (review R1-04).
+        -- Only the same approval is a replay: this request, from the same account into the same
+        -- wife account (the stored ones, review R2-06), by the same person (review R1-04).
         IF NOT EXISTS (SELECT 1 FROM public.spouse_reimbursement_request_outcomes o
                        WHERE o.request_id = p_request_id AND o.reimbursement_id = v_prev.id)
            OR v_prev.recorded_by IS DISTINCT FROM v_actor
-           OR v_prev.account_id IS DISTINCT FROM p_account_id THEN
+           OR v_prev.account_id IS DISTINCT FROM p_account_id
+           OR v_prev.wife_account_id IS DISTINCT FROM v_wife_account THEN
             RAISE EXCEPTION 'This request key was used for something else' USING ERRCODE = '22023', HINT = 'request_key_reused';
         END IF;
         RETURN public.nafaqah_repayment_replay(v_prev, p_request_id);
     END IF;
 
     RETURN public.nafaqah_repay_from_account(p_household_id, v_req.wife_user_id, v_actor, v_req.amount, v_req.payment_method,
-                                             NULL, p_account_id, p_request_key, p_request_id);
+                                             NULL, p_account_id, p_request_key, p_request_id, v_wife_account);
 END;
 $$;
 
@@ -1275,6 +1505,7 @@ DECLARE
     v_orig public.spouse_reimbursements%ROWTYPE;
     v_prev public.spouse_reimbursements%ROWTYPE;
     v_account uuid;
+    v_wife_account uuid;
     v_before numeric(14, 2);
     v_after numeric(14, 2);
     v_transfer uuid;
@@ -1325,18 +1556,32 @@ BEGIN
         RAISE EXCEPTION 'This repayment moved no money in the app, so there is nothing to return'
             USING ERRCODE = '22023', HINT = 'reversal_not_tracked';
     END IF;
-    SELECT t.from_account_id INTO v_account FROM public.account_transfers t WHERE t.id = v_orig.transfer_id;
+    SELECT t.from_account_id, t.to_account_id INTO v_account, v_wife_account
+    FROM public.account_transfers t WHERE t.id = v_orig.transfer_id;
     IF v_account IS NULL OR NOT EXISTS (
         SELECT 1 FROM public.accounts a
         WHERE a.id = v_account AND a.household_id = p_household_id AND a.is_archived IS NOT TRUE AND a.currency = 'SAR'
     ) THEN
         RAISE EXCEPTION 'The account it was paid from is archived or gone' USING ERRCODE = '22023', HINT = 'reversal_account_unavailable';
     END IF;
+    -- The wife account it credited gives the money back (section 12), so it must still be usable:
+    -- archived (her account deleted, or by its owner) or gone is refused as for any account. A
+    -- repayment from before the wife account credited nobody: its reversal returns from no account.
+    IF v_orig.wife_account_id IS NOT NULL AND (v_wife_account IS NULL OR NOT EXISTS (
+        SELECT 1 FROM public.accounts a
+        WHERE a.id = v_wife_account AND a.household_id = p_household_id AND a.account_type = 'wife'
+          AND a.is_archived IS NOT TRUE AND a.currency = 'SAR' AND a.assigned_wife_id = v_orig.wife_user_id
+    )) THEN
+        RAISE EXCEPTION 'Her wife account it was paid into is archived or gone' USING ERRCODE = '22023', HINT = 'reversal_account_unavailable';
+    END IF;
+    IF v_orig.wife_account_id IS NULL THEN
+        v_wife_account := NULL;
+    END IF;
     -- The manager (checked above) reverses from the account it left as the account rules say: a
     -- pool's only as an admin, a personal account's only as its owner (the helper below, under the
-    -- locks).
+    -- locks), and takes it back from her wife account.
     BEGIN
-        v_account := public.nafaqah_repayment_lock_account(p_household_id, v_actor, v_account);
+        v_account := public.nafaqah_repayment_lock(p_household_id, v_actor, v_account, v_orig.wife_user_id, v_wife_account);
     EXCEPTION WHEN SQLSTATE 'P0002' THEN
         -- Archived or deleted while this call waited for it, by a purge of its owner say (review
         -- R2-08): the same answer as when it was already gone.
@@ -1350,7 +1595,10 @@ BEGIN
     PERFORM public.nafaqah_claim_request_key(p_household_id, p_request_key);
 
     v_before := public.nafaqah_outstanding(p_household_id, v_orig.wife_user_id);
-    v_transfer := public.nafaqah_repayment_credit(p_household_id, v_actor, v_account, v_orig.amount, 'wife_repayment_reversal');
+    -- One transfer back: out of her wife account (it must still hold the amount:
+    -- wife_account_insufficient_funds), into his account.
+    v_transfer := public.nafaqah_repayment_transfer(p_household_id, v_actor, v_wife_account, v_account, v_orig.amount,
+                                                    'wife_repayment_reversal');
     -- What is owed after it, as nafaqah_outstanding will count it with this row (never below zero).
     v_after := GREATEST(
         (SELECT COALESCE(sum(t.amount), 0) FROM public.transactions t
@@ -1360,9 +1608,9 @@ BEGIN
         0);
     INSERT INTO public.spouse_reimbursements (household_id, wife_user_id, paid_by_user_id, amount, payment_method, notes,
                                               recorded_by, request_key, transfer_id, kind, reverses_id,
-                                              outstanding_before, outstanding_after, account_id)
+                                              outstanding_before, outstanding_after, account_id, wife_account_id)
     VALUES (p_household_id, v_orig.wife_user_id, v_orig.paid_by_user_id, v_orig.amount, v_orig.payment_method, NULL,
-            v_actor, p_request_key, v_transfer, 'reversal', v_orig.id, v_before, v_after, v_account)
+            v_actor, p_request_key, v_transfer, 'reversal', v_orig.id, v_before, v_after, v_account, v_wife_account)
     RETURNING id INTO v_id;
 
     RETURN jsonb_build_object(
@@ -1371,7 +1619,7 @@ BEGIN
         'household_id', p_household_id, 'wife_user_id', v_orig.wife_user_id,
         'paid_by_user_id', v_orig.paid_by_user_id,
         'amount', v_orig.amount, 'payment_method', v_orig.payment_method,
-        'account_id', v_account, 'transfer_id', v_transfer,
+        'account_id', v_account, 'wife_account_id', v_wife_account, 'transfer_id', v_transfer,
         'outstanding_before', v_before,
         'outstanding_after', v_after);
 END;
@@ -1639,6 +1887,52 @@ END;
 $$;
 
 -- 10. The purge: 001200's function, closing pending requests and removing his decline reasons -----
+-- With the wife account (section 12): her purge archives the wife accounts assigned to her, which
+-- stay their owner's with their balance and history and name nobody (assigned_wife_id cleared, her
+-- name taken out of the account's name); his purge passes the wife accounts he owns to the
+-- household's primary admin, or to the wife it is assigned to when that admin is another wife
+-- (account_deletion_wife_account_recipient). Both are in the ledger invariant: their balances
+-- do not move, also when her personal purchases on them are deleted.
+
+-- Who a wife account of p_user_id (being deleted) passes to: the household's primary admin (the
+-- longest-standing other admin when that is p_user_id), unless that admin is a wife other than the
+-- one it is assigned to, then the wife it is assigned to. A former wife's account (no one assigned)
+-- never goes to a wife: then the longest-standing admin who is not a wife. NULL: nobody is left to
+-- take it, and it goes with his accounts.
+CREATE OR REPLACE FUNCTION public.account_deletion_wife_account_recipient(p_account_id uuid, p_user_id uuid)
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    SELECT CASE
+        WHEN p.primary_admin IS NOT NULL
+             AND (p.primary_admin = a.assigned_wife_id OR NOT public.nafaqah_is_spouse_member(a.household_id, p.primary_admin))
+            THEN p.primary_admin
+        WHEN a.assigned_wife_id IS NOT NULL AND a.assigned_wife_id <> p_user_id
+             AND public.nafaqah_is_spouse_member(a.household_id, a.assigned_wife_id)
+            THEN a.assigned_wife_id
+        ELSE (SELECT o.user_id FROM public.household_memberships o
+              WHERE o.household_id = a.household_id AND o.user_id <> p_user_id AND o.role = 'admin'
+                AND o.financial_role IS DISTINCT FROM 'spouse'
+              ORDER BY public.account_deletion_user_pending(o.user_id) ASC, o.created_at ASC, o.user_id ASC
+              LIMIT 1)
+    END
+    FROM public.accounts a
+    CROSS JOIN LATERAL (
+        SELECT COALESCE(
+            (SELECT h.owner_user_id FROM public.households h
+             JOIN public.household_memberships m ON m.household_id = h.id AND m.user_id = h.owner_user_id
+             WHERE h.id = a.household_id AND h.owner_user_id <> p_user_id),
+            (SELECT o.user_id FROM public.household_memberships o
+             WHERE o.household_id = a.household_id AND o.user_id <> p_user_id AND o.role = 'admin'
+             ORDER BY public.account_deletion_user_pending(o.user_id) ASC, o.created_at ASC, o.user_id ASC
+             LIMIT 1)) AS primary_admin
+    ) p
+    WHERE a.id = p_account_id AND a.account_type = 'wife';
+$$;
+
 CREATE OR REPLACE FUNCTION public.prepare_account_purge(p_request_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -1668,6 +1962,10 @@ DECLARE
     v_email_re text;
     v_ledger_before text;
     v_ledger_after text;
+    v_keep_wife uuid[];
+    v_wife_ids uuid[];
+    v_wife_balances numeric[];
+    v_moved record;
 BEGIN
     PERFORM public.account_deletion_require_service();
 
@@ -1714,6 +2012,10 @@ BEGIN
         SELECT a.household_id FROM public.accounts a WHERE a.owner_user_id = v_uid AND a.is_shared_pool
         UNION ALL
         SELECT t.household_id FROM public.transactions t WHERE t.nafaqah_spouse_id = v_uid AND t.nafaqah_class = 'wife_personal'
+        UNION ALL
+        -- The wife accounts they own or are assigned (section 12).
+        SELECT a.household_id FROM public.accounts a
+        WHERE a.account_type = 'wife' AND (a.owner_user_id = v_uid OR a.assigned_wife_id = v_uid)
     ) s;
 
     PERFORM 1 FROM public.accounts a WHERE a.is_shared_pool AND a.household_id = ANY (v_lock_hhs) ORDER BY a.id FOR UPDATE;
@@ -1722,6 +2024,14 @@ BEGIN
     FROM public.households h
     WHERE h.id = ANY (v_lock_hhs)
     ORDER BY h.id
+    FOR UPDATE;
+
+    -- Then their wife accounts, in id order: a repayment, a reversal or her spending takes the
+    -- household before a personal account too, so nothing holds one of these while waiting for it.
+    PERFORM 1 FROM public.accounts a
+    WHERE a.account_type = 'wife' AND (a.owner_user_id = v_uid OR a.assigned_wife_id = v_uid)
+      AND a.household_id = ANY (v_lock_hhs)
+    ORDER BY a.id
     FOR UPDATE;
 
     FOR v_pos IN
@@ -1786,11 +2096,22 @@ BEGIN
       AND (a.owner_user_id <> v_uid
            OR EXISTS (SELECT 1 FROM public.household_memberships o
                       WHERE o.household_id = a.household_id AND o.user_id <> v_uid AND o.role = 'admin'));
+    -- The wife accounts that survive the purge (section 12): hers, which stay their owner's, and his
+    -- that pass to someone. Their balances are in the invariant too.
+    SELECT COALESCE(array_agg(a.id ORDER BY a.id), '{}') INTO v_keep_wife
+    FROM public.accounts a
+    WHERE a.account_type = 'wife'
+      AND a.household_id = ANY (v_ledger_hhs)
+      AND ((a.assigned_wife_id = v_uid AND a.owner_user_id <> v_uid)
+           OR (a.owner_user_id = v_uid AND public.account_deletion_wife_account_recipient(a.id, v_uid) IS NOT NULL));
     SELECT COALESCE((SELECT string_agg(a.id::text || '=' || a.balance::text, ',' ORDER BY a.id)
                      FROM public.accounts a WHERE a.id = ANY (v_keep_pools)), '')
         || '|'
         || COALESCE((SELECT string_agg(b.id::text || '=' || b.spent_amount::text, ',' ORDER BY b.id)
                      FROM public.budgets b WHERE b.household_id = ANY (v_ledger_hhs)), '')
+        || '|'
+        || COALESCE((SELECT string_agg(a.id::text || '=' || a.balance::text, ',' ORDER BY a.id)
+                     FROM public.accounts a WHERE a.id = ANY (v_keep_wife)), '')
     INTO v_ledger_before;
 
     -- ── Storage queue, while the paths still exist ──────────────────────────
@@ -1851,9 +2172,18 @@ BEGIN
     ON CONFLICT (request_id) DO NOTHING;
 
     -- ── Households that survive ─────────────────────────────────────────────
-    -- D5: before the membership trigger can declassify them into the budgets.
+    -- D5: before the membership trigger can declassify them into the budgets. Deleting a purchase
+    -- puts its amount back into its account (the balance trigger); on a wife account that stays
+    -- (section 12) the money she spent is still spent, so its balance is put back as it was.
+    SELECT COALESCE(array_agg(a.id ORDER BY a.id), '{}'), COALESCE(array_agg(a.balance ORDER BY a.id), '{}')
+    INTO v_wife_ids, v_wife_balances
+    FROM public.accounts a WHERE a.id = ANY (v_keep_wife);
     DELETE FROM public.transactions
     WHERE nafaqah_spouse_id = v_uid AND nafaqah_class = 'wife_personal';
+    UPDATE public.accounts a
+    SET balance = s.balance
+    FROM unnest(v_wife_ids, v_wife_balances) AS s(id, balance)
+    WHERE a.id = s.id AND a.balance IS DISTINCT FROM s.balance;
 
     -- Every pool they own, including in a household they already left.
     WITH reowned AS (
@@ -1872,6 +2202,24 @@ BEGIN
         RETURNING a.id
     )
     SELECT COALESCE(array_agg(id), '{}') INTO v_reowned FROM reowned;
+
+    -- The wife accounts they own pass on with their balance and history (section 12): to the
+    -- household's primary admin, or to the wife it is assigned to when that admin is another wife.
+    -- Before their accounts' transfers and the accounts themselves go below, so none of it goes.
+    -- Each moved account's past transfers are its new owner's too, as his own account's are.
+    FOR v_moved IN
+        SELECT a.id, public.account_deletion_wife_account_recipient(a.id, v_uid) AS recipient
+        FROM public.accounts a
+        WHERE a.id = ANY (v_keep_wife) AND a.owner_user_id = v_uid
+        ORDER BY a.id
+    LOOP
+        UPDATE public.accounts SET owner_user_id = v_moved.recipient, updated_at = now() WHERE id = v_moved.id;
+        UPDATE public.account_transfers t
+        SET personal_owner_ids = ARRAY(SELECT DISTINCT x FROM unnest(t.personal_owner_ids || v_moved.recipient) AS x ORDER BY x)
+        WHERE (t.from_account_id = v_moved.id OR t.to_account_id = v_moved.id)
+          AND NOT (v_moved.recipient = ANY (t.personal_owner_ids));
+        v_reowned := v_reowned || v_moved.id;
+    END LOOP;
 
     -- Its name now belongs to someone else's pool: their name goes from it.
     IF v_name_re IS NOT NULL THEN
@@ -1998,6 +2346,17 @@ BEGIN
     WHERE p.personal_owner_id = v_uid
       AND public.nafaqah_is_spouse_member(p.household_id, v_uid);
 
+    -- The wife accounts assigned to her stay their owner's, with their balance and history, as a
+    -- former wife's (section 12): archived, naming nobody (her id and her name go), read only by
+    -- their owner and her ledger's managers, never by a co-wife or a member. The leave below would
+    -- archive them too; her name is taken out here, where it is known.
+    UPDATE public.accounts a
+    SET is_archived = true,
+        assigned_wife_id = NULL,
+        name = CASE WHEN v_name_re IS NOT NULL THEN regexp_replace(a.name, v_name_re, 'deleted_member', 'gi') ELSE a.name END,
+        updated_at = now()
+    WHERE a.id = ANY (v_keep_wife) AND a.assigned_wife_id = v_uid;
+
     -- The leave itself. Fires the Nafaqah, provider, primary admin and mark triggers.
     DELETE FROM public.household_memberships WHERE user_id = v_uid;
 
@@ -2026,6 +2385,9 @@ BEGIN
         || '|'
         || COALESCE((SELECT string_agg(b.id::text || '=' || b.spent_amount::text, ',' ORDER BY b.id)
                      FROM public.budgets b WHERE b.household_id = ANY (v_ledger_hhs)), '')
+        || '|'
+        || COALESCE((SELECT string_agg(a.id::text || '=' || a.balance::text, ',' ORDER BY a.id)
+                     FROM public.accounts a WHERE a.id = ANY (v_keep_wife)), '')
     INTO v_ledger_after;
     IF v_ledger_after IS DISTINCT FROM v_ledger_before THEN
         RAISE EXCEPTION 'A surviving pool balance or budget would have moved; nothing was purged'
@@ -2495,7 +2857,8 @@ ALTER TABLE public.account_transfers ADD COLUMN IF NOT EXISTS personal_owner_ids
 COMMENT ON COLUMN public.account_transfers.personal_owner_ids IS
     'Owners of the personal (not shared) accounts on either side when the transfer was made (20261105001300, 10e). Set by trg_account_transfers_personal_owners; the read policy hides a row with a wife''s from a co-wife and an ordinary member.';
 
--- The owners of the personal accounts among these (none for a pool or no account).
+-- The owners of the personal accounts among these (none for a pool or no account), and the wife a
+-- wife account is assigned to (section 12): her wife account's rows are hers to read too.
 CREATE OR REPLACE FUNCTION public.nafaqah_personal_owners_of(p_from uuid, p_to uuid)
 RETURNS uuid[]
 LANGUAGE sql
@@ -2503,11 +2866,12 @@ STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-    SELECT COALESCE(array_agg(DISTINCT a.owner_user_id ORDER BY a.owner_user_id), '{}'::uuid[])
+    SELECT COALESCE(array_agg(DISTINCT o.id ORDER BY o.id), '{}'::uuid[])
     FROM public.accounts a
+    CROSS JOIN LATERAL (VALUES (a.owner_user_id), (a.assigned_wife_id)) AS o(id)
     WHERE a.id IN (p_from, p_to)
       AND a.is_shared_pool = false
-      AND a.owner_user_id IS NOT NULL;
+      AND o.id IS NOT NULL;
 $$;
 
 CREATE OR REPLACE FUNCTION public.nafaqah_transfer_personal_owners()
@@ -2518,6 +2882,8 @@ SET search_path = public, pg_temp
 AS $$
 BEGIN
     NEW.personal_owner_ids := public.nafaqah_personal_owners_of(NEW.from_account_id, NEW.to_account_id);
+    NEW.touches_wife_account := EXISTS (SELECT 1 FROM public.accounts a
+                                        WHERE a.id IN (NEW.from_account_id, NEW.to_account_id) AND a.account_type = 'wife');
     RETURN NEW;
 END;
 $$;
@@ -2533,6 +2899,11 @@ SET personal_owner_ids = public.nafaqah_personal_owners_of(t.from_account_id, t.
 WHERE t.personal_owner_ids IS NULL;
 ALTER TABLE public.account_transfers ALTER COLUMN personal_owner_ids SET DEFAULT '{}'::uuid[];
 ALTER TABLE public.account_transfers ALTER COLUMN personal_owner_ids SET NOT NULL;
+-- No wife account exists before this file; a second run finds every row of one already marked.
+UPDATE public.account_transfers t
+SET touches_wife_account = true
+WHERE NOT t.touches_wife_account
+  AND EXISTS (SELECT 1 FROM public.accounts a WHERE a.id IN (t.from_account_id, t.to_account_id) AND a.account_type = 'wife');
 
 -- The plan's owner: the wife whose personal purchase of the plan's household it is linked to.
 -- An ordinary purchase or her advance give none; another household's purchase is never linked.
@@ -2656,6 +3027,13 @@ BEGIN
     SET personal_owner_id = NULL,
         former_member_personal = p.former_member_personal OR public.nafaqah_is_spouse_member(p.household_id, OLD.id)
     WHERE p.personal_owner_id = OLD.id;
+    -- A wife account still assigned to her (a delete by any other path than the purge, which did
+    -- this already) becomes a former wife's before her id goes: archived, naming nobody (section 12).
+    UPDATE public.accounts a
+    SET is_archived = true,
+        assigned_wife_id = NULL,
+        updated_at = now()
+    WHERE a.assigned_wife_id = OLD.id;
     RETURN OLD;
 END;
 $$;
@@ -2692,13 +3070,17 @@ $$;
 -- ledger's managers and by the wife whose repayment it is (review R3B-02). The caller's halves run
 -- once per statement (InitPlans); per row, array tests, and the ledger link only for a repayment's
 -- row the caller neither manages nor owns.
+-- A row with a wife account on it (section 12) is read like the account: by her and its owner (both
+-- in personal_owner_ids), the owner of the other personal side, and her ledger's managers; never by
+-- an admin who is not a wife while the husband is there, a co-wife or a member.
 DROP POLICY IF EXISTS transfers_select_household ON public.account_transfers;
 CREATE POLICY transfers_select_household ON public.account_transfers
     FOR SELECT TO authenticated
     USING (household_id = (SELECT public.get_auth_user_household_id())
            AND ((SELECT auth.uid()) = ANY (personal_owner_ids)
-                OR (purpose IS NULL
+                OR (purpose IS NULL AND NOT touches_wife_account
                     AND NOT (personal_owner_ids && (SELECT public.nafaqah_caller_hidden_wives())))
+                OR (purpose IS NULL AND touches_wife_account AND (SELECT public.nafaqah_caller_manages_ledgers()))
                 OR (purpose IS NOT NULL
                     AND ((SELECT public.nafaqah_caller_manages_ledgers())
                          OR (purpose IN ('wife_repayment', 'wife_repayment_reversal')
@@ -2723,7 +3105,640 @@ CREATE POLICY "Allow household members full access to installment_plans" ON publ
                 AND (original_transaction_id IS NULL
                      OR EXISTS (SELECT 1 FROM public.transactions t WHERE t.id = installment_plans.original_transaction_id)));
 
+-- 12. The wife account (owner decisions 2026-11-06, superseding "her account is never credited") --
+-- An account of kind 'wife' (columns in section 3b): personal (not shared), in SAR, owned by the
+-- husband and assigned to one wife of the household (assigned_wife_id). A wife may still have
+-- accounts of her own; those stay hers alone and no repayment credits them.
+--   * Created and assigned only by her husband (the household's provider while he is a current
+--     member who is not a wife: nafaqah_ledger_husband_id), through create_wife_account and
+--     assign_wife_account, never by a client's own insert or update (trg_accounts_wife_account_guard).
+--     Assigning again is for a mistake only: refused once the account has any history, which would
+--     otherwise show one wife's spending to another. Its owner names and archives it.
+--   * Seen (its row, balance, history and transfer rows) by her (assigned_wife_id), its owner and
+--     her ledger's managers (her husband; when he is gone, an admin who is not a wife): never by a
+--     co-wife (even an admin), an ordinary member, or an admin who is not a wife while the husband is
+--     there, who do not learn it exists (transfer_between_accounts answers an account they do not
+--     see as no account).
+--   * Spent from only by her: her personal purchases (wife_personal) and her advances
+--     (wife_reimbursable), as their creator (trg_wife_account_spending). Nobody else spends from it,
+--     the husband included: what is in it is hers to spend, and he only funds it.
+--   * Funded by its owner or her ledger's managers (transfer_between_accounts into it); nothing is
+--     transferred out of it. Every repayment to her credits one of hers (sections 5 to 8): the
+--     payer picks it (on a direct repayment and on an approval, where he may change her choice to
+--     another of hers), she picks it on her request. A reversal takes the amount back out of it
+--     (refused when it no longer holds it, or is archived). A former member's payment credits none.
+--   * When she leaves or her account is deleted it is archived and assigned to nobody, and stays
+--     its owner's (her purge also takes her name out of its name); when his account is deleted it
+--     passes to the household's primary admin, or to her when that admin is a co-wife (section 10).
+
+-- Who sees a wife account (beside the owner, who sees every account he owns): her and her ledger's
+-- managers, in the household.
+CREATE OR REPLACE FUNCTION public.nafaqah_may_see_wife_account(p_household_id uuid, p_actor uuid, p_owner uuid, p_assigned uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    SELECT p_actor IS NOT NULL AND (
+        p_actor = p_owner
+        OR (p_actor = p_assigned AND EXISTS (SELECT 1 FROM public.household_memberships m
+                                             WHERE m.household_id = p_household_id AND m.user_id = p_actor))
+        OR public.nafaqah_may_manage_ledgers(p_household_id, p_actor));
+$$;
+
+-- 20261020100000's read rule (the owner; a shared pool by its household), with the wife account:
+-- the wife it is assigned to and her ledger's managers, in their active household. The caller's
+-- half runs once per statement (InitPlan) and only for a wife account.
+DROP POLICY IF EXISTS "accounts_select" ON public.accounts;
+CREATE POLICY "accounts_select" ON public.accounts
+    FOR SELECT
+    TO authenticated
+    USING (owner_user_id = (SELECT auth.uid())
+        OR (is_shared_pool = true AND household_id = (SELECT public.get_auth_user_household_id()))
+        OR (account_type = 'wife' AND household_id = (SELECT public.get_auth_user_household_id())
+            AND (assigned_wife_id = (SELECT auth.uid()) OR (SELECT public.nafaqah_caller_manages_ledgers()))));
+
+-- A client never makes a wife account or changes whom it is assigned to (or makes one into another
+-- kind): only the RPCs below and the server do. Run as the caller (SECURITY INVOKER), so it tells a
+-- client's own statement (current_user authenticated or anon) from one inside an RPC.
+CREATE OR REPLACE FUNCTION public.nafaqah_guard_wife_account_row()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF current_user NOT IN ('authenticated', 'anon') THEN
+        RETURN NEW;
+    END IF;
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.account_type = 'wife' OR NEW.assigned_wife_id IS NOT NULL THEN
+            RAISE EXCEPTION 'Forbidden: a wife account is created by her husband in the app'
+                USING ERRCODE = '42501', HINT = 'wife_account_forbidden';
+        END IF;
+    ELSIF (NEW.account_type = 'wife') IS DISTINCT FROM (OLD.account_type = 'wife')
+          OR NEW.assigned_wife_id IS DISTINCT FROM OLD.assigned_wife_id THEN
+        RAISE EXCEPTION 'Forbidden: a wife account stays one, and only her husband assigns it'
+            USING ERRCODE = '42501', HINT = 'wife_account_forbidden';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_accounts_wife_account_guard ON public.accounts;
+CREATE TRIGGER trg_accounts_wife_account_guard
+    BEFORE INSERT OR UPDATE ON public.accounts
+    FOR EACH ROW EXECUTE FUNCTION public.nafaqah_guard_wife_account_row();
+
+-- Only she spends from her wife account, and only her personal purchases and her advances, as their
+-- creator; not archived (nobody spends from a former wife's). The husband does not: he funds it.
+-- Runs after trg_bind_transaction_creator (names order BEFORE triggers), so user_id is filled in.
+-- The system's own cascades (her leaving declassifies her rows) leave the account as it is.
+CREATE OR REPLACE FUNCTION public.nafaqah_guard_wife_account_spending()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_acc public.accounts%ROWTYPE;
+BEGIN
+    IF NEW.account_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+    IF TG_OP = 'UPDATE' AND NEW.account_id IS NOT DISTINCT FROM OLD.account_id AND pg_trigger_depth() > 1 THEN
+        RETURN NEW;
+    END IF;
+    SELECT * INTO v_acc FROM public.accounts WHERE id = NEW.account_id;
+    IF v_acc.account_type IS DISTINCT FROM 'wife' THEN
+        RETURN NEW;
+    END IF;
+    -- A client who does not see it gets the answer the row policy gives for any account not theirs,
+    -- word for word: this refusal must not tell that a wife account is there.
+    IF auth.uid() IS NOT NULL
+       AND NOT public.nafaqah_may_see_wife_account(v_acc.household_id, auth.uid(), v_acc.owner_user_id, v_acc.assigned_wife_id) THEN
+        RAISE EXCEPTION 'new row violates row-level security policy for table "transactions"' USING ERRCODE = '42501';
+    END IF;
+    IF v_acc.assigned_wife_id IS NULL OR v_acc.is_archived IS TRUE
+       OR NEW.user_id IS DISTINCT FROM v_acc.assigned_wife_id
+       OR NEW.nafaqah_spouse_id IS DISTINCT FROM v_acc.assigned_wife_id
+       OR NEW.nafaqah_class IS NULL OR NEW.nafaqah_class NOT IN ('wife_personal', 'wife_reimbursable') THEN
+        RAISE EXCEPTION 'A wife account is spent from only by her, for her personal purchases and her advances'
+            USING ERRCODE = '42501', HINT = 'wife_account_spending';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_wife_account_spending ON public.transactions;
+CREATE TRIGGER trg_wife_account_spending
+    BEFORE INSERT OR UPDATE OF account_id, nafaqah_class, nafaqah_spouse_id, user_id ON public.transactions
+    FOR EACH ROW EXECUTE FUNCTION public.nafaqah_guard_wife_account_spending();
+
+-- 20261101000100's guard, with her wife account among the accounts a wife-class row may use.
+CREATE OR REPLACE FUNCTION public.enforce_wife_class_account()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF NEW.nafaqah_class IN ('wife_personal', 'wife_reimbursable') AND NEW.account_id IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1
+        FROM public.accounts a
+       WHERE a.id = NEW.account_id
+         AND (a.owner_user_id = NEW.nafaqah_spouse_id
+              OR (a.account_type = 'wife' AND a.assigned_wife_id = NEW.nafaqah_spouse_id))
+         AND a.is_shared_pool = false
+         AND a.is_archived = false
+         AND a.household_id = NEW.household_id
+    ) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'check_violation',
+        CONSTRAINT = 'transactions_wife_class_no_account',
+        HINT = 'wife_class_household_account',
+        MESSAGE = 'Wife expense cannot be debited from household shared accounts or other members accounts.';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- 20261020400000's balance trigger and its helper, with the wife account: the wife it is assigned
+-- to debits it with her own purchases (and an admin edits them as any member's), as an owner debits
+-- his own account. Nothing else of either changes; trg_wife_account_spending decides which of her
+-- purchases may be on it.
+CREATE OR REPLACE FUNCTION public.transaction_personal_account_writable(
+    p_account public.accounts,
+    p_creator_user_id uuid,
+    p_caller_uid uuid
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    SELECT p_caller_uid IS NULL
+        OR p_account.is_shared_pool
+        OR p_account.owner_user_id = p_caller_uid
+        OR (p_account.account_type = 'wife' AND p_account.assigned_wife_id = p_caller_uid)
+        OR (
+            (p_account.owner_user_id = p_creator_user_id
+             OR (p_account.account_type = 'wife' AND p_account.assigned_wife_id = p_creator_user_id))
+            AND public.household_member_role(p_account.household_id, p_caller_uid) = 'admin'
+        );
+$$;
+
+CREATE OR REPLACE FUNCTION public.update_account_balance_on_transaction()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_acc public.accounts%ROWTYPE;
+    v_caller_uid UUID;
+BEGIN
+    BEGIN
+        v_caller_uid := auth.uid();
+    EXCEPTION WHEN OTHERS THEN
+        v_caller_uid := NULL;
+    END;
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.account_id IS NOT NULL THEN
+            SELECT * INTO v_acc FROM public.accounts WHERE id = NEW.account_id FOR UPDATE;
+            IF v_acc.id IS NULL THEN
+                RAISE EXCEPTION 'Target account % not found', NEW.account_id USING ERRCODE = 'P0002';
+            END IF;
+            IF v_acc.household_id <> NEW.household_id THEN
+                RAISE EXCEPTION 'Account % does not belong to transaction household %', NEW.account_id, NEW.household_id USING ERRCODE = '42501';
+            END IF;
+            IF v_caller_uid IS NOT NULL AND v_acc.is_shared_pool = false AND v_acc.owner_user_id <> v_caller_uid
+               AND NOT (v_acc.account_type = 'wife' AND v_acc.assigned_wife_id IS NOT DISTINCT FROM v_caller_uid) THEN
+                RAISE EXCEPTION 'Access denied: cannot debit personal account owned by another user' USING ERRCODE = '42501';
+            END IF;
+
+            UPDATE public.accounts
+            SET balance = balance - NEW.amount,
+                updated_at = now()
+            WHERE id = NEW.account_id;
+        END IF;
+        RETURN NEW;
+
+    ELSIF TG_OP = 'DELETE' THEN
+        IF OLD.account_id IS NOT NULL THEN
+            SELECT * INTO v_acc FROM public.accounts WHERE id = OLD.account_id FOR UPDATE;
+            IF v_acc.id IS NOT NULL THEN
+                IF v_acc.household_id <> OLD.household_id THEN
+                    RAISE EXCEPTION 'Account % does not belong to transaction household %', OLD.account_id, OLD.household_id USING ERRCODE = '42501';
+                END IF;
+                IF NOT public.transaction_personal_account_writable(v_acc, OLD.user_id, v_caller_uid) THEN
+                    RAISE EXCEPTION 'Access denied: cannot credit personal account owned by another user' USING ERRCODE = '42501';
+                END IF;
+
+                UPDATE public.accounts
+                SET balance = balance + OLD.amount,
+                    updated_at = now()
+                WHERE id = OLD.account_id;
+            END IF;
+        END IF;
+        RETURN OLD;
+
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF OLD.account_id IS DISTINCT FROM NEW.account_id OR OLD.amount <> NEW.amount THEN
+            -- Revert old account debit
+            IF OLD.account_id IS NOT NULL THEN
+                SELECT * INTO v_acc FROM public.accounts WHERE id = OLD.account_id FOR UPDATE;
+                IF v_acc.id IS NOT NULL THEN
+                    IF v_acc.household_id <> OLD.household_id THEN
+                        RAISE EXCEPTION 'Account % does not belong to transaction household %', OLD.account_id, OLD.household_id USING ERRCODE = '42501';
+                    END IF;
+                    IF NOT public.transaction_personal_account_writable(v_acc, OLD.user_id, v_caller_uid) THEN
+                        RAISE EXCEPTION 'Access denied: cannot credit personal account owned by another user' USING ERRCODE = '42501';
+                    END IF;
+
+                    UPDATE public.accounts
+                    SET balance = balance + OLD.amount,
+                        updated_at = now()
+                    WHERE id = OLD.account_id;
+                END IF;
+            END IF;
+
+            -- Apply new account debit
+            IF NEW.account_id IS NOT NULL THEN
+                SELECT * INTO v_acc FROM public.accounts WHERE id = NEW.account_id FOR UPDATE;
+                IF v_acc.id IS NULL THEN
+                    RAISE EXCEPTION 'Target account % not found', NEW.account_id USING ERRCODE = 'P0002';
+                END IF;
+                IF v_acc.household_id <> NEW.household_id THEN
+                    RAISE EXCEPTION 'Account % does not belong to transaction household %', NEW.account_id, NEW.household_id USING ERRCODE = '42501';
+                END IF;
+                IF NOT public.transaction_personal_account_writable(v_acc, NEW.user_id, v_caller_uid) THEN
+                    RAISE EXCEPTION 'Access denied: cannot debit personal account owned by another user' USING ERRCODE = '42501';
+                END IF;
+
+                UPDATE public.accounts
+                SET balance = balance - NEW.amount,
+                    updated_at = now()
+                WHERE id = NEW.account_id;
+            END IF;
+        END IF;
+        RETURN NEW;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+-- 20261020400000's helper, with her wife account among the accounts of a transaction she creates
+-- (the spending guard above decides which of her transactions).
+CREATE OR REPLACE FUNCTION public.transaction_account_matches(
+    p_account_id uuid,
+    p_household_id uuid,
+    p_creator_user_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM public.accounts a
+        WHERE a.id = p_account_id
+          AND a.household_id = p_household_id
+          AND (a.is_shared_pool = true OR a.owner_user_id = p_creator_user_id
+               OR (a.account_type = 'wife' AND a.assigned_wife_id = p_creator_user_id))
+    );
+$$;
+
+-- 20261020400000's insert rule, through the same helper as the update rule.
+DROP POLICY IF EXISTS "transactions_insert_household" ON public.transactions;
+CREATE POLICY "transactions_insert_household" ON public.transactions
+    FOR INSERT TO authenticated
+    WITH CHECK (
+        household_id = (SELECT public.get_auth_user_household_id())
+        AND user_id = (SELECT auth.uid())
+        AND (
+            account_id IS NULL
+            OR public.transaction_account_matches(account_id, household_id, user_id)
+        )
+    );
+
+-- 20261020400000's transfer, with the wife account: an account the caller does not see is no
+-- account (a wife account is not revealed, also not by a refusal), nothing leaves a wife account,
+-- and only its owner or her ledger's managers put money into one (not an archived one). Locks
+-- pools first, then the other accounts in id order: the order of the purge and the repayments.
+CREATE OR REPLACE FUNCTION public.transfer_between_accounts(
+    p_household_id uuid,
+    p_from_account_id uuid,
+    p_to_account_id uuid,
+    p_amount numeric,
+    p_fee numeric DEFAULT 0.0,
+    p_notes text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_caller_uid UUID;
+    v_from_acc RECORD;
+    v_to_acc RECORD;
+    v_total_deduction NUMERIC;
+    v_transfer_id UUID;
+    v_created_at TIMESTAMPTZ := now();
+    v_result jsonb;
+BEGIN
+    v_caller_uid := auth.uid();
+    IF v_caller_uid IS NULL THEN
+        RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
+    END IF;
+
+    IF p_amount IS NULL OR p_amount <= 0 THEN
+        RAISE EXCEPTION 'Transfer amount must be positive' USING ERRCODE = '22023';
+    END IF;
+
+    IF p_fee IS NULL OR p_fee < 0 THEN
+        RAISE EXCEPTION 'Transfer fee cannot be negative' USING ERRCODE = '22023';
+    END IF;
+
+    -- Columns are NUMERIC(14,2)/(10,2): a third decimal would be rounded
+    -- independently on each side of the transfer and mint or burn money.
+    IF p_amount <> round(p_amount, 2) OR p_fee <> round(p_fee, 2) THEN
+        RAISE EXCEPTION 'Transfer amount and fee must have at most 2 decimal places' USING ERRCODE = '22023';
+    END IF;
+
+    IF p_from_account_id = p_to_account_id THEN
+        RAISE EXCEPTION 'Cannot transfer between the same account' USING ERRCODE = '22023';
+    END IF;
+
+    -- Strict NULL-safe membership check
+    IF p_household_id IS NULL OR public.get_auth_user_household_id() IS NULL OR p_household_id IS DISTINCT FROM public.get_auth_user_household_id() THEN
+        RAISE EXCEPTION 'Access denied: caller does not belong to specified household' USING ERRCODE = '42501';
+    END IF;
+
+    -- Pools first, then the rest, each in id order.
+    PERFORM 1 FROM public.accounts WHERE id IN (p_from_account_id, p_to_account_id)
+    ORDER BY is_shared_pool DESC, id
+    FOR UPDATE;
+    SELECT * INTO v_from_acc FROM public.accounts WHERE id = p_from_account_id;
+    SELECT * INTO v_to_acc FROM public.accounts WHERE id = p_to_account_id;
+
+    -- A wife account the caller does not see is answered as no account.
+    IF v_from_acc.id IS NULL
+       OR (v_from_acc.account_type = 'wife'
+           AND NOT public.nafaqah_may_see_wife_account(v_from_acc.household_id, v_caller_uid,
+                                                       v_from_acc.owner_user_id, v_from_acc.assigned_wife_id)) THEN
+        RAISE EXCEPTION 'Source account not found' USING ERRCODE = 'P0002';
+    END IF;
+    IF v_to_acc.id IS NULL
+       OR (v_to_acc.account_type = 'wife'
+           AND NOT public.nafaqah_may_see_wife_account(v_to_acc.household_id, v_caller_uid,
+                                                       v_to_acc.owner_user_id, v_to_acc.assigned_wife_id)) THEN
+        RAISE EXCEPTION 'Destination account not found' USING ERRCODE = 'P0002';
+    END IF;
+
+    IF v_from_acc.household_id <> p_household_id OR v_to_acc.household_id <> p_household_id THEN
+        RAISE EXCEPTION 'Both accounts must belong to the household' USING ERRCODE = '42501';
+    END IF;
+
+    -- The wife account: she spends from it; nothing is transferred out of it, by its owner either.
+    IF v_from_acc.account_type = 'wife' THEN
+        RAISE EXCEPTION 'Forbidden: a wife account is spent from, not transferred out of'
+            USING ERRCODE = '42501', HINT = 'wife_account_no_transfer_out';
+    END IF;
+
+    -- Personal source: only its owner. Shared pool source: only a household admin (DB-16).
+    IF v_from_acc.is_shared_pool = false AND v_from_acc.owner_user_id <> v_caller_uid THEN
+        RAISE EXCEPTION 'Access denied: cannot transfer from an account owned by another user' USING ERRCODE = '42501';
+    END IF;
+    IF v_from_acc.is_shared_pool = true
+       AND public.household_member_role(p_household_id, v_caller_uid) IS DISTINCT FROM 'admin' THEN
+        RAISE EXCEPTION 'Forbidden: only household admins can move money out of a shared pool' USING ERRCODE = '42501';
+    END IF;
+
+    -- Its owner or her ledger's managers fund it, not once it is archived.
+    IF v_to_acc.account_type = 'wife' THEN
+        IF v_caller_uid IS DISTINCT FROM v_to_acc.owner_user_id
+           AND NOT public.nafaqah_may_manage_ledgers(p_household_id, v_caller_uid) THEN
+            RAISE EXCEPTION 'Forbidden: her wife account is funded by her husband'
+                USING ERRCODE = '42501', HINT = 'wife_account_forbidden';
+        END IF;
+        IF v_to_acc.is_archived IS TRUE THEN
+            RAISE EXCEPTION 'This wife account is archived' USING ERRCODE = 'P0002', HINT = 'account_unavailable';
+        END IF;
+    END IF;
+
+    v_total_deduction := p_amount + p_fee;
+    IF v_from_acc.balance < v_total_deduction THEN
+        RAISE EXCEPTION 'Insufficient funds: balance (%) is less than transfer plus fee (%)', v_from_acc.balance, v_total_deduction USING ERRCODE = '22000';
+    END IF;
+
+    UPDATE public.accounts
+    SET balance = balance - v_total_deduction,
+        updated_at = v_created_at
+    WHERE id = p_from_account_id;
+
+    UPDATE public.accounts
+    SET balance = balance + p_amount,
+        updated_at = v_created_at
+    WHERE id = p_to_account_id;
+
+    INSERT INTO public.account_transfers (
+        household_id,
+        user_id,
+        from_account_id,
+        to_account_id,
+        amount,
+        fee,
+        timestamp,
+        notes,
+        created_at
+    ) VALUES (
+        p_household_id,
+        v_caller_uid,
+        p_from_account_id,
+        p_to_account_id,
+        p_amount,
+        p_fee,
+        v_created_at,
+        p_notes,
+        v_created_at
+    ) RETURNING id INTO v_transfer_id;
+
+    SELECT jsonb_build_object(
+        'id', v_transfer_id,
+        'household_id', p_household_id,
+        'user_id', v_caller_uid,
+        'from_account_id', p_from_account_id,
+        'to_account_id', p_to_account_id,
+        'amount', p_amount,
+        'fee', p_fee,
+        'timestamp', v_created_at,
+        'notes', p_notes,
+        'created_at', v_created_at
+    ) INTO v_result;
+
+    RETURN v_result;
+END;
+$$;
+
+-- Her husband makes her a wife account (in SAR, empty, his own, assigned to her). Returns it.
+CREATE OR REPLACE FUNCTION public.create_wife_account(
+    p_household_id uuid,
+    p_wife_user_id uuid,
+    p_name text,
+    p_actor_user_id uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_actor uuid := public.nafaqah_resolve_actor(p_actor_user_id);
+    v_name text := btrim(COALESCE(p_name, ''));
+    v_acc public.accounts%ROWTYPE;
+BEGIN
+    PERFORM public.nafaqah_require_member(p_household_id, v_actor);
+    -- The household as the purge locks it, so her purge either ran (she is no wife here now) or
+    -- waits for this account and archives it.
+    PERFORM 1 FROM public.households WHERE id = p_household_id FOR KEY SHARE;
+    IF v_actor IS DISTINCT FROM public.nafaqah_ledger_husband_id(p_household_id) THEN
+        RAISE EXCEPTION 'Forbidden: only her husband creates a wife account'
+            USING ERRCODE = '42501', HINT = 'wife_account_forbidden';
+    END IF;
+    IF NOT public.nafaqah_is_spouse_member(p_household_id, p_wife_user_id) THEN
+        RAISE EXCEPTION 'A wife account is for a wife of this household' USING ERRCODE = '22023', HINT = 'not_a_wife';
+    END IF;
+    IF v_name = '' OR char_length(v_name) > 60 THEN
+        RAISE EXCEPTION 'A name of 1 to 60 characters' USING ERRCODE = '22023', HINT = 'invalid_name';
+    END IF;
+    INSERT INTO public.accounts (household_id, owner_user_id, name, account_type, currency, balance, is_shared_pool,
+                                 is_archived, icon_name, assigned_wife_id)
+    VALUES (p_household_id, v_actor, v_name, 'wife', 'SAR', 0, false, false, 'favorite_rounded', p_wife_user_id)
+    RETURNING * INTO v_acc;
+    RETURN jsonb_build_object('id', v_acc.id, 'household_id', v_acc.household_id, 'owner_user_id', v_acc.owner_user_id,
+                              'assigned_wife_id', v_acc.assigned_wife_id, 'name', v_acc.name, 'account_type', v_acc.account_type,
+                              'currency', v_acc.currency, 'balance', v_acc.balance, 'is_archived', v_acc.is_archived,
+                              'created_at', v_acc.created_at);
+END;
+$$;
+
+-- Her husband corrects whom a wife account he owns is assigned to, before it has any history
+-- (a transaction or a transfer): afterwards it would show one wife's money to another.
+CREATE OR REPLACE FUNCTION public.assign_wife_account(
+    p_household_id uuid,
+    p_account_id uuid,
+    p_wife_user_id uuid,
+    p_actor_user_id uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_actor uuid := public.nafaqah_resolve_actor(p_actor_user_id);
+    v_acc public.accounts%ROWTYPE;
+BEGIN
+    PERFORM public.nafaqah_require_member(p_household_id, v_actor);
+    PERFORM 1 FROM public.households WHERE id = p_household_id FOR KEY SHARE;
+    SELECT * INTO v_acc FROM public.accounts WHERE id = p_account_id FOR UPDATE;
+    IF v_acc.id IS NULL OR v_acc.household_id IS DISTINCT FROM p_household_id OR v_acc.account_type IS DISTINCT FROM 'wife'
+       OR NOT public.nafaqah_may_see_wife_account(p_household_id, v_actor, v_acc.owner_user_id, v_acc.assigned_wife_id) THEN
+        RAISE EXCEPTION 'No such wife account in this household' USING ERRCODE = 'P0002', HINT = 'account_not_found';
+    END IF;
+    IF v_actor IS DISTINCT FROM public.nafaqah_ledger_husband_id(p_household_id) OR v_actor IS DISTINCT FROM v_acc.owner_user_id THEN
+        RAISE EXCEPTION 'Forbidden: her husband assigns the wife accounts he owns'
+            USING ERRCODE = '42501', HINT = 'wife_account_forbidden';
+    END IF;
+    IF v_acc.is_archived IS TRUE THEN
+        RAISE EXCEPTION 'This wife account is archived' USING ERRCODE = 'P0002', HINT = 'account_unavailable';
+    END IF;
+    IF NOT public.nafaqah_is_spouse_member(p_household_id, p_wife_user_id) THEN
+        RAISE EXCEPTION 'A wife account is for a wife of this household' USING ERRCODE = '22023', HINT = 'not_a_wife';
+    END IF;
+    IF v_acc.assigned_wife_id = p_wife_user_id THEN
+        RETURN jsonb_build_object('id', v_acc.id, 'assigned_wife_id', v_acc.assigned_wife_id, 'changed', false);
+    END IF;
+    IF EXISTS (SELECT 1 FROM public.transactions t WHERE t.account_id = v_acc.id)
+       OR EXISTS (SELECT 1 FROM public.account_transfers t WHERE t.from_account_id = v_acc.id OR t.to_account_id = v_acc.id)
+       OR EXISTS (SELECT 1 FROM public.spouse_reimbursement_requests q WHERE q.wife_account_id = v_acc.id) THEN
+        RAISE EXCEPTION 'This wife account has history: make her a new one instead'
+            USING ERRCODE = '22023', HINT = 'wife_account_has_history';
+    END IF;
+    UPDATE public.accounts SET assigned_wife_id = p_wife_user_id, updated_at = now() WHERE id = v_acc.id;
+    RETURN jsonb_build_object('id', v_acc.id, 'assigned_wife_id', p_wife_user_id, 'changed', true);
+END;
+$$;
+
+-- Its owner archives a wife account: nobody spends from it, credits it or funds it any more; its
+-- balance and history stay. (He may also archive it from the accounts screen, as any account.)
+CREATE OR REPLACE FUNCTION public.archive_wife_account(
+    p_household_id uuid,
+    p_account_id uuid,
+    p_actor_user_id uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_actor uuid := public.nafaqah_resolve_actor(p_actor_user_id);
+    v_acc public.accounts%ROWTYPE;
+BEGIN
+    PERFORM public.nafaqah_require_member(p_household_id, v_actor);
+    PERFORM 1 FROM public.households WHERE id = p_household_id FOR KEY SHARE;
+    SELECT * INTO v_acc FROM public.accounts WHERE id = p_account_id FOR UPDATE;
+    IF v_acc.id IS NULL OR v_acc.household_id IS DISTINCT FROM p_household_id OR v_acc.account_type IS DISTINCT FROM 'wife'
+       OR NOT public.nafaqah_may_see_wife_account(p_household_id, v_actor, v_acc.owner_user_id, v_acc.assigned_wife_id) THEN
+        RAISE EXCEPTION 'No such wife account in this household' USING ERRCODE = 'P0002', HINT = 'account_not_found';
+    END IF;
+    IF v_actor IS DISTINCT FROM v_acc.owner_user_id THEN
+        RAISE EXCEPTION 'Forbidden: a wife account is archived by its owner'
+            USING ERRCODE = '42501', HINT = 'wife_account_forbidden';
+    END IF;
+    IF v_acc.is_archived IS NOT TRUE THEN
+        UPDATE public.accounts SET is_archived = true, updated_at = now() WHERE id = v_acc.id;
+    END IF;
+    RETURN jsonb_build_object('id', v_acc.id, 'is_archived', true, 'changed', v_acc.is_archived IS NOT TRUE);
+END;
+$$;
+
 -- 11. Privileges ---------------------------------------------------------------------------------
+-- The wife account (section 12): the read policy runs its caller's half as the caller; the three
+-- RPCs are the clients' and the API's; the rest is internal.
+REVOKE ALL ON FUNCTION public.nafaqah_may_see_wife_account(uuid, uuid, uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.nafaqah_may_see_wife_account(uuid, uuid, uuid, uuid) TO service_role;
+REVOKE ALL ON FUNCTION public.nafaqah_require_wife_account(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.nafaqah_repayment_lock(uuid, uuid, uuid, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.nafaqah_repayment_transfer(uuid, uuid, uuid, uuid, numeric, text) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.account_deletion_wife_account_recipient(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.account_deletion_wife_account_recipient(uuid, uuid) TO service_role;
+REVOKE ALL ON FUNCTION public.nafaqah_guard_wife_account_row() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.nafaqah_guard_wife_account_spending() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.create_wife_account(uuid, uuid, text, uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.assign_wife_account(uuid, uuid, uuid, uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.archive_wife_account(uuid, uuid, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.create_wife_account(uuid, uuid, text, uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.assign_wife_account(uuid, uuid, uuid, uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.archive_wife_account(uuid, uuid, uuid) TO authenticated, service_role;
+-- As 20261101000100 and 20261020400000 left them.
+REVOKE EXECUTE ON FUNCTION public.transaction_personal_account_writable(public.accounts, uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.update_account_balance_on_transaction() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.enforce_wife_class_account() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.transfer_between_accounts(uuid, uuid, uuid, numeric, numeric, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.transfer_between_accounts(uuid, uuid, uuid, numeric, numeric, text) TO authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.transaction_account_matches(uuid, uuid, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.transaction_account_matches(uuid, uuid, uuid) TO authenticated, service_role;
 -- Her transfers and plans: the read policies run the caller's helper as the caller; the others are
 -- internal.
 REVOKE ALL ON FUNCTION public.nafaqah_caller_hidden_wives() FROM PUBLIC, anon;
@@ -2757,7 +3772,7 @@ REVOKE ALL ON FUNCTION public.nafaqah_outstanding(uuid, uuid) FROM PUBLIC, anon,
 REVOKE ALL ON FUNCTION public.nafaqah_repayment_lock_account(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.nafaqah_repayment_debit(uuid, uuid, uuid, numeric, text) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.nafaqah_repayment_credit(uuid, uuid, uuid, numeric, text) FROM PUBLIC, anon, authenticated, service_role;
-REVOKE ALL ON FUNCTION public.nafaqah_repay_from_account(uuid, uuid, uuid, numeric, text, text, uuid, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.nafaqah_repay_from_account(uuid, uuid, uuid, numeric, text, text, uuid, uuid, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.nafaqah_repayment_replay(public.spouse_reimbursements, uuid) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.nafaqah_request_close(public.spouse_reimbursement_requests, text, text, uuid) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.nafaqah_may_repay(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
@@ -2777,12 +3792,12 @@ DECLARE
 BEGIN
     FOREACH v_sig IN ARRAY ARRAY[
         'get_spouse_reimbursement_balance(uuid, uuid, uuid)',
-        'record_spouse_reimbursement(uuid, uuid, numeric, text, text, uuid, uuid, uuid)',
+        'record_spouse_reimbursement(uuid, uuid, numeric, text, text, uuid, uuid, uuid, uuid)',
         'record_spouse_reimbursement(uuid, uuid, numeric, text, text, uuid)',
-        'request_spouse_reimbursement(uuid, numeric, text, uuid, uuid)',
+        'request_spouse_reimbursement(uuid, numeric, text, uuid, uuid, uuid)',
         'cancel_spouse_reimbursement_request(uuid, uuid, uuid)',
         'decline_spouse_reimbursement_request(uuid, uuid, text, uuid)',
-        'approve_spouse_reimbursement_request(uuid, uuid, uuid, uuid, uuid)',
+        'approve_spouse_reimbursement_request(uuid, uuid, uuid, uuid, uuid, uuid)',
         'reverse_spouse_reimbursement(uuid, uuid, uuid, uuid)',
         'record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid, uuid)',
         'reverse_former_member_debt_payment(uuid, uuid, uuid, uuid, uuid)'
