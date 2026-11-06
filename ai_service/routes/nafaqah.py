@@ -67,6 +67,7 @@ from nafaqah_service import (
     load_family_context,
     record_former_member_debt_payment,
     record_reimbursement,
+    require_allowance_reader,
     require_ledger_reader,
     resolve_wife_id,
     waive_former_member_debt,
@@ -390,7 +391,7 @@ async def nafaqah_decline_repayment_request(
 @router.get(
     "/households/{household_id}/nafaqah/allowance",
     tags=["nafaqah"],
-    summary="Wife personal allowance for a salary cycle: allocated, spent and remaining.",
+    summary="Wife personal allowance for a salary cycle: allocated, spent and remaining (her own, her husband, an admin who is not a wife).",
 )
 async def nafaqah_get_allowance(
     household_id: str,
@@ -406,8 +407,11 @@ async def nafaqah_get_allowance(
         ctx = load_family_context(household_id)
         if not ctx.is_family:
             raise NotFamilyHousehold("Nafaqah ledgers apply to family households with a spouse member.")
-        # A wife reads her own allowance, never a co-wife's (review R3-01).
-        return get_allowance(ctx, resolve_wife_id(ctx, wife_user_id, caller), cycle_key)
+        # She reads her own (never a co-wife's, review R3-01); her husband and an admin who is not
+        # a wife read every wife's; anyone else is refused before any wife is named or looked up
+        # (owner decision 2026-11-06).
+        require_allowance_reader(ctx, caller)
+        return get_allowance(ctx, resolve_wife_id(ctx, wife_user_id, caller), cycle_key, caller)
 
     return await _run(work, public_message="Failed to load the allowance.")
 
@@ -415,7 +419,7 @@ async def nafaqah_get_allowance(
 @router.put(
     "/households/{household_id}/nafaqah/allowance",
     tags=["nafaqah"],
-    summary="Set the wife's personal allowance for a salary cycle (husband or household admin).",
+    summary="Set the wife's personal allowance for a salary cycle (husband or household admin, never a wife).",
 )
 async def nafaqah_set_allowance(
     household_id: str,

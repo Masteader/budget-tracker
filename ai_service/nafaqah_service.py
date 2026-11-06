@@ -675,13 +675,45 @@ def _require_member(ctx: FamilyContext, actor_id: str) -> None:
         raise NafaqahForbidden("Not a member of this household.")
 
 
+def _is_spouse_member(ctx: FamilyContext, user_id: Optional[str]) -> bool:
+    return ctx.is_member(user_id) and (
+        ctx.members[str(user_id)].get("financial_role") == "spouse" or ctx.is_wife(user_id)
+    )
+
+
 def can_set_allowance(ctx: FamilyContext, actor_id: str, wife_id: Optional[str] = None) -> bool:
-    """The husband or a household admin; never the wife herself."""
+    """The husband (an admin or not) or a household admin; never a wife: not herself, and not a
+    co-wife, even an admin (owner decision 2026-11-06). Mirrors ``public.set_member_allowance``."""
     if not ctx.is_member(actor_id) or (wife_id and str(actor_id) == str(wife_id)):
         return False
-    if wife_id is None and ctx.is_wife(actor_id):
+    if _is_spouse_member(ctx, actor_id):
         return False
     return str(actor_id) == ctx.husband_id or ctx.is_admin(actor_id)
+
+
+def can_see_allowances(ctx: FamilyContext, actor_id: Optional[str]) -> bool:
+    """Who reads every wife's allowance (owner decision 2026-11-06; mirrors
+    ``public.nafaqah_may_see_allowances``): her husband (the provider while he is a current member
+    who is not a wife) and a household admin who is not a wife. Never a wife (a co-wife, even an
+    admin) and never an ordinary member."""
+    if not ctx.is_member(actor_id) or _is_spouse_member(ctx, actor_id):
+        return False
+    return ctx.is_admin(actor_id) or str(actor_id) == ctx.ledger_husband_id
+
+
+def can_view_allowance(ctx: FamilyContext, actor_id: Optional[str], wife_id: Optional[str]) -> bool:
+    """Her allowance (allocated, spent, remaining) is read by her and by those who see allowances."""
+    if not actor_id or not wife_id or not ctx.is_member(actor_id):
+        return False
+    return str(actor_id) == str(wife_id) or can_see_allowances(ctx, actor_id)
+
+
+def require_allowance_reader(ctx: FamilyContext, actor_id: Optional[str]) -> None:
+    """A caller who may read some wife's allowance: a wife (her own) or those who see allowances;
+    anyone else is refused before any wife is named or looked up."""
+    _require_member(ctx, actor_id)
+    if not ctx.is_wife(actor_id) and not can_see_allowances(ctx, actor_id):
+        raise NafaqahForbidden("Only she, her husband, or an admin who is not a wife, reads her allowance.")
 
 
 def can_manage_wife_ledgers(ctx: FamilyContext, actor_id: Optional[str]) -> bool:
@@ -1595,9 +1627,15 @@ def waive_former_member_debt(ctx: FamilyContext, actor_id: str, debt_id: str, re
 
 # ─── Personal allowance (rule 3) ──────────────────────────────────────────────
 
-def get_allowance(ctx: FamilyContext, wife_id: str, cycle_key: Optional[str]) -> Dict[str, Any]:
-    """Allocated / spent / remaining of the wife's personal allowance for a cycle."""
+def get_allowance(
+    ctx: FamilyContext, wife_id: str, cycle_key: Optional[str], caller_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """Allocated / spent / remaining of the wife's personal allowance for a cycle. ``caller_id`` is
+    who asks: only she, her husband, or an admin who is not a wife reads it (NafaqahForbidden
+    otherwise). Without a caller it is the server's own read (after a set)."""
     _require_family(ctx)
+    if caller_id is not None and not can_view_allowance(ctx, caller_id, wife_id):
+        raise NafaqahForbidden("Only she, her husband, or an admin who is not a wife, reads her allowance.")
     _require_wife(ctx, wife_id)
     cycle = _resolve_cycle(ctx, cycle_key)
     client = get_client()
@@ -1631,11 +1669,11 @@ def get_allowance(ctx: FamilyContext, wife_id: str, cycle_key: Optional[str]) ->
 def set_allowance(
     ctx: FamilyContext, actor_id: str, wife_id: str, amount: Any, cycle_key: Optional[str]
 ) -> Dict[str, Any]:
-    """The husband (or a household admin other than the wife) sets the cycle allowance."""
+    """The husband or a household admin, never a wife, sets the cycle allowance."""
     _require_family(ctx)
     _require_member(ctx, actor_id)
     if not can_set_allowance(ctx, actor_id, wife_id):
-        raise NafaqahForbidden("The allowance is set by the husband or a household admin.")
+        raise NafaqahForbidden("The allowance is set by the husband or a household admin who is not a wife.")
     _require_wife(ctx, wife_id)
     value = parse_sar_amount(amount, allow_zero=True)
     cycle = _resolve_cycle(ctx, cycle_key)
@@ -1705,19 +1743,20 @@ def build_summary(ctx: FamilyContext, caller_id: str, cycle_key: Optional[str] =
     cycle = _resolve_cycle(ctx, cycle_key)
     pending = get_deletion_notices(ctx, caller_id) if ctx.wives else {}
     wives = []
-    # Her allowance is not her repayment ledger: the husband or any admin sets it (rule 04). An
-    # admin who reads no wife's ledger (the husband is there) still gets each wife's allowance,
-    # with nothing of her ledger (review R3-01).
+    # Her allowance is not her repayment ledger: she, her husband and an admin who is not a wife
+    # read it (owner decision 2026-11-06). An admin who reads no wife's ledger (the husband is
+    # there) still gets each wife's allowance, with nothing of her ledger (review R3-01); a
+    # co-wife and an ordinary member get none.
     allowance_wives = []
     for wife in ctx.wives:
         # Only the wives whose ledger the caller reads (review R3-01): a wife her own entry, the
         # husband (an admin who is not a wife when he is gone) every wife's, anyone else none.
         if not can_view_wife_ledger(ctx, caller_id, wife["id"]):
-            if can_set_allowance(ctx, caller_id, wife["id"]) and not ctx.is_wife(caller_id):
+            if can_view_allowance(ctx, caller_id, wife["id"]):
                 allowance_wives.append({
                     "id": wife["id"],
                     "display_name": wife["display_name"],
-                    "allowance": get_allowance(ctx, wife["id"], cycle),
+                    "allowance": get_allowance(ctx, wife["id"], cycle, caller_id),
                 })
             continue
         ledger = get_reimbursement_ledger(ctx, wife["id"], caller_id)
@@ -1731,7 +1770,9 @@ def build_summary(ctx: FamilyContext, caller_id: str, cycle_key: Optional[str] =
             # when he is gone) records, approves, declines and reverses.
             "can_request": can_request_reimbursement(ctx, caller_id, wife["id"]),
             "can_decide": can_record_reimbursement(ctx, caller_id, wife["id"]),
-            "allowance": get_allowance(ctx, wife["id"], cycle),
+            # Whoever reads her ledger reads her allowance (she, her husband, an admin who is not
+            # a wife once he is gone); checked again with the caller all the same.
+            "allowance": get_allowance(ctx, wife["id"], cycle, caller_id),
             # Only for the husband (or the admins without one): she scheduled her deletion.
             "pending_deletion": pending.get(wife["id"]),
         })
