@@ -217,7 +217,7 @@ Details and couplings: [`docs/review/audit/MASTER_AUDIT_REPORT.md`](docs/review/
 | `PORT` | ❌ | HTTP port (default: 8000) |
 | `RELOAD` | ❌ | Hot-reload on file change (default: false) |
 | `CONTACT_RECIPIENT_EMAIL` | ❌ | Where support and VIP early-access emails go (default: `abedmowafaq@gmail.com`) |
-| `MAIL_FROM` | ❌ | Sender of those emails (default: `Budget Tracker <fmscoinfo@fmsco.com.sa>`) |
+| `MAIL_FROM` | ❌ | Sender of those emails (default: `Qawam Money <fmscoinfo@fmsco.com.sa>`) |
 | `RESEND_API_KEY` | ✅ one provider | Resend API key; preferred provider (HTTP, works where outbound SMTP is blocked, e.g. Railway non-Pro). `fmsco.com.sa` must be verified in Resend (SPF + DKIM) |
 | `RESEND_FROM` | ❌ | Overrides `MAIL_FROM` for Resend only |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURITY` | ✅ one provider | SMTP alternative, used when `RESEND_API_KEY` is empty. `SMTP_SECURITY` is `starttls` (default, port 587) or `ssl` (port 465) |
@@ -235,8 +235,8 @@ Details and couplings: [`docs/review/audit/MASTER_AUDIT_REPORT.md`](docs/review/
 to `CONTACT_RECIPIENT_EMAIL` from `MAIL_FROM` with `Reply-To` set to the person who submitted it.
 With SMTP, use the credentials of the `fmscoinfo@fmsco.com.sa` mailbox; with Resend, verify the
 `fmsco.com.sa` domain (SPF and DKIM records) first, or providers will reject or spam-folder the
-mail. Subjects look like `[Budget Tracker] VIP early access — <email>` or
-`[Budget Tracker] Support — <email>`.
+mail. Subjects look like `[Qawam Money] VIP early access — <email>` or
+`[Qawam Money] Support — <email>`.
 
 ```json
 {"type": "vip_early_access" | "support" | "contact", "email": "you@example.com",
@@ -287,7 +287,7 @@ key, `FASTAPI_BASE_URL`) stops at startup with a `StateError` naming each missin
 
 ### Camera or Microphone not opening
 
-- Check that **Camera** and **Microphone** permissions are granted in Android Settings → Apps → Budget Tracker → Permissions.
+- Check that **Camera** and **Microphone** permissions are granted in Android Settings → Apps → Qawam Money → Permissions.
 
 ### Supabase Realtime not updating the Flutter UI
 
