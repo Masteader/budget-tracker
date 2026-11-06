@@ -22,6 +22,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/brand_names.dart';
 import '../support/localized_app.dart';
 
 const _logoAsset = 'assets/images/brand_logo.png';
@@ -376,12 +377,12 @@ void main() {
     });
 
     test('no source file contains an old or withdrawn app name', () {
-      final oldNames = RegExp('budget tracker|wafeer|(?<![؀-ۿ])وف(?:يي|یی|ی|ي)ر(?![؀-ۿ])', caseSensitive: false);
-      expect(oldNames.hasMatch('وفير'), isTrue);
-      expect(oldNames.hasMatch('توفير'), isFalse);
+      bool oldNames(String text) => formerAppName.hasMatch(text) || withdrawnAppName.hasMatch(text);
+      expect(oldNames('وفير'), isTrue);
+      expect(oldNames('توفير'), isFalse);
       final offenders = [
         for (final f in webFiles)
-          if (oldNames.hasMatch(f.readAsStringSync())) f.path,
+          if (oldNames(f.readAsStringSync())) f.path,
       ];
       expect(offenders, isEmpty);
     });
@@ -389,7 +390,7 @@ void main() {
     test('the Arabic old name survives only where it means "household budget"', () {
       final uses = [
         for (final f in webFiles)
-          if (f.readAsStringSync().contains('ميزانية الأسرة')) f.path.replaceAll(r'\', '/').split('/').last,
+          if (f.readAsStringSync().contains(formerArabicAppName)) f.path.replaceAll(r'\', '/').split('/').last,
       ];
       expect(uses, ['BudgetsView.tsx']);
     });

@@ -17,6 +17,8 @@ import 'package:budget_tracker/l10n/app_localizations.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/brand_names.dart';
+
 final _l10nSource = File('lib/l10n/app_localizations.dart').readAsStringSync();
 
 /// Parses `'lang': { 'key': 'value', ... }` blocks of `_localizedValues`.
@@ -184,24 +186,22 @@ void main() {
     });
 
     test('no value in any language contains an old or withdrawn app name', () {
-      final oldNames = RegExp(
-        'budget tracker|بجٹ ٹریکر|wafeer|(?<![؀-ۿ])وف(?:يي|یی|ی|ي)ر(?![؀-ۿ])',
-        caseSensitive: false,
-      );
       // Add a key here only if a sentence really means "household budget".
       const householdBudgetKeys = <String>{};
       final offenders = <String>[];
       for (final lang in ['en', 'ar', 'ur']) {
         for (final e in allValues(lang)) {
-          final oldArabicName = e.value.contains('ميزانية الأسرة') && !householdBudgetKeys.contains(e.key);
-          if (oldNames.hasMatch(e.value) || oldArabicName) offenders.add('$lang:${e.key}=${e.value}');
+          final oldArabicName = e.value.contains(formerArabicAppName) && !householdBudgetKeys.contains(e.key);
+          if (formerAppName.hasMatch(e.value) || withdrawnAppName.hasMatch(e.value) || oldArabicName) {
+            offenders.add('$lang:${e.key}=${e.value}');
+          }
         }
       }
       expect(offenders, isEmpty, reason: offenders.join('\n'));
     });
 
     test('the withdrawn-name pattern spares words that only contain the same letters', () {
-      final withdrawn = RegExp('(?<![؀-ۿ])وف(?:يي|یی|ی|ي)ر(?![؀-ۿ])');
+      final withdrawn = withdrawnAppName;
       expect(withdrawn.hasMatch('وفيير'), isTrue);
       expect(withdrawn.hasMatch('وفییر'), isTrue);
       expect(withdrawn.hasMatch('وفیر'), isTrue);
@@ -209,6 +209,26 @@ void main() {
       expect(withdrawn.hasMatch('وفير'), isTrue);
       expect(withdrawn.hasMatch('تطبيق وفير'), isTrue);
       expect(withdrawn.hasMatch('توفير'), isFalse);
+    });
+
+    test('the withdrawn-name pattern catches an attached proclitic, punctuation and other spellings', () {
+      const caught = [
+        'لوفير', 'بوفير', 'ووفير', 'فوفير', 'كوفير', 'لوفیر', 'بوفیر', //
+        'وبوفير', 'ولوفير', 'فبوفير', 'فلوفير', //
+        'لوفيير', 'بوفيير', 'ووفيير', 'وفّير', 'وافير', 'وافیر', //
+        'مرحباً بك في وفير', '(وفير)', '«وفير»', 'وفير،', 'وفير؟', 'وفیر۔', //
+        'Wafeer', 'WAFEER', 'myWafeer', 'Wafir', 'Waffeer', 'Wafeir',
+      ];
+      for (final text in caught) {
+        expect(withdrawnAppName.hasMatch(text), isTrue, reason: text);
+      }
+      const spared = [
+        'توفير', 'توفیر', 'التوفير', 'التوفیر', 'للتوفير', 'بالتوفير', //
+        'وفيرة', 'وفي التخزين', 'يوفر', 'wafer', 'waffle', 'Qawam Money', 'قوام المال',
+      ];
+      for (final text in spared) {
+        expect(withdrawnAppName.hasMatch(text), isFalse, reason: text);
+      }
     });
 
     test('no Urdu value contains the Arabic-script form of the name', () {
