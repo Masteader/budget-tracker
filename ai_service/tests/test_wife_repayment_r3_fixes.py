@@ -187,9 +187,9 @@ def test_r3_01_an_admin_still_sets_the_allowance_while_the_husband_is_there(hous
             assert set(w) == {"id", "display_name", "allowance"}, w
     else:
         assert body["allowance_wives"] == []
-    for who in ("co-wife", "member", "wife"):
+    for who in ("co-wife", "member", "wife", "wife-admin"):
         other = client.get(f"/households/{HH}/nafaqah", headers=bearer(CALLERS[who])).json()
-        assert other["allowance_wives"] == []
+        assert other["allowance_wives"] == [], who
 
 
 @pytest.mark.parametrize("who", list(CALLERS))
@@ -358,3 +358,16 @@ def test_r3_01_with_no_wife_left_the_husband_is_owed_nothing_not_hidden(family):
     assert v2["family_summary"]["wife_reimbursement_owed"] == 0.0
     member = client.get(f"/households/{HH}/settlement-v2", headers=bearer(CHILD)).json()
     assert member["family_summary"]["wife_reimbursement_owed"] is None
+
+
+@pytest.mark.parametrize("who", list(CALLERS))
+def test_r3_01_the_ledger_read_itself_refuses_anyone_else(household, who):
+    """get_reimbursement_ledger checks its caller too, whatever route calls it."""
+    ctx = ns.load_family_context(HH)
+    if not ctx.is_member(CALLERS[who]):
+        return
+    if who in _viewers(household.state):
+        assert ns.get_reimbursement_ledger(ctx, WIFE, CALLERS[who])["wife_user_id"] == WIFE
+    else:
+        with pytest.raises(ns.NafaqahForbidden):
+            ns.get_reimbursement_ledger(ctx, WIFE, CALLERS[who])
