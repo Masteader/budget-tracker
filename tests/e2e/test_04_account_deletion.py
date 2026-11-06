@@ -546,7 +546,11 @@ def test_what_a_leaving_wife_is_owed_reaches_her_husband_and_stays_as_one_anonym
     _budget(husband, hh, "OPEX-GROCERY")
     advance = world.chat_commit(wife, hh, llm, merchant="Lulu", amount=90, category_code="OPEX-GROCERY")
     assert advance.status_code == 200 and advance.json()["nafaqah_class"] == "wife_reimbursable", advance.text
-    paid = husband.api.post(f"/households/{hh.id}/nafaqah/reimbursements", json={"amount": 20, "payment_method": "cash"})
+    # 20261105001300: every repayment and payment leaves an account of his.
+    his = _account(husband, hh, "His bank")
+    _income(husband, hh, his, 1000)
+    paid = husband.api.post(f"/households/{hh.id}/nafaqah/reimbursements",
+                            json={"amount": 20, "payment_method": "cash", "account_id": his, "request_key": str(uuid.uuid4())})
     assert paid.status_code == 200, paid.text
 
     assert _request(_session_client(world, db, wife), "delete").status_code == 200
@@ -573,17 +577,20 @@ def test_what_a_leaving_wife_is_owed_reaches_her_husband_and_stays_as_one_anonym
     debt = debts[0]["id"]
     base = f"/households/{hh.id}/nafaqah/former-member-debts/{debt}"
     key = str(uuid.uuid4())
-    first = husband.api.post(f"{base}/payments", json={"amount": 30.5, "payment_method": "bank_transfer", "request_key": key})
+    first = husband.api.post(f"{base}/payments", json={"amount": 30.5, "payment_method": "bank_transfer", "request_key": key,
+                                                       "account_id": his})
     assert first.status_code == 200, first.text
     assert (first.json()["remaining"], first.json()["replayed"]) == (39.5, False)
-    again = husband.api.post(f"{base}/payments", json={"amount": 30.5, "payment_method": "bank_transfer", "request_key": key})
+    again = husband.api.post(f"{base}/payments", json={"amount": 30.5, "payment_method": "bank_transfer", "request_key": key,
+                                                       "account_id": his})
     assert again.status_code == 200 and again.json()["replayed"] is True
-    over = husband.api.post(f"{base}/payments", json={"amount": 39.51, "payment_method": "cash", "request_key": str(uuid.uuid4())})
+    over = husband.api.post(f"{base}/payments", json={"amount": 39.51, "payment_method": "cash", "request_key": str(uuid.uuid4()),
+                                                      "account_id": his})
     assert over.status_code == 409 and over.json()["detail"]["code"] == "overpayment"
     # Straight to the database function, as the app's JWT: the same refusal.
     direct = husband.rpc("record_former_member_debt_payment", {
         "p_household_id": hh.id, "p_debt_id": debt, "p_amount": 39.51, "p_payment_method": "cash",
-        "p_request_key": str(uuid.uuid4())})
+        "p_request_key": str(uuid.uuid4()), "p_actor_user_id": None, "p_account_id": his})
     assert direct.status_code >= 400 and _hint(direct) == "overpayment"
     waived = husband.api.post(f"{base}/waiver", json={"request_key": str(uuid.uuid4())})
     assert waived.status_code == 200 and waived.json()["status"] == "waived", waived.text
@@ -592,6 +599,8 @@ def test_what_a_leaving_wife_is_owed_reaches_her_husband_and_stays_as_one_anonym
     assert (after["status"], after["paid_amount"]) == ("waived", 30.5)
     assert [(e["kind"], e["amount"]) for e in after["events"]] == [("payment", 30.5), ("waiver", 39.5)]
     assert _pool_balances(db, hh) == pools and _budgets_spent(db, hh) == budgets
+    # His account paid the 20 repayment and the 30.50 payment; nothing else moved.
+    assert float(db.scalar("SELECT balance FROM public.accounts WHERE id = %s", (his,))) == 1000 - 20 - 30.5
     _assert_user_erased(db, wife)
 
 

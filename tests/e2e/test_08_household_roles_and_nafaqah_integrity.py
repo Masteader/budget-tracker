@@ -14,6 +14,29 @@ real stack.
 
 from __future__ import annotations
 
+import uuid
+
+
+def _payer_account(user, hh, amount=10000):
+    """A funded account of the payer (20261105001300: every repayment leaves an account)."""
+    res = user.rest.post("/accounts", json={
+        "household_id": hh.id, "owner_user_id": user.id, "name": f"Repayments {user.display_name}",
+        "account_type": "bank", "is_shared_pool": False,
+    }, headers={"Prefer": "return=representation"})
+    assert res.status_code == 201, res.text
+    account = res.json()[0]["id"]
+    res = user.rpc("record_income", {
+        "p_household_id": hh.id, "p_account_id": account, "p_cycle_key": None, "p_source_type": "salary",
+        "p_title": "Salary", "p_base_amount": amount,
+    })
+    assert res.status_code == 200, res.text
+    return account
+
+
+def _paid(account, **body):
+    """A repayment body from ``account`` with a fresh request key."""
+    return {"account_id": account, "request_key": str(uuid.uuid4()), **body}
+
 
 def _summary(user, hh):
     res = user.api.get(f"/households/{hh.id}/nafaqah")
@@ -90,7 +113,8 @@ def test_editing_a_repaid_advance_is_refused(world, db, llm):
                             paid_by="me", beneficiary="both")
     assert res.status_code == 200 and res.json()["nafaqah_class"] == "wife_reimbursable", res.text
     tx_id = res.json()["transaction_id"]
-    paid = husband.api.post(f"/households/{family.id}/nafaqah/reimbursements", json={"amount": 200})
+    paid = husband.api.post(f"/households/{family.id}/nafaqah/reimbursements",
+                            json=_paid(_payer_account(husband, family), amount=200))
     assert paid.status_code == 200, paid.text
 
     for user, call in (
