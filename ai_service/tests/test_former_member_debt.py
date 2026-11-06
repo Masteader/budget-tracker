@@ -160,6 +160,19 @@ def test_only_the_husband_or_an_admin_may_close_a_record(household, caller, allo
     assert body["can_manage_former_member_debts"] is allowed
 
 
+def test_the_husband_manages_the_record_even_when_he_is_not_an_admin(household):
+    """The provider is chosen by an admin and need not be one (set_nafaqah_provider)."""
+    for m in household.tables["household_memberships"]:
+        if m["user_id"] == HUSBAND:
+            m["role"] = "member"
+    household.tables["households"][0]["owner_user_id"] = COADMIN
+    body = client.get(f"/households/{HH}/nafaqah", headers=bearer(HUSBAND)).json()
+    assert body["can_manage_former_member_debts"] is True
+    assert _pay(HUSBAND).status_code == 200
+    assert [p["p_actor_user_id"] for p in _calls(household, "record_former_member_debt_payment")] == [HUSBAND]
+    assert _waive(HUSBAND).status_code == 200
+
+
 def test_a_family_with_no_wife_left_still_shows_its_records(household):
     household.tables["household_memberships"] = [m for m in household.tables["household_memberships"] if m["user_id"] != WIFE]
     body = client.get(f"/households/{HH}/nafaqah", headers=bearer(CHILD)).json()

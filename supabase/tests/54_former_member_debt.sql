@@ -229,6 +229,7 @@ $$;
 -- F4(4): husband R(10) sole admin, wife S(11).
 -- F5(5): no provider: admin A(13), wife Y(12), member B(15).
 -- Outsider O(16), admin of their own family household F6(6).
+-- F7(7): admin A7(17); the provider PM(18) is a plain member, not an admin; wife Z(19).
 DO $$
 DECLARE
     v_cycle text;
@@ -238,7 +239,7 @@ BEGIN
 
     INSERT INTO auth.users (id, email, raw_user_meta_data)
     SELECT pg_temp.u(n), 't54-' || n || '@test.local', jsonb_build_object('display_name', 'T54 User ' || n)
-    FROM generate_series(1, 16) AS n;
+    FROM generate_series(1, 19) AS n;
     UPDATE auth.users SET email = 't54-warda@test.local' WHERE id = pg_temp.u(2);
     UPDATE public.users SET display_name = 'Warda Uniquewife' WHERE id = pg_temp.u(2);
     UPDATE auth.users SET email = 't54-pasha@test.local' WHERE id = pg_temp.u(7);
@@ -273,6 +274,12 @@ BEGIN
     PERFORM pg_temp.hh(6);
     PERFORM pg_temp.join(16, 6, 'admin', 'provider');
 
+    PERFORM pg_temp.hh(7);
+    PERFORM pg_temp.join(17, 7, 'admin', 'family_member');
+    PERFORM pg_temp.join(18, 7, 'member', 'provider');
+    PERFORM pg_temp.join(19, 7, 'member', 'spouse');
+    UPDATE public.households SET nafaqah_provider_user_id = pg_temp.u(18) WHERE id = pg_temp.h(7);
+
     PERFORM pg_temp.acct(1, 1, 1, true, 1000);   -- F1 pool
     PERFORM pg_temp.acct(2, 1, 2, false, 500);   -- W personal
     PERFORM pg_temp.acct(3, 1, 1, false, 300);   -- H personal
@@ -295,6 +302,8 @@ BEGIN
     PERFORM pg_temp.advance(4, 11, 25);
     PERFORM pg_temp.advance(5, 12, 60);
     UPDATE public.households SET nafaqah_provider_user_id = NULL WHERE id = pg_temp.h(5);
+    -- F7: 15.
+    PERFORM pg_temp.advance(7, 19, 15);
 END $$;
 
 -- 1. Before the deletion ---------------------------------------------------------------------
@@ -518,6 +527,21 @@ BEGIN
     PERFORM pg_temp.expect('household deleted', (SELECT count(*)::text FROM public.households WHERE id = pg_temp.h(4)), '0');
     PERFORM pg_temp.expect('its record went with it', (SELECT count(*)::text FROM public.former_member_debts WHERE household_id = pg_temp.h(4)), '0');
     RAISE NOTICE 'PASSED: a waiver closes the record with no money moving; the husband''s own deletion follows the household.';
+END $$;
+
+-- 5b. A provider who is not an admin -------------------------------------------------------
+DO $$
+BEGIN
+    PERFORM pg_temp.request(19);
+    PERFORM pg_temp.expect('the provider is told, though not an admin',
+        pg_temp.call(pg_temp.u(18), NULL, format('SELECT string_agg(outstanding::text, '','') FROM public.get_former_member_debt_deletion_notices(%L)', pg_temp.h(7))), '15.00');
+    PERFORM pg_temp.expect('the admin is not, while there is a provider',
+        pg_temp.call(pg_temp.u(17), NULL, format('SELECT count(*)::text FROM public.get_former_member_debt_deletion_notices(%L)', pg_temp.h(7))), '0');
+    PERFORM pg_temp.purge(19);
+    PERFORM pg_temp.expect('F7 record', pg_temp.state(7), '15.00/0.00/open/false');
+    PERFORM pg_temp.expect('the provider pays', (pg_temp.pay(18, 7, '5', 20, 'cash')::jsonb ->> 'remaining'), '10.00');
+    PERFORM pg_temp.expect('an admin waives the rest', (pg_temp.waive(17, 7, 21)::jsonb ->> 'status'), 'waived');
+    RAISE NOTICE 'PASSED: the husband closes the record even when he is not an admin.';
 END $$;
 
 -- 6. A record exists only when something is owed, and the snapshot never moves the ledger ---------
