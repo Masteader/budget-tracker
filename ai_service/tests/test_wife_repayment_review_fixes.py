@@ -21,6 +21,7 @@ from __future__ import annotations
 import pytest
 
 import nafaqah_service as ns
+from test_wife_repayment_debit import WIFE_WA  # noqa: F401
 from test_wife_repayment_debit import (  # noqa: F401  (pytest fixture)
     ACCOUNT,
     COADMIN,
@@ -231,7 +232,7 @@ def test_r1_02_the_database_decides_closed_overpaid_and_unknown(family, hint, co
 
 @pytest.mark.parametrize("rpc, call", [
     ("record_spouse_reimbursement", lambda: client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(HUSBAND), json={
-        "amount": 20, "payment_method": "cash", "account_id": ACCOUNT, "request_key": KEY})),
+        "amount": 20, "payment_method": "cash", "account_id": ACCOUNT, "request_key": KEY, "wife_account_id": WIFE_WA})),
     ("approve_spouse_reimbursement_request", lambda: client.post(
         f"/households/{HH}/nafaqah/reimbursement-requests/{Q_PENDING}/approve", headers=bearer(HUSBAND),
         json={"account_id": ACCOUNT, "request_key": KEY})),
@@ -322,13 +323,13 @@ def test_r1_08_the_answer_names_who_paid_never_assumes_the_husband(family):
         "success": True, "replayed": False, "reimbursement_id": "r-x", "amount": 20.0, "payment_method": "cash",
         "account_id": POOL, "paid_by_user_id": COADMIN, "outstanding_before": 225.0, "outstanding_after": 205.0}
     resp = client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(COADMIN), json={
-        "amount": 20, "payment_method": "cash", "account_id": POOL, "request_key": KEY})
+        "amount": 20, "payment_method": "cash", "account_id": POOL, "request_key": KEY, "wife_account_id": WIFE_WA})
     assert resp.status_code == 200 and resp.json()["paid_by_user_id"] == COADMIN
     family.rpc_handlers["record_spouse_reimbursement"] = lambda p: {
         "success": True, "replayed": False, "reimbursement_id": "r-y", "amount": 20.0, "payment_method": "cash",
         "account_id": POOL, "outstanding_before": 225.0, "outstanding_after": 205.0}
     resp = client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(COADMIN), json={
-        "amount": 20, "payment_method": "cash", "account_id": POOL, "request_key": KEY})
+        "amount": 20, "payment_method": "cash", "account_id": POOL, "request_key": KEY, "wife_account_id": WIFE_WA})
     assert resp.json()["paid_by_user_id"] != HUSBAND
 
 

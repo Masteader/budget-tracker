@@ -4,7 +4,8 @@ Every repayment to the wife is tracked; she asks, he approves; corrections are r
 
   * A repayment (or a payment of a former member's record) always names the account it leaves.
     Without one the caller is an app that predates this: HTTP 426, code app_update_required, and
-    nothing is recorded. Her account is never credited.
+    nothing is recorded. It credits the wife account the payer names (test_wife_account); her own
+    accounts are never credited.
   * The wife does not record a repayment (403, wife_must_request). She creates a request; the
     husband or an admin approves it from an account or declines it; she can cancel it.
   * A tracked repayment or payment is reversed in full; the ledger shows which were reversed and
@@ -44,6 +45,7 @@ PEER2 = "b2000000-0000-4000-8000-0000000000f2"
 ACCOUNT = "b5000000-0000-4000-8000-000000000001"
 POOL = "b5000000-0000-4000-8000-000000000002"
 HER_ACCOUNT = "b5000000-0000-4000-8000-000000000003"
+WIFE_WA = "b5000000-0000-4000-8000-000000000004"
 T_NEW = "b6000000-0000-4000-8000-000000000001"
 T_POOL = "b6000000-0000-4000-8000-000000000002"
 T_BACK = "b6000000-0000-4000-8000-000000000003"
@@ -99,6 +101,9 @@ def family(fake_supabase):
         {"id": ACCOUNT, "household_id": HH, "owner_user_id": HUSBAND, "is_shared_pool": False, "is_archived": False, "currency": "SAR"},
         {"id": POOL, "household_id": HH, "owner_user_id": HUSBAND, "is_shared_pool": True, "is_archived": False, "currency": "SAR"},
         {"id": HER_ACCOUNT, "household_id": HH, "owner_user_id": WIFE, "is_shared_pool": False, "is_archived": False, "currency": "SAR"},
+        # Her wife account (section 12 of 20261105001300): every repayment credits it.
+        {"id": WIFE_WA, "household_id": HH, "owner_user_id": HUSBAND, "is_shared_pool": False, "is_archived": False,
+         "currency": "SAR", "account_type": "wife", "assigned_wife_id": WIFE, "name": "Sara card", "balance": 0},
     ])
     fake_supabase.seed("transactions", [
         {"id": "t1", "household_id": HH, "amount": 300.0, "merchant": "Panda", "timestamp": "2026-11-10T09:00:00+00:00",
@@ -209,7 +214,7 @@ def husband_leaves(fake):
 
 
 def _repay(user, **body):
-    payload = {"amount": 20, "payment_method": "bank_transfer", **body}
+    payload = {"amount": 20, "payment_method": "bank_transfer", "wife_account_id": WIFE_WA, **body}
     return client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(user), json=payload)
 
 
@@ -229,10 +234,10 @@ def test_a_repayment_goes_to_the_rpc_with_the_account_and_the_key(family):
     assert resp.status_code == 200, resp.text
     assert _calls(family, "record_spouse_reimbursement") == [{
         "p_household_id": HH, "p_wife_user_id": WIFE, "p_amount": "20.40", "p_payment_method": "bank_transfer",
-        "p_notes": None, "p_actor_user_id": HUSBAND, "p_account_id": ACCOUNT, "p_request_key": KEY}]
+        "p_notes": None, "p_actor_user_id": HUSBAND, "p_account_id": ACCOUNT, "p_request_key": KEY, "p_wife_account_id": WIFE_WA}]
     body = resp.json()
     assert (body["account_id"], body["balance_moved"], body["replayed"], body["outstanding_after"]) == (ACCOUNT, True, False, 204.6)
-    assert "wife_account_credited" not in body, "her account is never credited"
+    assert body["wife_account_id"] == WIFE_WA, "it credits the wife account he named, never one of her own"
 
 
 @pytest.mark.parametrize("body", [{}, {"request_key": KEY}, {"payment_method": "cash"}])
@@ -259,7 +264,7 @@ def test_the_legacy_route_without_an_account_is_told_to_update(family):
 def test_the_legacy_route_passes_the_account_in_a_family(family):
     resp = client.post(f"/households/{HH}/reimbursements", headers=bearer(HUSBAND), json={
         "household_id": HH, "payer_id": "husband", "recipient_id": "wife", "amount": 10, "payment_method": "cash",
-        "account_id": ACCOUNT, "request_key": KEY})
+        "account_id": ACCOUNT, "request_key": KEY, "wife_account_id": WIFE_WA})
     assert resp.status_code == 200, resp.text
     params = _calls(family, "record_spouse_reimbursement")[0]
     assert (params["p_account_id"], params["p_request_key"]) == (ACCOUNT, KEY)
@@ -334,10 +339,12 @@ def test_database_refusals_of_a_repayment_map_to_codes(family, hint, code, statu
 # ─── Her requests ─────────────────────────────────────────────────────────────
 
 def test_she_asks_and_nothing_else_happens(family):
-    resp = client.post(_q(), headers=bearer(WIFE), json={"amount": 30.5, "payment_method": "cash", "request_key": KEY})
+    resp = client.post(_q(), headers=bearer(WIFE), json={"amount": 30.5, "payment_method": "cash", "request_key": KEY,
+                                                          "wife_account_id": WIFE_WA})
     assert resp.status_code == 200, resp.text
     assert _calls(family, "request_spouse_reimbursement") == [{
-        "p_household_id": HH, "p_amount": "30.50", "p_payment_method": "cash", "p_request_key": KEY, "p_actor_user_id": WIFE}]
+        "p_household_id": HH, "p_amount": "30.50", "p_payment_method": "cash", "p_request_key": KEY, "p_actor_user_id": WIFE,
+        "p_wife_account_id": WIFE_WA}]
     assert (resp.json()["request_status"], resp.json()["request_id"]) == ("pending", "q-new")
     assert _calls(family, "record_spouse_reimbursement") == []
 
@@ -361,7 +368,8 @@ def test_a_request_beyond_what_is_owed_says_what_is_left(family):
         raise db_error("pending_exceeds_outstanding", details="195.00")
 
     family.rpc_handlers["request_spouse_reimbursement"] = refuse
-    resp = client.post(_q(), headers=bearer(WIFE), json={"amount": 200, "payment_method": "cash", "request_key": KEY})
+    resp = client.post(_q(), headers=bearer(WIFE), json={"amount": 200, "payment_method": "cash", "request_key": KEY,
+                                                          "wife_account_id": WIFE_WA})
     assert resp.status_code == 409
     assert resp.json()["detail"]["code"] == "pending_exceeds_outstanding" and resp.json()["detail"]["available"] == 195.0
 
@@ -394,7 +402,8 @@ def test_the_husband_or_an_admin_approves_from_an_account(family, caller):
     resp = client.post(_q(f"/{Q_PENDING}/approve"), headers=bearer(caller), json={"account_id": account, "request_key": KEY})
     assert resp.status_code == 200, resp.text
     assert _calls(family, "approve_spouse_reimbursement_request") == [{
-        "p_household_id": HH, "p_request_id": Q_PENDING, "p_account_id": account, "p_request_key": KEY, "p_actor_user_id": caller}]
+        "p_household_id": HH, "p_request_id": Q_PENDING, "p_account_id": account, "p_request_key": KEY, "p_actor_user_id": caller,
+        "p_wife_account_id": None}]
     body = resp.json()
     assert (body["request_id"], body["amount"], body["outstanding_after"], body["balance_moved"]) == (Q_PENDING, 30.0, 195.0, True)
 
@@ -670,17 +679,25 @@ def _signatures(text, name):
 def test_the_service_calls_the_signatures_the_migration_defines():
     text = MIGRATION.read_text(encoding="utf-8")
     assert {"p_household_id", "p_wife_user_id", "p_amount", "p_payment_method", "p_notes", "p_actor_user_id",
-            "p_account_id", "p_request_key"} in _signatures(text, "record_spouse_reimbursement")
+            "p_account_id", "p_request_key", "p_wife_account_id"} in _signatures(text, "record_spouse_reimbursement")
     assert {"p_household_id", "p_debt_id", "p_amount", "p_payment_method", "p_request_key", "p_actor_user_id",
             "p_account_id"} in _signatures(text, "record_former_member_debt_payment")
-    assert {"p_household_id", "p_amount", "p_payment_method", "p_request_key", "p_actor_user_id"} in _signatures(text, "request_spouse_reimbursement")
+    assert {"p_household_id", "p_amount", "p_payment_method", "p_request_key", "p_actor_user_id",
+            "p_wife_account_id"} in _signatures(text, "request_spouse_reimbursement")
     assert {"p_household_id", "p_request_id", "p_actor_user_id"} in _signatures(text, "cancel_spouse_reimbursement_request")
     assert {"p_household_id", "p_request_id", "p_reason", "p_actor_user_id"} in _signatures(text, "decline_spouse_reimbursement_request")
-    assert {"p_household_id", "p_request_id", "p_account_id", "p_request_key", "p_actor_user_id"} in _signatures(text, "approve_spouse_reimbursement_request")
+    assert {"p_household_id", "p_request_id", "p_account_id", "p_request_key", "p_actor_user_id",
+            "p_wife_account_id"} in _signatures(text, "approve_spouse_reimbursement_request")
+    for name, params in (("create_wife_account", {"p_household_id", "p_wife_user_id", "p_name", "p_actor_user_id"}),
+                         ("assign_wife_account", {"p_household_id", "p_account_id", "p_wife_user_id", "p_actor_user_id"}),
+                         ("archive_wife_account", {"p_household_id", "p_account_id", "p_actor_user_id"})):
+        assert params in _signatures(text, name), name
     assert {"p_household_id", "p_reimbursement_id", "p_request_key", "p_actor_user_id"} in _signatures(text, "reverse_spouse_reimbursement")
     assert {"p_household_id", "p_debt_id", "p_event_id", "p_request_key", "p_actor_user_id"} in _signatures(text, "reverse_former_member_debt_payment")
     for hint in ("app_update_required", "wife_must_request", "account_unavailable", "account_forbidden", "insufficient_funds",
                  "request_key_required", "request_key_reused", "request_not_found", "request_not_pending",
                  "request_exceeds_outstanding", "pending_exceeds_outstanding", "reimbursement_not_found", "payment_not_found",
-                 "account_required", "invalid_reason", *ns.REVERSAL_REFUSALS):
+                 "account_required", "invalid_reason", *ns.REVERSAL_REFUSALS,
+                 "wife_account_required", "wife_account_invalid", "wife_account_insufficient_funds", "wife_account_forbidden",
+                 "wife_account_has_history", "not_a_wife", "invalid_name", "account_not_found"):
         assert f"HINT = '{hint}'" in text, hint

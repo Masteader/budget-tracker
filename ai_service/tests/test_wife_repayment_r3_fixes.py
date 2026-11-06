@@ -21,6 +21,7 @@ from __future__ import annotations
 import pytest
 
 import nafaqah_service as ns
+from test_wife_repayment_debit import WIFE_WA  # noqa: F401
 from test_wife_repayment_debit import (  # noqa: F401  (pytest fixture)
     ACCOUNT,
     CHILD,
@@ -43,6 +44,7 @@ from test_wife_repayment_debit import (  # noqa: F401  (pytest fixture)
 COWIFE = "b2000000-0000-4000-8000-00000000000e"
 WIFE_ADMIN = "b2000000-0000-4000-8000-00000000000f"
 COWIFE_REQUEST = "b7000000-0000-4000-8000-0000000000c1"
+WA_OF = {COWIFE: "b5000000-0000-4000-8000-0000000000e1", WIFE_ADMIN: "b5000000-0000-4000-8000-0000000000f1"}
 R_POOL = "b9000000-0000-4000-8000-0000000000c2"
 T_POOL2 = "b6000000-0000-4000-8000-0000000000c3"
 
@@ -69,6 +71,12 @@ def household(request, family):
          "created_at": "2026-01-05T00:00:00+00:00"},
         {"user_id": WIFE_ADMIN, "financial_role": "spouse", "household_id": HH, "role": "admin",
          "created_at": "2026-01-06T00:00:00+00:00"},
+    ])
+    # Each wife's own wife account (section 12 of 20261105001300): her request names it.
+    family.tables["accounts"].extend([
+        {"id": WA_OF[w], "household_id": HH, "owner_user_id": HUSBAND, "is_shared_pool": False, "is_archived": False,
+         "currency": "SAR", "account_type": "wife", "assigned_wife_id": w, "name": "card", "balance": 0}
+        for w in (COWIFE, WIFE_ADMIN)
     ])
     family.tables["transactions"].append(
         {"id": "t-cowife", "household_id": HH, "amount": 100.0, "merchant": "Tamimi", "timestamp": "2026-11-10T10:00:00+00:00",
@@ -237,7 +245,7 @@ def _account_for(who):
 def test_r3_01_only_her_husband_records_a_repayment_and_an_admin_once_he_is_gone(household, who):
     resp = client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(CALLERS[who]),
                        json={"amount": 10, "payment_method": "cash", "wife_user_id": WIFE,
-                             "account_id": _account_for(who), "request_key": KEY})
+                             "account_id": _account_for(who), "request_key": KEY, "wife_account_id": WIFE_WA})
     if who in _managers(household.state):
         assert resp.status_code == 200, resp.text
         assert _calls(household, "record_spouse_reimbursement")
@@ -305,7 +313,8 @@ def test_r3_01_her_requests_are_hers(household, who):
                          headers=bearer(CALLERS[who]))
     assert cancel.status_code == (200 if who == "wife" else 403), cancel.text
     ask = client.post(f"/households/{HH}/nafaqah/reimbursement-requests", headers=bearer(CALLERS[who]),
-                      json={"amount": 5, "payment_method": "cash", "request_key": KEY})
+                      json={"amount": 5, "payment_method": "cash", "request_key": KEY,
+                            "wife_account_id": WA_OF.get(CALLERS[who], WIFE_WA)})
     assert ask.status_code == (200 if who in ("wife", "co-wife", "wife-admin") else 403), ask.text
 
 

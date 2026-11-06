@@ -22,6 +22,7 @@ from postgrest.exceptions import APIError
 import nafaqah_service as ns
 import settlement_engine
 from test_fable_household_type import FAMILY, HUSBAND as FAMILY_HUSBAND, FakeApiError, world  # noqa: F401
+from test_wife_repayment_debit import WIFE_WA  # noqa: F401
 from test_wife_repayment_debit import (  # noqa: F401  (pytest fixture)
     ACCOUNT,
     HH,
@@ -64,7 +65,8 @@ def test_r2_07_the_route_answers_409_request_key_reused_not_500(family):
 
     family.rpc_handlers["record_spouse_reimbursement"] = race
     resp = client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(HUSBAND), json={
-        "amount": 10, "payment_method": "cash", "wife_user_id": WIFE, "account_id": ACCOUNT, "request_key": KEY})
+        "amount": 10, "payment_method": "cash", "wife_user_id": WIFE, "account_id": ACCOUNT, "request_key": KEY,
+        "wife_account_id": WIFE_WA})
     assert resp.status_code == 409, resp.text
     assert resp.json()["detail"]["code"] == "request_key_reused"
 
