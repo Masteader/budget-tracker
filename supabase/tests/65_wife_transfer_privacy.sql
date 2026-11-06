@@ -146,8 +146,9 @@ $$;
 --        not a wife; wife WA(6) who is an admin.
 -- F2(2): husband H2(7) a member (not an admin) and provider; wife V(8); primary admin D(9) who is
 --        not a wife; wife VA(10) who is an admin; member M(11).
--- Accounts: F1 pool P(1) 5000, a second pool P'(8) 0, W's bank A(2) 1000 and cash A(4) 200, W2's
---           bank A(5) 800, H's own A(6) 3000, K's own A(7) 500;
+-- Accounts: F1 pool P(1) 5000, a second pool P'(8) 0 that the wife-admin owns (a pool is
+--           everyone's, whoever owns it), W's bank A(2) 1000 and cash A(4) 200, W2's bank A(5) 800,
+--           H's own A(6) 3000, K's own A(7) 500;
 --           F2 pool P2(3) 3000, V's bank A(9) 400, H2's own A(10) 1000.
 DO $$
 BEGIN
@@ -174,7 +175,7 @@ BEGIN
 
     INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, is_shared_pool, is_archived, currency) VALUES
         (pg_temp.a(1), pg_temp.h(1), pg_temp.u(1), 'T65 pool', 'shared_pool', 5000, true, false, 'SAR'),
-        (pg_temp.a(8), pg_temp.h(1), pg_temp.u(1), 'T65 pool 2', 'shared_pool', 0, true, false, 'SAR'),
+        (pg_temp.a(8), pg_temp.h(1), pg_temp.u(6), 'T65 pool 2', 'shared_pool', 0, true, false, 'SAR'),
         (pg_temp.a(2), pg_temp.h(1), pg_temp.u(2), 'T65 her bank', 'bank', 1000, false, false, 'SAR'),
         (pg_temp.a(4), pg_temp.h(1), pg_temp.u(2), 'T65 her cash', 'cash', 200, false, false, 'SAR'),
         (pg_temp.a(5), pg_temp.h(1), pg_temp.u(3), 'T65 co-wife bank', 'bank', 800, false, false, 'SAR'),
@@ -230,6 +231,8 @@ BEGIN
         (pg_temp.p(4), pg_temp.h(1), 'pl4 Unlinked', 'Other', 400, 4, 100, 0, '2026-11-05', NULL, 'k'),
         (pg_temp.p(5), pg_temp.h(1), 'pl5 Pharmacy advance', 'Tabby', 600, 4, 150, 1, '2026-11-05', pg_temp.t(4), 'k'),
         (pg_temp.p(6), pg_temp.h(1), 'pl6 Gold WA', 'Tabby', 700, 4, 175, 1, '2026-11-05', pg_temp.t(6), 'k'),
+        -- Linked to a purchase of another household (no client read of it): read by no member of F1.
+        (pg_temp.p(7), pg_temp.h(1), 'pl7 Elsewhere', 'Bank', 500, 5, 100, 1, '2026-11-05', pg_temp.t(11), 'k'),
         (pg_temp.p(11), pg_temp.h(2), 'pl11 Abaya V', 'Tabby', 800, 4, 200, 1, '2026-11-05', pg_temp.t(11), 'k'),
         (pg_temp.p(12), pg_temp.h(2), 'pl12 Unlinked F2', 'Other', 100, 2, 50, 0, '2026-11-05', NULL, 'k');
 END $$;
@@ -358,7 +361,7 @@ BEGIN
     PERFORM pg_temp.check('a member edits every plan he can', pg_temp.write(pg_temp.u(4), 'UPDATE public.installment_plans SET notes = ''K'''), '3');
     PERFORM pg_temp.check('the plans after them',
         (SELECT string_agg(merchant || '=' || notes, ',' ORDER BY merchant) FROM public.installment_plans WHERE household_id = pg_temp.h(1)),
-        'pl1 Boutique W=k,pl2 Salon W2=k,pl3 Electronics=K,pl4 Unlinked=K,pl5 Pharmacy advance=K,pl6 Gold WA=k');
+        'pl1 Boutique W=k,pl2 Salon W2=k,pl3 Electronics=K,pl4 Unlinked=K,pl5 Pharmacy advance=K,pl6 Gold WA=k,pl7 Elsewhere=k');
     -- She, the husband and an admin who is not a wife edit hers.
     PERFORM pg_temp.check('the wife edits her plan', pg_temp.write(pg_temp.u(2), format('UPDATE public.installment_plans SET notes = %L WHERE id = %L', 'W', pg_temp.p(1))), '1');
     PERFORM pg_temp.check('the husband edits her plan', pg_temp.write(pg_temp.u(1), format('UPDATE public.installment_plans SET notes = %L WHERE id = %L', 'H', pg_temp.p(1))), '1');
@@ -381,7 +384,7 @@ BEGIN
         v := v || '|' || (SELECT string_agg(merchant, ',' ORDER BY merchant) FROM public.installment_plans WHERE household_id = pg_temp.h(1));
         RAISE EXCEPTION 'undo %', v;
     EXCEPTION WHEN raise_exception THEN
-        PERFORM pg_temp.check('a member deletes every plan he can', SQLERRM, 'undo 3|pl1 Boutique W,pl2 Salon W2,pl6 Gold WA');
+        PERFORM pg_temp.check('a member deletes every plan he can', SQLERRM, 'undo 3|pl1 Boutique W,pl2 Salon W2,pl6 Gold WA,pl7 Elsewhere');
     END;
 END $$;
 

@@ -47,6 +47,9 @@ PLAN_A = "b6000000-0000-4000-8000-000000000003"
 PLAN_O = "b6000000-0000-4000-8000-000000000004"
 PLAN_U = "b6000000-0000-4000-8000-000000000005"
 PLAN_R = "b6000000-0000-4000-8000-000000000006"
+PLAN_X = "b6000000-0000-4000-8000-000000000007"
+# Read by no member: linked to a purchase that is not in the household (as under RLS).
+NOBODY = "nobody"
 
 # Each plan: (id, shop, linked purchase, whose personal purchase it is or None). Names are distinct,
 # so a leak shows in a response's text.
@@ -58,6 +61,7 @@ PLANS = [
     (PLAN_U, "Other Unlinked Sofa", None, None),
     # Her wife_reimbursable advance (the family fixture's t1): an ordinary row for reading.
     (PLAN_R, "Tabby Panda Advance", "t1", None),
+    (PLAN_X, "Bank Elsewhere Lamp", "tx-of-another-household", NOBODY),
 ]
 OWNER = {pid: wife for pid, _shop, _tx, wife in PLANS}
 SHOP = {pid: shop for pid, shop, _tx, _wife in PLANS}
@@ -81,7 +85,7 @@ def plans(household):
 
 def _reads(state, who, pid):
     wife = OWNER[pid]
-    return wife is None or _sees(state, who, wife)
+    return wife is None or (wife != NOBODY and _sees(state, who, wife))
 
 
 def _gone_husband(plans, who, resp):
@@ -117,7 +121,7 @@ def test_the_plan_list_holds_her_plans_only_for_who_reads_her_purchases(plans, w
 # ─── A payment, an edit ───────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("who", list(CALLERS))
-@pytest.mark.parametrize("pid", [PLAN_W, PLAN_C, PLAN_A, PLAN_O, PLAN_U])
+@pytest.mark.parametrize("pid", [PLAN_W, PLAN_C, PLAN_A, PLAN_O, PLAN_U, PLAN_X])
 def test_a_payment_on_her_plan_is_not_found_for_who_does_not_read_it(plans, who, pid):
     resp = client.post(f"/budgets/installments/{pid}/pay", headers=bearer(CALLERS[who]))
     if _gone_husband(plans, who, resp):
@@ -133,7 +137,7 @@ def test_a_payment_on_her_plan_is_not_found_for_who_does_not_read_it(plans, who,
 
 
 @pytest.mark.parametrize("who", list(CALLERS))
-@pytest.mark.parametrize("pid", [PLAN_W, PLAN_C, PLAN_A, PLAN_O, PLAN_U])
+@pytest.mark.parametrize("pid", [PLAN_W, PLAN_C, PLAN_A, PLAN_O, PLAN_U, PLAN_X])
 def test_an_edit_of_her_plan_is_not_found_for_who_does_not_read_it(plans, who, pid):
     resp = client.put(f"/budgets/installments/{pid}", headers=bearer(CALLERS[who]), json={"notes": "edited"})
     if _gone_husband(plans, who, resp):
