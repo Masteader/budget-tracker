@@ -119,7 +119,7 @@ void main() {
           FamilyReimbursementCard(
             householdId: 'hh',
             summary: _family,
-            recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey}) => pending.future,
+            recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey, String? wifeAccountId}) => pending.future,
           ),
         );
         await tester.tap(find.text('Reimburse Wife'));

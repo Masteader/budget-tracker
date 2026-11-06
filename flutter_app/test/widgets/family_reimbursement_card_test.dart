@@ -116,7 +116,7 @@ void main() {
         loads++;
         return _summary(outstanding: 300.5);
       },
-      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey}) async {
+      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey, String? wifeAccountId}) async {
         calls.add({'amount': amount, 'method': paymentMethod, 'wife': wifeUserId});
         return 300.5;
       },
@@ -150,7 +150,7 @@ void main() {
       householdId: 'hh',
       summary: _summary(),
       loadSummary: (_) async => _summary(),
-      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey}) async {
+      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey, String? wifeAccountId}) async {
         amounts.add(amount);
         return 0;
       },
@@ -175,7 +175,7 @@ void main() {
     await tester.pumpWidget(_app(FamilyReimbursementCard(
       householdId: 'hh',
       summary: _summary(),
-      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey}) async {
+      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey, String? wifeAccountId}) async {
         called = true;
         return 0;
       },
@@ -202,7 +202,7 @@ void main() {
       householdId: 'hh',
       summary: _summary(),
       onReimbursed: () => reimbursed = true,
-      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey}) async =>
+      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey, String? wifeAccountId}) async =>
           throw const NafaqahApiException('overpayment', 'exceeds', statusCode: 409),
     )));
     await tester.pumpAndSettle();

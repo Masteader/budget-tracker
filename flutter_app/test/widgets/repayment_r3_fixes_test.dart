@@ -57,6 +57,9 @@ Account _acct(String id, String name, {String owner = _husband, double balance =
     );
 
 final _all = [
+  // Her wife account (migration 20261105001300, section 12): every repayment credits it.
+  const Account(id: 'wa-$_wife', householdId: 'hh', ownerUserId: 'u-husband', name: 'Her account', accountType: AccountType.wife, assignedWifeId: _wife),
+  const Account(id: 'wa-$_cowife', householdId: 'hh', ownerUserId: 'u-husband', name: 'Her account', accountType: AccountType.wife, assignedWifeId: _cowife),
   _acct('a-bank', 'Al Rajhi current account'),
   _acct('a-pool', 'Home pool shared by the family', owner: _admin, pool: true),
 ];
@@ -134,7 +137,7 @@ class _Harness {
               householdId: 'hh',
               summary: summary,
               loadSummary: (_) async => summary,
-              approveRequest: ({required String requestId, required String accountId, required String requestKey}) async {
+              approveRequest: ({required String requestId, required String accountId, required String requestKey, String? wifeAccountId}) async {
                 approvals.add((requestId: requestId, accountId: accountId, requestKey: requestKey));
                 if (failNext.isNotEmpty) throw failNext.removeAt(0);
                 return 0;

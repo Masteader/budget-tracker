@@ -129,7 +129,7 @@ void main() {
           householdId: 'hh',
           summary: _family(),
           onReimbursed: () => reimbursed++,
-          recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey}) async => throw error,
+          recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey, String? wifeAccountId}) async => throw error,
         ),
         lang: lang,
       )));

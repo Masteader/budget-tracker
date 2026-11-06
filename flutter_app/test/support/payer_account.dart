@@ -20,14 +20,24 @@ class PayerAccounts extends AccountProvider {
   Future<void> refresh({bool force = false}) async => refreshes++;
 }
 
+/// The wives the older tests name, each with one wife account (her husband's,
+/// migration 20261105001300 section 12): every repayment credits one, and the
+/// sheets pick her only one for him.
+const kTestWifeIds = ['u-wife', 'u-w', 'w', 'w1', 'w2', 'wife'];
+
+/// Her wife account in [kTestWifeIds]' default set.
+String testWifeAccountId(String wifeId) => 'wa-$wifeId';
+
 /// [app] (a MaterialApp) with the viewer [userId] owning one personal SAR
-/// account in [householdId], holding [balance].
+/// account in [householdId], holding [balance], and the wives' wife accounts
+/// ([wifeAccounts]; by default one for each of [kTestWifeIds]).
 Widget withPayerAccount(
   Widget app, {
   String userId = 'u-husband',
   String householdId = 'hh',
   double balance = 100000,
   PayerAccounts? accounts,
+  List<Account>? wifeAccounts,
 }) {
   final provider = (accounts ?? PayerAccounts())
     ..setAccountsForTesting([
@@ -40,6 +50,19 @@ Widget withPayerAccount(
         currency: 'SAR',
         balance: balance,
       ),
+      ...(wifeAccounts ??
+          [
+            for (final w in kTestWifeIds)
+              Account(
+                id: testWifeAccountId(w),
+                householdId: householdId,
+                ownerUserId: 'u-husband',
+                name: 'Her account',
+                accountType: AccountType.wife,
+                currency: 'SAR',
+                assignedWifeId: w,
+              ),
+          ]),
     ], householdId: householdId);
   return MultiProvider(
     providers: [

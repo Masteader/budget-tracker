@@ -57,6 +57,8 @@ Account _acct(
     );
 
 final _all = [
+  // Her wife account (migration 20261105001300, section 12): every repayment credits it.
+  const Account(id: 'wa-$_wife', householdId: 'hh', ownerUserId: 'u-husband', name: 'Her account', accountType: AccountType.wife, assignedWifeId: _wife),
   _acct('a-bank', 'Al Rajhi'),
   _acct('a-cash', 'Wallet cash', balance: 50, type: AccountType.cash),
   _acct('a-pool', 'Home pool', owner: 'u-coadmin', balance: 1000, pool: true),
@@ -218,13 +220,13 @@ class _Harness {
                 required String paymentMethod,
                 required String wifeUserId,
                 required String accountId,
-                required String requestKey,
+                required String requestKey, String? wifeAccountId,
               }) async {
                 repays.add((amount: amount, method: paymentMethod, accountId: accountId, requestKey: requestKey));
                 await maybeFail();
                 return 0;
               },
-              createRequest: ({required double amount, required String paymentMethod, required String requestKey}) async {
+              createRequest: ({required double amount, required String paymentMethod, required String requestKey, String? wifeAccountId}) async {
                 asks.add((amount: amount, method: paymentMethod, requestKey: requestKey));
                 await maybeFail();
               },
@@ -232,7 +234,7 @@ class _Harness {
                 cancels.add(requestId);
                 await maybeFail();
               },
-              approveRequest: ({required String requestId, required String accountId, required String requestKey}) async {
+              approveRequest: ({required String requestId, required String accountId, required String requestKey, String? wifeAccountId}) async {
                 approvals.add((requestId: requestId, accountId: accountId, requestKey: requestKey));
                 await maybeFail();
                 return 470.5;

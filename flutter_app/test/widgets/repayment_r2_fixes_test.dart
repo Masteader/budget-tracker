@@ -50,6 +50,8 @@ Account _acct(String id, String name, {String owner = _husband, double balance =
     );
 
 final _all = [
+  // Her wife account (migration 20261105001300, section 12): every repayment credits it.
+  const Account(id: 'wa-$_wife', householdId: 'hh', ownerUserId: 'u-husband', name: 'Her account', accountType: AccountType.wife, assignedWifeId: _wife),
   _acct('a-bank', 'Al Rajhi current account'),
   _acct('a-pool', 'Home pool shared by the family', owner: 'u-coadmin', pool: true),
 ];
@@ -186,18 +188,18 @@ class _Harness {
                 required String paymentMethod,
                 required String wifeUserId,
                 required String accountId,
-                required String requestKey,
+                required String requestKey, String? wifeAccountId,
               }) async {
                 repays.add((amount: amount, method: paymentMethod, accountId: accountId, requestKey: requestKey));
                 await maybeFail();
                 return 0;
               },
-              createRequest: ({required double amount, required String paymentMethod, required String requestKey}) async {
+              createRequest: ({required double amount, required String paymentMethod, required String requestKey, String? wifeAccountId}) async {
                 asks.add((amount: amount, method: paymentMethod, requestKey: requestKey));
                 await maybeFail();
               },
               cancelRequest: ({required String requestId}) async {},
-              approveRequest: ({required String requestId, required String accountId, required String requestKey}) async => 0,
+              approveRequest: ({required String requestId, required String accountId, required String requestKey, String? wifeAccountId}) async => 0,
               declineRequest: ({required String requestId, String? reason}) async {},
               reverseReimbursement: ({required String reimbursementId, required String requestKey}) async => 0,
               recordFormerMemberDebtPayment: ({
