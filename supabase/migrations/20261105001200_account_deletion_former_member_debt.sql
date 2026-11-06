@@ -28,27 +28,42 @@
 --      that takes the account it is paid from) has no amount-only path for a client (review R1-11).
 --   4. Members read both tables under the reimbursement ledger's rule (their active household). No
 --      client writes them.
+--   5. One request key, one operation, per household (review R2-01): nafaqah_request_keys holds every
+--      key a Nafaqah call that takes one has used in the household (its primary key is the
+--      household and the key), written in the same transaction as the operation. Each call first
+--      looks for an exact replay in its own table; otherwise it claims the key there
+--      (nafaqah_claim_request_key), and a key the household already used, on another path or
+--      another record (a household may keep one record per deleted wife), is request_key_reused.
+--      The constraint decides, also between two calls at once: the second waits for the first and
+--      then gets request_key_reused, never a raw unique violation (review R2-07). 20261105001300
+--      makes every repayment path claim its key here too.
+--   6. A family does not become a roommates household while a record is open (review R2-04, owner
+--      decision): set_household_type names 'former_member_debt' among its blockers. A record closes
+--      with a payment of what remains or her waiver.
 --
 -- The husband deleting his account later: a surviving household keeps the record and his id leaves
--- it (recorded_by ON DELETE SET NULL); a household deleted with him takes it along (CASCADE).
+-- it (recorded_by ON DELETE SET NULL); a household deleted with him takes it along (CASCADE), with
+-- its request keys.
 --
--- Replaces two existing functions, with the same signatures:
+-- Replaces three existing functions, with the same signatures:
 --   prepare_account_purge             (000300) + the snapshot, before the leave
 --   mark_account_deletion_notice_sent (000400) + 'creditor_owed'
+--   set_household_type                (20261020900000) + the open record as a blocker
 -- So re-running 000300 or 000400 after this file puts their versions back: run this file again.
--- It is safe to run again (IF NOT EXISTS, CREATE OR REPLACE, DROP POLICY IF EXISTS).
+-- It is safe to run again (IF NOT EXISTS, CREATE OR REPLACE, DROP POLICY IF EXISTS, ON CONFLICT).
 --
 -- Lock order. prepare_account_purge holds the household rows FOR UPDATE when it takes the snapshot,
 -- and every write to spouse_reimbursements or transactions of that household needs a KEY SHARE lock
 -- on that row, so the amount cannot change under it. It does not take the spouse_reimbursement
 -- advisory lock: record_spouse_reimbursement takes that lock before the household's, and taking
--- them in the other order here could deadlock. The payment and waiver RPCs lock only the record
--- row; the events table has no household column, so they never wait on the household while holding
--- it, and a purge deleting the household waits for them.
+-- them in the other order here could deadlock. The payment and waiver RPCs take the household
+-- (KEY SHARE) and then the record row: claiming a key writes a row that points at the household, so
+-- they must never wait for the household while holding the record, which a purge deleting the
+-- household locks after the household.
 --
 -- Rollback (one transaction), after rolling back the app and the API:
---   1. Run prepare_account_purge's CREATE OR REPLACE statement from 000300 and
---      mark_account_deletion_notice_sent's from 000400.
+--   1. Run prepare_account_purge's CREATE OR REPLACE statement from 000300,
+--      mark_account_deletion_notice_sent's from 000400 and set_household_type's from 20261020900000.
 --   2. DROP FUNCTION public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid),
 --        public.waive_former_member_debt(uuid, uuid, uuid, uuid),
 --        public.get_former_member_debt_deletion_notices(uuid, uuid),
@@ -56,9 +71,10 @@
 --        public.account_deletion_snapshot_former_member_debts(uuid),
 --        public.former_member_debt_require_manager(uuid, uuid),
 --        public.former_member_debt_creditors(uuid, uuid),
---        public.former_member_debt_outstanding(uuid, uuid);
---      DROP TABLE public.former_member_debt_events, public.former_member_debts;
---   Data lost: every kept record and its history.
+--        public.former_member_debt_outstanding(uuid, uuid),
+--        public.nafaqah_claim_request_key(uuid, uuid);
+--      DROP TABLE public.former_member_debt_events, public.former_member_debts, public.nafaqah_request_keys;
+--   Data lost: every kept record and its history, and the household's used request keys.
 -- ============================================================================
 
 BEGIN;
@@ -134,7 +150,53 @@ CREATE POLICY former_member_debt_events_select_household ON public.former_member
           AND d.household_id = (SELECT public.get_auth_user_household_id())
     ));
 
+-- Every request key a Nafaqah call has used in the household (review R2-01). No client reads or
+-- writes it; only the RPCs, through nafaqah_claim_request_key.
+CREATE TABLE IF NOT EXISTS public.nafaqah_request_keys (
+    household_id uuid NOT NULL REFERENCES public.households(id) ON DELETE CASCADE,
+    request_key uuid NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT nafaqah_request_keys_pkey PRIMARY KEY (household_id, request_key)
+);
+
+COMMENT ON TABLE public.nafaqah_request_keys IS
+    'One request key, one operation, per household: every key a repayment, approval, reversal, request, '
+    'former member payment, waiver or reversal used (review R2-01). Written by the RPCs in the same '
+    'transaction; a key already here is request_key_reused unless the call is an exact replay.';
+
+ALTER TABLE public.nafaqah_request_keys ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.nafaqah_request_keys FROM PUBLIC, anon, authenticated;
+GRANT ALL ON public.nafaqah_request_keys TO service_role;
+
+-- The keys already used (a second run of this file, or after 20261105001300).
+INSERT INTO public.nafaqah_request_keys (household_id, request_key)
+SELECT DISTINCT d.household_id, e.request_key
+FROM public.former_member_debt_events e
+JOIN public.former_member_debts d ON d.id = e.debt_id
+ON CONFLICT (household_id, request_key) DO NOTHING;
+
 -- 2. Helpers (no client executes them) ---------------------------------------------
+
+-- Claims a request key for one operation of the household (review R2-01). The caller has found no
+-- exact replay of its own and holds the household (KEY SHARE) and every row it will lock: the
+-- insert waits for a call that claimed the same key and has not finished, so it is taken last. A key
+-- the household already used, on any path or record, is request_key_reused (review R2-07: never a
+-- raw unique violation).
+CREATE OR REPLACE FUNCTION public.nafaqah_claim_request_key(p_household_id uuid, p_request_key uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    INSERT INTO public.nafaqah_request_keys (household_id, request_key)
+    VALUES (p_household_id, p_request_key)
+    ON CONFLICT (household_id, request_key) DO NOTHING;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'This request key was used for something else' USING ERRCODE = '22023', HINT = 'request_key_reused';
+    END IF;
+END;
+$$;
 
 -- What the husband owes this wife in this household now: her advances less the repayments.
 CREATE OR REPLACE FUNCTION public.former_member_debt_outstanding(p_household_id uuid, p_wife_user_id uuid)
@@ -355,6 +417,8 @@ BEGIN
         RAISE EXCEPTION 'A request key is required' USING ERRCODE = '22023', HINT = 'request_key_required';
     END IF;
 
+    -- The household before the record row (see Lock order): claiming the key points at it.
+    PERFORM 1 FROM public.households WHERE id = p_household_id FOR KEY SHARE;
     SELECT * INTO v_debt FROM public.former_member_debts
     WHERE id = p_debt_id AND household_id = p_household_id
     FOR UPDATE;
@@ -391,6 +455,9 @@ BEGIN
         RAISE EXCEPTION 'Payment of % exceeds the remaining % SAR', p_amount, v_remaining
             USING ERRCODE = '22023', HINT = 'overpayment';
     END IF;
+
+    -- A key the household used for anything else is refused (review R2-01).
+    PERFORM public.nafaqah_claim_request_key(p_household_id, p_request_key);
 
     UPDATE public.former_member_debts
     SET paid_amount = paid_amount + p_amount,
@@ -433,6 +500,8 @@ BEGIN
         RAISE EXCEPTION 'A request key is required' USING ERRCODE = '22023', HINT = 'request_key_required';
     END IF;
 
+    -- The household before the record row (see Lock order): claiming the key points at it.
+    PERFORM 1 FROM public.households WHERE id = p_household_id FOR KEY SHARE;
     SELECT * INTO v_debt FROM public.former_member_debts
     WHERE id = p_debt_id AND household_id = p_household_id
     FOR UPDATE;
@@ -454,6 +523,9 @@ BEGIN
     IF v_debt.status <> 'open' THEN
         RAISE EXCEPTION 'This record is already closed' USING ERRCODE = '22023', HINT = 'debt_closed';
     END IF;
+
+    -- A key the household used for anything else is refused (review R2-01).
+    PERFORM public.nafaqah_claim_request_key(p_household_id, p_request_key);
 
     v_remaining := v_debt.original_amount - v_debt.paid_amount;
     UPDATE public.former_member_debts
@@ -846,7 +918,110 @@ BEGIN
 END;
 $$;
 
--- 6. Privileges --------------------------------------------------------------------
+-- 6. No switch to roommates while a record is open (review R2-04) ---------------------
+-- 20261020900000's set_household_type, with one more blocker. The household row is locked FOR
+-- UPDATE before the blockers are read, as before: a purge keeping a record holds it too, so the
+-- record a purge is writing is seen.
+CREATE OR REPLACE FUNCTION public.set_household_type(
+    p_household_id uuid,
+    p_household_type text,
+    p_actor_user_id uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_actor uuid := public.household_resolve_actor(p_actor_user_id);
+    v_type text := lower(trim(p_household_type));
+    v_previous text;
+    v_owner uuid;
+    v_provider uuid;
+    v_blockers text[] := ARRAY[]::text[];
+BEGIN
+    PERFORM public.household_require_admin(p_household_id, v_actor);
+
+    IF v_type IS NULL OR v_type NOT IN ('family', 'roommates') THEN
+        RAISE EXCEPTION 'Household type must be ''family'' or ''roommates'''
+            USING ERRCODE = '22023', HINT = 'invalid_household_type';
+    END IF;
+
+    SELECT household_type, owner_user_id, nafaqah_provider_user_id INTO v_previous, v_owner, v_provider
+    FROM public.households
+    WHERE id = p_household_id
+    FOR UPDATE;
+
+    IF v_previous IS DISTINCT FROM v_type THEN
+        IF v_type = 'roommates' THEN
+            -- Refused while anything of the family ledger exists (no silent conversion).
+            IF EXISTS (SELECT 1 FROM public.household_memberships
+                       WHERE household_id = p_household_id AND financial_role = 'spouse') THEN
+                v_blockers := array_append(v_blockers, 'spouse_member');
+            END IF;
+            IF EXISTS (SELECT 1 FROM public.transactions
+                       WHERE household_id = p_household_id AND nafaqah_class IS NOT NULL) THEN
+                v_blockers := array_append(v_blockers, 'nafaqah_expenses');
+            END IF;
+            IF EXISTS (SELECT 1 FROM public.spouse_reimbursements WHERE household_id = p_household_id) THEN
+                v_blockers := array_append(v_blockers, 'reimbursements');
+            END IF;
+            IF EXISTS (SELECT 1 FROM public.member_allowances WHERE household_id = p_household_id) THEN
+                v_blockers := array_append(v_blockers, 'allowances');
+            END IF;
+            -- What a deleted wife is still owed (review R2-04, owner decision): closed first, by a
+            -- payment of what remains or her waiver.
+            IF EXISTS (SELECT 1 FROM public.former_member_debts
+                       WHERE household_id = p_household_id AND status = 'open') THEN
+                v_blockers := array_append(v_blockers, 'former_member_debt');
+            END IF;
+            IF cardinality(v_blockers) > 0 THEN
+                RAISE EXCEPTION 'A family household with a wife or Nafaqah records cannot become a roommates household'
+                    USING ERRCODE = '22023', HINT = 'type_change_blocked',
+                          DETAIL = array_to_string(v_blockers, ',');
+            END IF;
+
+            UPDATE public.households
+            SET household_type = 'roommates',
+                nafaqah_provider_user_id = NULL
+            WHERE id = p_household_id;
+
+            UPDATE public.household_memberships
+            SET financial_role = 'peer'
+            WHERE household_id = p_household_id AND financial_role <> 'peer';
+        ELSE
+            UPDATE public.households SET household_type = 'family' WHERE id = p_household_id;
+
+            UPDATE public.household_memberships
+            SET financial_role = CASE WHEN user_id = v_owner THEN 'provider' ELSE 'family_member' END
+            WHERE household_id = p_household_id AND financial_role = 'peer';
+
+            -- Explicit default: the primary admin is the Nafaqah provider until an admin changes it.
+            IF v_owner IS NOT NULL
+               AND public.household_member_financial_role(p_household_id, v_owner) IS DISTINCT FROM 'spouse'
+               AND public.household_member_financial_role(p_household_id, v_owner) IS NOT NULL THEN
+                UPDATE public.households
+                SET nafaqah_provider_user_id = v_owner
+                WHERE id = p_household_id AND nafaqah_provider_user_id IS NULL;
+            END IF;
+        END IF;
+    END IF;
+
+    SELECT nafaqah_provider_user_id INTO v_provider FROM public.households WHERE id = p_household_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'household_id', p_household_id,
+        'household_type', v_type,
+        'previous_household_type', v_previous,
+        'changed', v_previous IS DISTINCT FROM v_type,
+        'nafaqah_provider_user_id', v_provider
+    );
+END;
+$$;
+
+-- 7. Privileges --------------------------------------------------------------------
 REVOKE ALL ON FUNCTION public.former_member_debt_outstanding(uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.former_member_debt_creditors(uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.former_member_debt_require_manager(uuid, uuid) FROM PUBLIC, anon, authenticated;
@@ -855,6 +1030,9 @@ REVOKE ALL ON FUNCTION public.list_former_member_debt_notices_due() FROM PUBLIC,
 REVOKE ALL ON FUNCTION public.get_former_member_debt_deletion_notices(uuid, uuid) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.waive_former_member_debt(uuid, uuid, uuid, uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.nafaqah_claim_request_key(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+-- As 20261020900000 left it.
+REVOKE EXECUTE ON FUNCTION public.set_household_type(uuid, text, uuid) FROM PUBLIC, anon;
 -- As 000300 and 000400 left them.
 REVOKE ALL ON FUNCTION public.prepare_account_purge(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.mark_account_deletion_notice_sent(uuid, text) FROM PUBLIC, anon, authenticated;
@@ -867,5 +1045,6 @@ GRANT EXECUTE ON FUNCTION public.record_former_member_debt_payment(uuid, uuid, n
 GRANT EXECUTE ON FUNCTION public.waive_former_member_debt(uuid, uuid, uuid, uuid) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.prepare_account_purge(uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.mark_account_deletion_notice_sent(uuid, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.set_household_type(uuid, text, uuid) TO authenticated, service_role;
 
 COMMIT;
