@@ -214,6 +214,8 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
   String _typeErrorText(Object e) {
     if (e is HouseholdRolesApiException) {
       if (e.code == 'forbidden') return context.tr('hh_type_forbidden');
+      // What a deleted wife is still owed: closed first, by its payment or her waiver (review R2-04).
+      if (e.code == 'former_member_debt_open') return context.tr('hh_type_blocked_former_member');
       if (e.code == 'type_change_blocked') return e.serverMessage ?? context.tr('hh_type_blocked');
       if (e.code == 'invalid') return context.tr('hh_type_invalid');
     }

@@ -119,6 +119,38 @@ void main() {
       expect(find.text('This family has a wife and Nafaqah records.'), findsOneWidget);
       expect(find.text('Household type: Family (Wife Expenses)'), findsOneWidget);
     });
+
+    // Review R2-04 (owner decision): an open record of what a former member is
+    // owed blocks the switch; the app says, in her language, to close it first.
+    for (final lang in ['en', 'ar', 'ur']) {
+      testWidgets('an open former member record says to close it first ($lang)', (tester) async {
+        await tester.pumpWidget(_app(
+          HouseholdRolesCard(
+            householdId: 'hh',
+            loadRoster: (_) async => _family(),
+            setHouseholdType: (hh, type) async => throw const HouseholdRolesApiException(
+              'former_member_debt_open',
+              'Server response error (409)',
+              statusCode: 409,
+              serverMessage: 'What a former member is still owed is open: record its payment or her waiver first.',
+            ),
+          ),
+          lang: lang,
+        ));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('household_type_change')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('household_type_roommates')).last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('household_type_save')));
+        await tester.pumpAndSettle();
+        final message = AppLocalizations.localizedMap(lang)['hh_type_blocked_former_member'];
+        expect(message, isNotNull);
+        expect(find.text(message!), findsOneWidget);
+        expect(find.textContaining('What a former member is still owed'), findsNothing,
+            reason: 'never the server English');
+      });
+    }
   });
 
   group('financial roles', () {
