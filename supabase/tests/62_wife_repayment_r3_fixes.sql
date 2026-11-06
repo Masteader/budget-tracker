@@ -571,6 +571,25 @@ EXCEPTION WHEN OTHERS THEN
     PERFORM pg_temp.check('husband gone (deleted)', SQLERRM, 'ok');
 END $$;
 
+-- ── R3-01: every read policy of her ledger and of the records states the rule itself ─────────
+-- The outcomes' policy also reads the requests under theirs; each states the rule on its own, so
+-- no table's rows depend on another table's policy staying as it is.
+DO $$
+BEGIN
+    PERFORM pg_temp.check('R3-01 each ledger and record policy names the caller rule',
+        (SELECT string_agg(tablename, ',' ORDER BY tablename) FROM pg_policies
+         WHERE schemaname = 'public' AND cmd = 'SELECT'
+           AND tablename IN ('spouse_reimbursements', 'spouse_reimbursement_requests', 'spouse_reimbursement_request_outcomes',
+                             'former_member_debts', 'former_member_debt_events')
+           AND qual LIKE '%nafaqah_caller_manages_ledgers%'),
+        'former_member_debt_events,former_member_debts,spouse_reimbursement_request_outcomes,spouse_reimbursement_requests,spouse_reimbursements');
+    PERFORM pg_temp.check('R3-01 and no other read policy on them',
+        (SELECT count(*)::text FROM pg_policies
+         WHERE schemaname = 'public'
+           AND tablename IN ('spouse_reimbursements', 'spouse_reimbursement_requests', 'spouse_reimbursement_request_outcomes',
+                             'former_member_debts', 'former_member_debt_events')), '5');
+END $$;
+
 -- ── R3-03: the amount-only payment stays the service role's ────────────────────────────────
 DO $$
 BEGIN
