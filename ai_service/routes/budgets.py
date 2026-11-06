@@ -196,13 +196,17 @@ async def list_recurring_bill_candidates(
 )
 async def list_installments(
     household_id: str,
+    request: Request,
     _auth: str = Depends(verify_household_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
+    # Only the plans the caller reads (the plan of a wife's personal purchase only for her, her
+    # husband and an admin who is not a wife).
+    caller = get_current_user_id(request)
     try:
-        plans = await asyncio.to_thread(InstallmentService.list_plans, household_id)
+        plans = await asyncio.to_thread(InstallmentService.list_plans, household_id, caller)
         return {"plans": [p.model_dump() for p in plans], "count": len(plans)}
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to list installment plans.")
@@ -230,6 +234,15 @@ async def create_installment_plan(request: Request):
     # only its creator or a household admin may do that (DB-18).
     original_tx = body.get("original_transaction_id")
     if original_tx:
+        # A purchase the caller does not read (a wife's personal purchase, for anyone but her, her
+        # husband and an admin who is not a wife) is not found: it cannot be picked.
+        try:
+            readable = await asyncio.to_thread(InstallmentService.transaction_visible_to, str(original_tx),
+                                               household_id, caller)
+        except Exception as exc:
+            raise safe_error_response(exc, public_message="Failed to verify the original transaction.")
+        if not readable:
+            raise HTTPException(status_code=404, detail="Original transaction not found in this household.")
         try:
             await asyncio.to_thread(assert_can_modify_transaction, household_id, str(original_tx), caller)
         except TransactionNotFoundError:
@@ -262,6 +275,18 @@ async def create_installment_plan(request: Request):
         raise safe_error_response(exc, public_message="Failed to create installment plan.")
 
 
+async def _require_readable_plan(plan_id: str, household_id: str, caller: str, not_found: HTTPException,
+                                 public_message: str) -> None:
+    """A plan the caller does not read (the plan of a wife's personal purchase, for anyone but her,
+    her husband and an admin who is not a wife) is not found, and nothing is done to it."""
+    try:
+        readable = await asyncio.to_thread(InstallmentService.plan_visible_to, plan_id, household_id, caller)
+    except Exception as exc:
+        raise safe_error_response(exc, public_message=public_message)
+    if not readable:
+        raise not_found
+
+
 @router.post(
     "/budgets/installments/{plan_id}/pay",
     tags=["installments"],
@@ -281,6 +306,7 @@ async def pay_installment_endpoint(plan_id: str, request: Request):
     if not household_id:
         raise not_found
     await verify_household_access(request, household_id)
+    await _require_readable_plan(plan_id, household_id, caller, not_found, "Failed to pay installment.")
     try:
         # One atomic conditional increment in the database (FABLE-API-10).
         plan = await asyncio.to_thread(InstallmentService.pay_installment, plan_id, household_id, caller)
@@ -317,6 +343,7 @@ async def update_installment_plan_endpoint(plan_id: str, request: Request):
     if not household_id:
         raise not_found
     await verify_household_access(request, household_id)
+    await _require_readable_plan(plan_id, household_id, caller, not_found, "Failed to update installment plan.")
     try:
         body = await request.json()
     except Exception as exc:

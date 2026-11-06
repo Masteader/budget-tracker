@@ -749,6 +749,22 @@ def transactions_visible_to(
     return visible_transactions(load_family_context(household_id), actor_id, rows)
 
 
+def can_view_installment_plan(
+    ctx: FamilyContext, actor_id: Optional[str], plan: Dict[str, Any], purchases: Dict[str, Dict[str, Any]]
+) -> bool:
+    """Whether ``actor_id`` reads installment ``plan`` (mirrors the installment_plans policy,
+    migration 20261105001300 section 10e): an unlinked plan is read by every member; a plan linked
+    to a purchase (``original_transaction_id``) by whoever reads that purchase, so the plan of her
+    personal purchase only by her, her husband and an admin who is not a wife. ``purchases`` maps
+    the household's transaction ids to their ``nafaqah_class`` and ``nafaqah_spouse_id``; a linked
+    purchase missing from it (not in this household) is read by nobody, as under RLS."""
+    tx_id = plan.get("original_transaction_id")
+    if not tx_id:
+        return True
+    row = purchases.get(str(tx_id))
+    return row is not None and can_view_personal_purchase(ctx, actor_id, row)
+
+
 def can_manage_wife_ledgers(ctx: FamilyContext, actor_id: Optional[str]) -> bool:
     """Who sees and settles every wife's repayment ledger and the former member records (review
     R3-01, owner decision 2026-11-06; mirrors ``public.nafaqah_may_manage_ledgers``): her husband;

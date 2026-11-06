@@ -332,6 +332,51 @@ class InstallmentService:
             logger.warning("Could not verify ownership of transaction %s: %s", tx_id, e)
             return False
 
+    @staticmethod
+    def _purchases(household_id: str, tx_ids: List[Any]) -> Dict[str, Dict[str, Any]]:
+        """{id: row} of the household's transactions among ``tx_ids``, with the two columns the
+        read rule needs (service role; a failure propagates rather than show a plan by mistake)."""
+        ids = sorted({str(t) for t in tx_ids if t})
+        out: Dict[str, Dict[str, Any]] = {}
+        sb = supabase_client.get_client()
+        for i in range(0, len(ids), 100):
+            res = (sb.table("transactions").select("id, nafaqah_class, nafaqah_spouse_id")
+                   .eq("household_id", household_id).in_("id", ids[i:i + 100]).execute())
+            for row in (res.data or []) if res is not None else []:
+                out[str(row.get("id"))] = row
+        return out
+
+    @classmethod
+    def visible_plan_rows(cls, household_id: str, caller_id: Optional[str], rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """The plan rows of ``household_id`` that ``caller_id`` reads (owner decision 2026-11-06,
+        mirroring the installment_plans policy): a plan linked to a purchase follows it, so the plan
+        of a wife's personal purchase only for her, her husband and an admin who is not a wife.
+        ``caller_id`` None is the server's own read: every row."""
+        if caller_id is None:
+            return list(rows)
+        from nafaqah_service import can_view_installment_plan, load_family_context
+
+        purchases = cls._purchases(household_id, [r.get("original_transaction_id") for r in rows])
+        ctx = load_family_context(household_id)
+        return [r for r in rows if can_view_installment_plan(ctx, caller_id, r, purchases)]
+
+    @classmethod
+    def plan_visible_to(cls, plan_id: str, household_id: str, caller_id: Optional[str]) -> bool:
+        """Whether ``caller_id`` reads plan ``plan_id`` of ``household_id``. A plan the caller does
+        not read is answered as not found, and nothing is done to it."""
+        sb = supabase_client.get_client()
+        res = (sb.table("installment_plans").select("id, original_transaction_id")
+               .eq("id", plan_id).eq("household_id", household_id).limit(1).execute())
+        rows = (res.data or []) if res is not None else []
+        return bool(rows) and bool(cls.visible_plan_rows(household_id, caller_id, rows))
+
+    @classmethod
+    def transaction_visible_to(cls, tx_id: str, household_id: str, caller_id: Optional[str]) -> bool:
+        """Whether ``caller_id`` reads transaction ``tx_id`` of ``household_id`` (a wife's personal
+        purchase only she, her husband and an admin who is not a wife read). A plan is linked only
+        to a purchase the caller reads."""
+        return bool(cls.visible_plan_rows(household_id, caller_id, [{"original_transaction_id": tx_id}]))
+
     @classmethod
     def get_plan_household_id(cls, plan_id: str) -> Optional[str]:
         """Owning household of an installment plan, None when it does not exist (errors propagate)."""
@@ -625,11 +670,15 @@ class InstallmentService:
             logger.warning("Could not recalculate budgets for household %s: %s", household_id, e)
 
     @classmethod
-    def list_plans(cls, household_id: str) -> List[InstallmentPlan]:
+    def list_plans(cls, household_id: str, caller_id: Optional[str] = None) -> List[InstallmentPlan]:
         """
         The household's plans, read from public.installment_plans only (the database is the only
         store: a failed query fails the request, FABLE-API-09). ACTIVE plans first, by next due
         date; then the others, newest first.
+
+        ``caller_id`` is the member asking: only the plans they read (the plan of a wife's personal
+        purchase only for her, her husband and an admin who is not a wife; owner decision
+        2026-11-06). None is the server's own read.
 
         Plans are no longer reconstructed by regex from transaction notes on every load (product
         review R10): legacy "Financed via ..." notes without a plan row are turned into rows once,
@@ -637,7 +686,8 @@ class InstallmentService:
         """
         sb = supabase_client.get_client()
         res = sb.table("installment_plans").select("*").eq("household_id", household_id).execute()
-        plans = [InstallmentPlan(**row) for row in (res.data or [])]
+        rows = cls.visible_plan_rows(household_id, caller_id, list(res.data or []))
+        plans = [InstallmentPlan(**row) for row in rows]
         active = sorted((p for p in plans if p.status == "ACTIVE"),
                         key=lambda p: (p.next_due_at or "9999-12-31", p.created_at or ""))
         others = sorted((p for p in plans if p.status != "ACTIVE"),
