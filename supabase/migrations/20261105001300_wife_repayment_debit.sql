@@ -11,18 +11,25 @@
 --      any call without an account, including the old 6-argument signatures of
 --      record_spouse_reimbursement and record_former_member_debt_payment, is refused with HINT
 --      app_update_required and records nothing.
---   2. Her account is never credited. Each repayment writes one account_transfers row from his
---      account to no account (to_account_id NULL) and lowers his balance in the same statement;
---      no budget or transaction moves (her expense counted when she recorded it).
+--   2. Her account is never credited. Each repayment writes one account_transfers row from the
+--      payer's account to no account (to_account_id NULL, purpose 'wife_repayment' or
+--      'former_member_payment', so the account's own history names it) and lowers its balance in
+--      the same statement; no budget or transaction moves (her expense counted when she recorded
+--      it). The ledger row records who actually paid (paid_by_user_id: the payer, not always the
+--      husband) and what was owed before and after it, which a replay answers again.
 --   3. The wife asks, the husband approves. She no longer records a repayment (wife_must_request).
 --      She marks "I received X": a pending request (spouse_reimbursement_requests) that moves no
 --      money and does not lower what is owed. The husband or an admin approves it with an account,
 --      which is the normal repayment of exactly the requested amount, re-checked against what is
 --      owed at that moment (request_exceeds_outstanding), linked to the request; or declines it with
 --      an optional reason; she can cancel her own pending one. New requests never take the pending
---      total above what is owed (pending_exceeds_outstanding). Outcomes are rows of their own
---      (spouse_reimbursement_request_outcomes, one per request), so requests are append-only too.
---      A former member's record takes no requests: she is gone.
+--      total above what is owed (pending_exceeds_outstanding), and whatever lowers what is owed (a
+--      direct repayment, an approval, a smaller or removed advance) closes, in the same
+--      transaction, the pending requests that no longer fit (outcome 'already_repaid', nothing
+--      moves): they are kept in the order she made them while they fit, so the most recent close
+--      first and a later, smaller one that still fits stays. Pending never exceeds what is owed.
+--      Outcomes are rows of their own (spouse_reimbursement_request_outcomes, one per request), so
+--      requests are append-only too. A former member's record takes no requests: she is gone.
 --   4. Nothing is deleted, edited or voided; a correction is a reversing entry. A reversal of a
 --      tracked repayment (spouse_reimbursements.kind = 'reversal', reverses_id unique) credits the
 --      original account back in full, as a transfer from no account, and adds the amount back to
@@ -30,8 +37,14 @@
 --      'reversal', reverses_event_id unique), which reopens a settled record. Refused for a legacy
 --      row without a transfer (reversal_not_tracked), an archived or deleted account
 --      (reversal_account_unavailable), a record waived after the payment (reversal_after_waiver),
---      and a second time (already_reversed). The same people who could record it reverse it, under
---      the same account rules.
+--      and a second time (already_reversed). Who reverses follows the account it left: a personal
+--      account's owner, while he is a member and not a wife, whatever his role now (he may no
+--      longer be an admin or the husband); a shared pool's repayment, any admin who is not a wife.
+--   5. Who pays (2026-11-06, review R1-01): only the husband, or a household admin who is not a
+--      wife (a spouse member) of the household, records a repayment, approves or declines a
+--      request, pays or waives a former member's record. No wife does any of it, for a co-wife or a
+--      former member, even as an admin, and a wife never pays from a shared pool (account_forbidden
+--      in the account helper itself).
 --
 -- What is owed is advances less repayments plus reversals (nafaqah_net_repaid); pending requests
 -- never count. get_spouse_reimbursement_balance, former_member_debt_outstanding (the purge's
@@ -39,11 +52,14 @@
 --
 -- Account rules, as transfer_between_accounts: the account is in the household, not archived, in
 -- SAR (account_unavailable); a personal account only by its owner, a shared pool only by a household
--- admin (account_forbidden). Every money-moving call takes a request key: the same key again answers
--- as the first time and changes nothing (request_key_reused if it was used for something else).
+-- admin, and never by a wife (account_forbidden). Every money-moving call takes a request key: the
+-- same key again, for the same thing by the same person (amount, account, kind and actor), answers
+-- as the first time and changes nothing; anything else with it is request_key_reused.
 --
 -- Lock order: the spouse_reimbursement advisory lock (as before), then a shared pool, the household
--- (KEY SHARE), a personal account, then the request row or the former member's record row.
+-- (KEY SHARE), a personal account, then the request rows or the former member's record row. The
+-- guard trigger, closing requests after a smaller advance, takes the advisory lock, then the
+-- household (KEY SHARE), then the request rows.
 -- prepare_account_purge locks pools, then households FOR UPDATE, and only then closes requests, so a
 -- repayment, approval or reversal in flight either finishes before the purge or waits for it without
 -- holding anything the purge needs.
@@ -58,7 +74,8 @@
 -- get_spouse_reimbursement_balance (20261020300000), guard_wife_reimbursable_ledger and
 -- remove_nafaqah_ledger_on_membership_end (20261020900000), former_member_debt_outstanding and
 -- prepare_account_purge (20261105001200). Re-running 001200 after this file puts its own versions
--- back (an amount-only 6-argument payment among them): run this file again after it.
+-- back (an amount-only 6-argument payment among them, which 001200 grants to the service role only,
+-- so no client can call it): run this file again after it.
 --
 -- Safe to run again (IF NOT EXISTS, CREATE OR REPLACE, DROP ... IF EXISTS).
 --
@@ -82,7 +99,9 @@
 --     public.nafaqah_repayment_credit(uuid, uuid, uuid, numeric, text),
 --     public.nafaqah_repayment_lock_account(uuid, uuid, uuid),
 --     public.nafaqah_repayment_replay(public.spouse_reimbursements, uuid),
---     public.nafaqah_request_close(public.spouse_reimbursement_requests, text, text, uuid);
+--     public.nafaqah_request_close(public.spouse_reimbursement_requests, text, text, uuid),
+--     public.nafaqah_close_unfit_requests(uuid, uuid, numeric),
+--     public.nafaqah_may_repay(uuid, uuid);
 --   Then run these CREATE OR REPLACE statements: record_spouse_reimbursement and
 --   get_spouse_reimbursement_balance from 20261020300000; guard_wife_reimbursable_ledger and
 --   remove_nafaqah_ledger_on_membership_end from 20261020900000; record_former_member_debt_payment,
@@ -94,10 +113,14 @@
 --     ADD CONSTRAINT former_member_debt_events_kind_check CHECK (kind IN ('payment', 'waiver')),
 --     DROP COLUMN reverses_event_id, DROP COLUMN transfer_id;
 --   ALTER TABLE public.spouse_reimbursements DROP CONSTRAINT spouse_reimbursements_kind,
---     DROP COLUMN reverses_id, DROP COLUMN kind, DROP COLUMN transfer_id, DROP COLUMN request_key;
+--     DROP COLUMN reverses_id, DROP COLUMN kind, DROP COLUMN transfer_id, DROP COLUMN request_key,
+--     DROP COLUMN outstanding_before, DROP COLUMN outstanding_after;
+--   ALTER TABLE public.account_transfers DROP CONSTRAINT account_transfers_purpose, DROP COLUMN purpose;
 --   (Their indexes go with the columns.) Balances already moved stay moved: the money did leave his
 --   account; the transfers stay in account_transfers as ordinary history. Data lost: requests and
---   their outcomes, and the ledger's links to the transfers and its request keys.
+--   their outcomes, the ledger's links to the transfers, its request keys and stored outstanding
+--   figures, and the transfers' labels. paid_by_user_id keeps whoever paid (a co-admin, say), where
+--   the old record_spouse_reimbursement wrote the husband.
 -- ============================================================================
 
 BEGIN;
@@ -105,6 +128,10 @@ BEGIN;
 -- 0. The first draft of this file (never applied anywhere) had other helpers -------------------
 DROP FUNCTION IF EXISTS public.nafaqah_repayment_move(uuid, uuid, uuid, uuid, numeric, text);
 DROP FUNCTION IF EXISTS public.nafaqah_repayment_lock_accounts(uuid, uuid, uuid, uuid, text);
+-- Its second draft named the last argument of these two p_note; they now take the purpose. Dropped
+-- and created again below on every run (nothing depends on them but the functions of this file).
+DROP FUNCTION IF EXISTS public.nafaqah_repayment_debit(uuid, uuid, uuid, numeric, text);
+DROP FUNCTION IF EXISTS public.nafaqah_repayment_credit(uuid, uuid, uuid, numeric, text);
 
 -- 1. The wife's ledger: links to the transfer, request keys, reversals ------------------------
 ALTER TABLE public.spouse_reimbursements
@@ -120,6 +147,28 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_spouse_reimbursements_request
 CREATE UNIQUE INDEX IF NOT EXISTS uq_spouse_reimbursements_reverses
     ON public.spouse_reimbursements (reverses_id) WHERE reverses_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_spouse_reimbursements_transfer ON public.spouse_reimbursements (transfer_id);
+-- What was owed before and after the row, as its call answered (a replay answers the same).
+ALTER TABLE public.spouse_reimbursements
+    ADD COLUMN IF NOT EXISTS outstanding_before numeric(14, 2),
+    ADD COLUMN IF NOT EXISTS outstanding_after numeric(14, 2);
+
+COMMENT ON COLUMN public.spouse_reimbursements.outstanding_before IS
+    'What was owed to her just before this row, as its call answered. NULL on rows from before 20261105001300.';
+COMMENT ON COLUMN public.spouse_reimbursements.outstanding_after IS
+    'What was owed to her just after this row, as its call answered. NULL on rows from before 20261105001300.';
+-- paid_by_user_id (20261020300000) now holds who paid: the owner of the personal account it left, or
+-- the admin who paid from a pool (the husband on older rows). A reversal keeps the payer of the
+-- repayment it reverses. Its ON DELETE SET NULL and the purge's scrub of his notes are unchanged.
+
+-- What a system transfer is, so the account's own history can name it. Only these RPCs set it:
+-- clients cannot write account_transfers (20261020050000). NULL for ordinary transfers.
+ALTER TABLE public.account_transfers ADD COLUMN IF NOT EXISTS purpose text;
+ALTER TABLE public.account_transfers DROP CONSTRAINT IF EXISTS account_transfers_purpose;
+ALTER TABLE public.account_transfers ADD CONSTRAINT account_transfers_purpose
+    CHECK (purpose IS NULL OR purpose IN ('wife_repayment', 'wife_repayment_reversal',
+                                          'former_member_payment', 'former_member_payment_reversal'));
+COMMENT ON COLUMN public.account_transfers.purpose IS
+    'Set by the Nafaqah RPCs (20261105001300): a repayment to the wife, its reversal, a payment of a former member''s record, or its reversal. Carries no name or text of anyone. NULL for transfers between accounts.';
 
 COMMENT ON COLUMN public.spouse_reimbursements.transfer_id IS
     'The account_transfers row that moved the money: out of his account for a payment, back into it for a reversal. NULL only on rows from before 20261105001300.';
@@ -169,7 +218,7 @@ CREATE INDEX IF NOT EXISTS idx_spouse_reimbursement_requests_wife_user ON public
 -- looking pending, and a cascade that removes both in one statement is not refused halfway.
 CREATE TABLE IF NOT EXISTS public.spouse_reimbursement_request_outcomes (
     request_id uuid PRIMARY KEY REFERENCES public.spouse_reimbursement_requests(id) ON DELETE CASCADE,
-    outcome text NOT NULL CHECK (outcome IN ('approved', 'declined', 'cancelled', 'closed')),
+    outcome text NOT NULL CHECK (outcome IN ('approved', 'declined', 'cancelled', 'closed', 'already_repaid')),
     reimbursement_id uuid REFERENCES public.spouse_reimbursements(id) DEFERRABLE INITIALLY DEFERRED,
     reason text CHECK (reason IS NULL OR char_length(reason) <= 200),
     decided_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
@@ -185,7 +234,7 @@ CREATE INDEX IF NOT EXISTS idx_spouse_reimbursement_request_outcomes_decided_by
 COMMENT ON TABLE public.spouse_reimbursement_requests IS
     'The wife''s "I received X": pending until it has an outcome. Moves no money and lowers nothing owed. Via request_spouse_reimbursement.';
 COMMENT ON TABLE public.spouse_reimbursement_request_outcomes IS
-    'Approved (linked to the repayment), declined (optional reason), cancelled by her, or closed by an account deletion. One per request; append-only.';
+    'Approved (linked to the repayment), declined (optional reason), cancelled by her, closed by an account deletion, or already_repaid: closed because what is owed dropped below her pending total (nothing moved). One per request; append-only.';
 
 ALTER TABLE public.spouse_reimbursement_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.spouse_reimbursement_request_outcomes ENABLE ROW LEVEL SECURITY;
@@ -303,7 +352,65 @@ BEGIN
 END;
 $$;
 
--- 20261020900000's guard, with the repaid amount net of reversals.
+-- Who records, approves or declines a repayment to a wife (review R1-01, owner decision
+-- 2026-11-06): a member who is not a wife (spouse member) of the household and is its husband or
+-- one of its admins. A wife never does, for a co-wife either, even as an admin.
+CREATE OR REPLACE FUNCTION public.nafaqah_may_repay(p_household_id uuid, p_actor uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.household_memberships m
+        WHERE m.household_id = p_household_id
+          AND m.user_id = p_actor
+          AND m.financial_role IS DISTINCT FROM 'spouse'
+          AND (m.role = 'admin' OR p_actor = public.nafaqah_husband_id(p_household_id))
+    );
+$$;
+
+-- Pending total <= what is owed (review R1-03). Called whenever what is owed may have dropped: the
+-- pending requests that no longer fit [p_owed] close as 'already_repaid', with nothing moved. They
+-- are kept in the order she made them while they fit, so the most recent close first, and a later
+-- one that still fits (a smaller one) stays. The caller holds the spouse_reimbursement advisory
+-- lock and the household (KEY SHARE). Returns how many closed.
+CREATE OR REPLACE FUNCTION public.nafaqah_close_unfit_requests(p_household_id uuid, p_wife_user_id uuid, p_owed numeric)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_req record;
+    v_kept numeric(14, 2) := 0;
+    v_closed integer := 0;
+BEGIN
+    FOR v_req IN
+        SELECT q.id, q.amount
+        FROM public.spouse_reimbursement_requests q
+        WHERE q.household_id = p_household_id AND q.wife_user_id = p_wife_user_id
+          AND NOT EXISTS (SELECT 1 FROM public.spouse_reimbursement_request_outcomes o WHERE o.request_id = q.id)
+        ORDER BY q.created_at, q.id
+        FOR UPDATE OF q
+    LOOP
+        IF v_kept + v_req.amount <= GREATEST(COALESCE(p_owed, 0), 0) THEN
+            v_kept := v_kept + v_req.amount;
+        ELSE
+            INSERT INTO public.spouse_reimbursement_request_outcomes (request_id, outcome, decided_by)
+            VALUES (v_req.id, 'already_repaid', NULL)
+            ON CONFLICT (request_id) DO NOTHING;
+            v_closed := v_closed + 1;
+        END IF;
+    END LOOP;
+    RETURN v_closed;
+END;
+$$;
+
+-- 20261020900000's guard, with the repaid amount net of reversals, closing the requests a smaller
+-- advance leaves above what is owed (review R1-03).
 CREATE OR REPLACE FUNCTION public.guard_wife_reimbursable_ledger()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -363,6 +470,16 @@ BEGIN
                   DETAIL = format('repaid=%s advances_after=%s', v_repaid, v_after);
     END IF;
 
+    -- What is owed drops to v_after - v_repaid: her pending requests that no longer fit close. The
+    -- household before the request rows, as everywhere else; only when there is something to close.
+    IF (SELECT COALESCE(sum(q.amount), 0) FROM public.spouse_reimbursement_requests q
+        WHERE q.household_id = OLD.household_id AND q.wife_user_id = OLD.nafaqah_spouse_id
+          AND NOT EXISTS (SELECT 1 FROM public.spouse_reimbursement_request_outcomes o WHERE o.request_id = q.id))
+       > v_after - v_repaid THEN
+        PERFORM 1 FROM public.households WHERE id = OLD.household_id FOR KEY SHARE;
+        PERFORM public.nafaqah_close_unfit_requests(OLD.household_id, OLD.nafaqah_spouse_id, v_after - v_repaid);
+    END IF;
+
     RETURN COALESCE(NEW, OLD);
 END;
 $$;
@@ -416,6 +533,12 @@ BEGIN
             RAISE EXCEPTION 'This account cannot be used in this household'
                 USING ERRCODE = 'P0002', HINT = 'account_unavailable';
         END IF;
+        -- A spouse member never pays a repayment or takes one back, from a pool above all (review
+        -- R1-01). The account is still never picked for anyone: the payer names it.
+        IF public.nafaqah_is_spouse_member(p_household_id, p_actor) THEN
+            RAISE EXCEPTION 'Forbidden: a spouse member does not pay or reverse a repayment'
+                USING ERRCODE = '42501', HINT = 'account_forbidden';
+        END IF;
         IF v_acc.is_shared_pool IS TRUE THEN
             IF public.household_member_role(p_household_id, p_actor) IS DISTINCT FROM 'admin' THEN
                 RAISE EXCEPTION 'Forbidden: only household admins can move money of a shared pool'
@@ -442,7 +565,8 @@ END;
 $$;
 
 -- Money out of a locked account, into no account: one transfer, his balance down by the amount.
-CREATE OR REPLACE FUNCTION public.nafaqah_repayment_debit(p_household_id uuid, p_actor uuid, p_account uuid, p_amount numeric, p_note text)
+-- p_purpose labels it in the account's own history ('wife_repayment', 'former_member_payment').
+CREATE OR REPLACE FUNCTION public.nafaqah_repayment_debit(p_household_id uuid, p_actor uuid, p_account uuid, p_amount numeric, p_purpose text)
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -459,15 +583,17 @@ BEGIN
             USING ERRCODE = '22000', HINT = 'insufficient_funds';
     END IF;
     UPDATE public.accounts SET balance = balance - p_amount, updated_at = v_now WHERE id = p_account;
-    INSERT INTO public.account_transfers (household_id, user_id, from_account_id, to_account_id, amount, fee, timestamp, notes, created_at)
-    VALUES (p_household_id, p_actor, p_account, NULL, p_amount, 0, v_now, p_note, v_now)
+    -- No free text: the purpose says what it is, and a former member's line names nobody.
+    INSERT INTO public.account_transfers (household_id, user_id, from_account_id, to_account_id, amount, fee, timestamp, notes, purpose, created_at)
+    VALUES (p_household_id, p_actor, p_account, NULL, p_amount, 0, v_now, NULL, p_purpose, v_now)
     RETURNING id INTO v_id;
     RETURN v_id;
 END;
 $$;
 
--- A reversal: money back into a locked account, from no account.
-CREATE OR REPLACE FUNCTION public.nafaqah_repayment_credit(p_household_id uuid, p_actor uuid, p_account uuid, p_amount numeric, p_note text)
+-- A reversal: money back into a locked account, from no account ('wife_repayment_reversal',
+-- 'former_member_payment_reversal').
+CREATE OR REPLACE FUNCTION public.nafaqah_repayment_credit(p_household_id uuid, p_actor uuid, p_account uuid, p_amount numeric, p_purpose text)
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -478,8 +604,8 @@ DECLARE
     v_id uuid;
 BEGIN
     UPDATE public.accounts SET balance = balance + p_amount, updated_at = v_now WHERE id = p_account;
-    INSERT INTO public.account_transfers (household_id, user_id, from_account_id, to_account_id, amount, fee, timestamp, notes, created_at)
-    VALUES (p_household_id, p_actor, NULL, p_account, p_amount, 0, v_now, p_note, v_now)
+    INSERT INTO public.account_transfers (household_id, user_id, from_account_id, to_account_id, amount, fee, timestamp, notes, purpose, created_at)
+    VALUES (p_household_id, p_actor, NULL, p_account, p_amount, 0, v_now, NULL, p_purpose, v_now)
     RETURNING id INTO v_id;
     RETURN v_id;
 END;
@@ -487,7 +613,9 @@ $$;
 
 -- The repayment itself, for a direct record and for an approved request. The caller has checked
 -- who may do it, holds the spouse_reimbursement advisory lock and found no replay. With a request:
--- it must still be pending, and its amount must not exceed what is owed now.
+-- it must still be pending, and its amount must not exceed what is owed now. The ledger row names
+-- who paid (the actor: his own account, or a pool he administers) and keeps what was owed before
+-- and after it; then her pending requests that no longer fit close (review R1-03, R1-05, R1-08).
 CREATE OR REPLACE FUNCTION public.nafaqah_repay_from_account(
     p_household_id uuid,
     p_wife_user_id uuid,
@@ -505,7 +633,6 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_husband uuid := public.nafaqah_husband_id(p_household_id);
     v_amount numeric(14, 2) := p_amount;
     v_from uuid;
     v_outcome text;
@@ -541,18 +668,23 @@ BEGIN
             USING ERRCODE = '22023', HINT = 'overpayment', DETAIL = v_outstanding::text;
     END IF;
 
-    v_transfer := public.nafaqah_repayment_debit(p_household_id, p_actor, v_from, v_amount, 'nafaqah_reimbursement');
+    v_transfer := public.nafaqah_repayment_debit(p_household_id, p_actor, v_from, v_amount, 'wife_repayment');
 
     INSERT INTO public.spouse_reimbursements (household_id, wife_user_id, paid_by_user_id, amount, payment_method, notes,
-                                              recorded_by, request_key, transfer_id, kind)
-    VALUES (p_household_id, p_wife_user_id, v_husband, v_amount, p_method, NULLIF(left(trim(p_notes), 500), ''),
-            p_actor, p_request_key, v_transfer, 'payment')
+                                              recorded_by, request_key, transfer_id, kind,
+                                              outstanding_before, outstanding_after)
+    VALUES (p_household_id, p_wife_user_id, p_actor, v_amount, p_method, NULLIF(left(trim(p_notes), 500), ''),
+            p_actor, p_request_key, v_transfer, 'payment',
+            v_outstanding, v_outstanding - v_amount)
     RETURNING id INTO v_id;
 
     IF p_request_id IS NOT NULL THEN
         INSERT INTO public.spouse_reimbursement_request_outcomes (request_id, outcome, reimbursement_id, decided_by)
         VALUES (p_request_id, 'approved', v_id, p_actor);
     END IF;
+
+    -- Less is owed now: what she still has pending must fit in it.
+    PERFORM public.nafaqah_close_unfit_requests(p_household_id, p_wife_user_id, v_outstanding - v_amount);
 
     RETURN jsonb_build_object(
         'success', true,
@@ -561,7 +693,7 @@ BEGIN
         'request_id', p_request_id,
         'household_id', p_household_id,
         'wife_user_id', p_wife_user_id,
-        'paid_by_user_id', v_husband,
+        'paid_by_user_id', p_actor,
         'amount', v_amount,
         'payment_method', p_method,
         'account_id', v_from,
@@ -572,7 +704,8 @@ BEGIN
 END;
 $$;
 
--- The answer to a replayed repayment or reversal: what the first call stored.
+-- The answer to a replayed repayment or reversal: what the first call stored, the outstanding
+-- figures included (review R1-05), whatever happened since.
 CREATE OR REPLACE FUNCTION public.nafaqah_repayment_replay(p_row public.spouse_reimbursements, p_request_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -582,7 +715,6 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_transfer public.account_transfers%ROWTYPE;
-    v_outstanding numeric(14, 2) := public.nafaqah_outstanding(p_row.household_id, p_row.wife_user_id);
 BEGIN
     SELECT * INTO v_transfer FROM public.account_transfers WHERE id = p_row.transfer_id;
     RETURN jsonb_build_object(
@@ -598,8 +730,8 @@ BEGIN
         'payment_method', p_row.payment_method,
         'account_id', CASE WHEN p_row.kind = 'reversal' THEN v_transfer.to_account_id ELSE v_transfer.from_account_id END,
         'transfer_id', p_row.transfer_id,
-        'outstanding_before', CASE WHEN p_row.kind = 'reversal' THEN v_outstanding - p_row.amount ELSE v_outstanding + p_row.amount END,
-        'outstanding_after', v_outstanding);
+        'outstanding_before', p_row.outstanding_before,
+        'outstanding_after', p_row.outstanding_after);
 END;
 $$;
 
@@ -639,9 +771,9 @@ BEGIN
         RAISE EXCEPTION 'Forbidden: the wife asks for a repayment to be recorded; she does not record it'
             USING ERRCODE = '42501', HINT = 'wife_must_request';
     END IF;
-    IF v_actor IS DISTINCT FROM public.nafaqah_husband_id(p_household_id)
-       AND public.household_member_role(p_household_id, v_actor) IS DISTINCT FROM 'admin' THEN
-        RAISE EXCEPTION 'Forbidden: only the husband or a household admin can record a repayment'
+    -- Never a wife, not even a co-wife who is an admin (review R1-01).
+    IF NOT public.nafaqah_may_repay(p_household_id, v_actor) THEN
+        RAISE EXCEPTION 'Forbidden: only the husband or a household admin who is not a wife can record a repayment'
             USING ERRCODE = '42501', HINT = 'forbidden';
     END IF;
     IF p_amount IS NULL OR p_amount <= 0 OR p_amount <> round(p_amount, 2) OR p_amount > 999999999999.99 THEN
@@ -657,11 +789,17 @@ BEGIN
     -- Serialise everything that changes what one wife is owed, so two calls cannot both pass a check.
     PERFORM pg_advisory_xact_lock(hashtextextended('spouse_reimbursement:' || p_household_id::text || ':' || p_wife_user_id::text, 0));
 
-    -- The same tap again: answer as the first time, change nothing.
+    -- The same tap again: answer as the first time, change nothing. Only the same call is a replay:
+    -- the same wife, amount, method and account, by the same person, and not an approval's key
+    -- (review R1-04).
     SELECT * INTO v_prev FROM public.spouse_reimbursements
     WHERE household_id = p_household_id AND request_key = p_request_key;
     IF v_prev.id IS NOT NULL THEN
-        IF v_prev.wife_user_id IS DISTINCT FROM p_wife_user_id OR v_prev.kind <> 'payment' THEN
+        IF v_prev.wife_user_id IS DISTINCT FROM p_wife_user_id OR v_prev.kind <> 'payment'
+           OR v_prev.amount IS DISTINCT FROM p_amount OR v_prev.payment_method IS DISTINCT FROM v_method
+           OR v_prev.recorded_by IS DISTINCT FROM v_actor
+           OR (SELECT t.from_account_id FROM public.account_transfers t WHERE t.id = v_prev.transfer_id) IS DISTINCT FROM p_account_id
+           OR EXISTS (SELECT 1 FROM public.spouse_reimbursement_request_outcomes o WHERE o.reimbursement_id = v_prev.id) THEN
             RAISE EXCEPTION 'This request key was used for something else' USING ERRCODE = '22023', HINT = 'request_key_reused';
         END IF;
         RETURN public.nafaqah_repayment_replay(v_prev, NULL);
@@ -746,8 +884,10 @@ BEGIN
                 USING ERRCODE = '22023', HINT = 'pending_exceeds_outstanding',
                       DETAIL = GREATEST(v_outstanding - v_pending, 0)::text;
         END IF;
-        INSERT INTO public.spouse_reimbursement_requests (household_id, wife_user_id, amount, payment_method, request_key)
-        VALUES (p_household_id, v_actor, p_amount, v_method, p_request_key)
+        -- The moment itself, not the transaction's start: the order she made them in decides which
+        -- close first when less is owed (nafaqah_close_unfit_requests).
+        INSERT INTO public.spouse_reimbursement_requests (household_id, wife_user_id, amount, payment_method, request_key, created_at)
+        VALUES (p_household_id, v_actor, p_amount, v_method, p_request_key, clock_timestamp())
         RETURNING * INTO v_req;
         RETURN jsonb_build_object(
             'success', true, 'replayed', false, 'request_id', v_req.id, 'status', 'pending',
@@ -755,7 +895,9 @@ BEGIN
             'outstanding', v_outstanding, 'pending_requested', v_pending + v_req.amount);
     END IF;
 
-    IF v_req.wife_user_id IS DISTINCT FROM v_actor THEN
+    -- Only the same request is a replay: hers, for the same amount and method (review R1-04).
+    IF v_req.wife_user_id IS DISTINCT FROM v_actor OR v_req.amount IS DISTINCT FROM p_amount
+       OR v_req.payment_method IS DISTINCT FROM v_method THEN
         RAISE EXCEPTION 'This request key was used for something else' USING ERRCODE = '22023', HINT = 'request_key_reused';
     END IF;
     RETURN jsonb_build_object(
@@ -843,12 +985,13 @@ BEGIN
     IF v_req.id IS NULL THEN
         RAISE EXCEPTION 'No such request in this household' USING ERRCODE = 'P0002', HINT = 'request_not_found';
     END IF;
-    IF v_actor = v_req.wife_user_id
-       OR (v_actor IS DISTINCT FROM public.nafaqah_husband_id(p_household_id)
-           AND public.household_member_role(p_household_id, v_actor) IS DISTINCT FROM 'admin') THEN
-        RAISE EXCEPTION 'Forbidden: only the husband or a household admin declines a request'
+    -- The husband or an admin who is not a wife: never she herself, nor a co-wife (review R1-01).
+    IF v_actor = v_req.wife_user_id OR NOT public.nafaqah_may_repay(p_household_id, v_actor) THEN
+        RAISE EXCEPTION 'Forbidden: only the husband or a household admin who is not a wife declines a request'
             USING ERRCODE = '42501', HINT = 'forbidden';
     END IF;
+    -- At most 200 characters, counted as Unicode code points (char_length), as the API (len) and
+    -- the app (runes) count them.
     IF char_length(v_reason) > 200 THEN
         RAISE EXCEPTION 'A reason is at most 200 characters' USING ERRCODE = '22023', HINT = 'invalid_reason';
     END IF;
@@ -880,10 +1023,9 @@ BEGIN
     IF v_req.id IS NULL THEN
         RAISE EXCEPTION 'No such request in this household' USING ERRCODE = 'P0002', HINT = 'request_not_found';
     END IF;
-    IF v_actor = v_req.wife_user_id
-       OR (v_actor IS DISTINCT FROM public.nafaqah_husband_id(p_household_id)
-           AND public.household_member_role(p_household_id, v_actor) IS DISTINCT FROM 'admin') THEN
-        RAISE EXCEPTION 'Forbidden: only the husband or a household admin approves a request'
+    -- The husband or an admin who is not a wife: never she herself, nor a co-wife (review R1-01).
+    IF v_actor = v_req.wife_user_id OR NOT public.nafaqah_may_repay(p_household_id, v_actor) THEN
+        RAISE EXCEPTION 'Forbidden: only the husband or a household admin who is not a wife approves a request'
             USING ERRCODE = '42501', HINT = 'forbidden';
     END IF;
     IF p_account_id IS NULL THEN
@@ -898,8 +1040,12 @@ BEGIN
     SELECT * INTO v_prev FROM public.spouse_reimbursements
     WHERE household_id = p_household_id AND request_key = p_request_key;
     IF v_prev.id IS NOT NULL THEN
+        -- Only the same approval is a replay: this request, from the same account, by the same
+        -- person (review R1-04).
         IF NOT EXISTS (SELECT 1 FROM public.spouse_reimbursement_request_outcomes o
-                       WHERE o.request_id = p_request_id AND o.reimbursement_id = v_prev.id) THEN
+                       WHERE o.request_id = p_request_id AND o.reimbursement_id = v_prev.id)
+           OR v_prev.recorded_by IS DISTINCT FROM v_actor
+           OR (SELECT t.from_account_id FROM public.account_transfers t WHERE t.id = v_prev.transfer_id) IS DISTINCT FROM p_account_id THEN
             RAISE EXCEPTION 'This request key was used for something else' USING ERRCODE = '22023', HINT = 'request_key_reused';
         END IF;
         RETURN public.nafaqah_repayment_replay(v_prev, p_request_id);
@@ -929,6 +1075,7 @@ DECLARE
     v_prev public.spouse_reimbursements%ROWTYPE;
     v_account uuid;
     v_before numeric(14, 2);
+    v_after numeric(14, 2);
     v_transfer uuid;
     v_id uuid;
 BEGIN
@@ -940,11 +1087,11 @@ BEGIN
     IF v_orig.id IS NULL THEN
         RAISE EXCEPTION 'No such repayment in this household' USING ERRCODE = 'P0002', HINT = 'reimbursement_not_found';
     END IF;
-    -- Whoever could record it: the husband or an admin, never the wife.
-    IF v_actor = v_orig.wife_user_id
-       OR (v_actor IS DISTINCT FROM public.nafaqah_husband_id(p_household_id)
-           AND public.household_member_role(p_household_id, v_actor) IS DISTINCT FROM 'admin') THEN
-        RAISE EXCEPTION 'Forbidden: only the husband or a household admin reverses a repayment'
+    -- Never a wife (review R1-01). Otherwise who reverses follows the account it left (review
+    -- R1-07), checked under the locks below: a personal account's owner, while he is a member,
+    -- whatever his role now; a shared pool, any admin.
+    IF public.nafaqah_is_spouse_member(p_household_id, v_actor) THEN
+        RAISE EXCEPTION 'Forbidden: a wife does not reverse a repayment'
             USING ERRCODE = '42501', HINT = 'forbidden';
     END IF;
 
@@ -953,7 +1100,8 @@ BEGIN
     SELECT * INTO v_prev FROM public.spouse_reimbursements
     WHERE household_id = p_household_id AND request_key = p_request_key;
     IF v_prev.id IS NOT NULL THEN
-        IF v_prev.kind <> 'reversal' OR v_prev.reverses_id IS DISTINCT FROM v_orig.id THEN
+        IF v_prev.kind <> 'reversal' OR v_prev.reverses_id IS DISTINCT FROM v_orig.id
+           OR v_prev.recorded_by IS DISTINCT FROM v_actor THEN
             RAISE EXCEPTION 'This request key was used for something else' USING ERRCODE = '22023', HINT = 'request_key_reused';
         END IF;
         RETURN public.nafaqah_repayment_replay(v_prev, NULL);
@@ -983,21 +1131,30 @@ BEGIN
     END IF;
 
     v_before := public.nafaqah_outstanding(p_household_id, v_orig.wife_user_id);
-    v_transfer := public.nafaqah_repayment_credit(p_household_id, v_actor, v_account, v_orig.amount, 'nafaqah_reimbursement_reversal');
+    v_transfer := public.nafaqah_repayment_credit(p_household_id, v_actor, v_account, v_orig.amount, 'wife_repayment_reversal');
+    -- What is owed after it, as nafaqah_outstanding will count it with this row (never below zero).
+    v_after := GREATEST(
+        (SELECT COALESCE(sum(t.amount), 0) FROM public.transactions t
+         WHERE t.household_id = p_household_id AND t.nafaqah_spouse_id = v_orig.wife_user_id
+           AND t.nafaqah_class = 'wife_reimbursable')
+      - public.nafaqah_net_repaid(p_household_id, v_orig.wife_user_id) + v_orig.amount,
+        0);
     INSERT INTO public.spouse_reimbursements (household_id, wife_user_id, paid_by_user_id, amount, payment_method, notes,
-                                              recorded_by, request_key, transfer_id, kind, reverses_id)
+                                              recorded_by, request_key, transfer_id, kind, reverses_id,
+                                              outstanding_before, outstanding_after)
     VALUES (p_household_id, v_orig.wife_user_id, v_orig.paid_by_user_id, v_orig.amount, v_orig.payment_method, NULL,
-            v_actor, p_request_key, v_transfer, 'reversal', v_orig.id)
+            v_actor, p_request_key, v_transfer, 'reversal', v_orig.id, v_before, v_after)
     RETURNING id INTO v_id;
 
     RETURN jsonb_build_object(
         'success', true, 'replayed', false,
         'reimbursement_id', v_id, 'kind', 'reversal', 'reverses_id', v_orig.id,
         'household_id', p_household_id, 'wife_user_id', v_orig.wife_user_id,
+        'paid_by_user_id', v_orig.paid_by_user_id,
         'amount', v_orig.amount, 'payment_method', v_orig.payment_method,
         'account_id', v_account, 'transfer_id', v_transfer,
         'outstanding_before', v_before,
-        'outstanding_after', public.nafaqah_outstanding(p_household_id, v_orig.wife_user_id));
+        'outstanding_after', v_after);
 END;
 $$;
 
@@ -1060,13 +1217,19 @@ BEGIN
     SELECT * INTO v_event FROM public.former_member_debt_events
     WHERE debt_id = p_debt_id AND request_key = p_request_key;
     IF v_event.id IS NOT NULL THEN
-        IF v_event.kind <> 'payment' THEN
+        -- Only the same call is a replay: a payment of the same amount and method, from the same
+        -- account, by the same person (review R1-04). It answers what the first call answered: what
+        -- remained after it, and the status that left (review R1-05).
+        IF v_event.kind <> 'payment' OR v_event.amount IS DISTINCT FROM p_amount
+           OR v_event.payment_method IS DISTINCT FROM v_method OR v_event.recorded_by IS DISTINCT FROM v_actor
+           OR (SELECT t.from_account_id FROM public.account_transfers t WHERE t.id = v_event.transfer_id) IS DISTINCT FROM p_account_id THEN
             RAISE EXCEPTION 'This request key was used for something else' USING ERRCODE = '22023', HINT = 'request_key_reused';
         END IF;
         RETURN jsonb_build_object(
             'success', true, 'replayed', true, 'event_id', v_event.id, 'debt_id', v_debt.id,
             'amount', v_event.amount, 'payment_method', v_event.payment_method,
-            'remaining', v_event.remaining_after, 'status', v_debt.status,
+            'remaining', v_event.remaining_after,
+            'status', CASE WHEN v_event.remaining_after = 0 THEN 'settled' ELSE 'open' END,
             'transfer_id', v_event.transfer_id,
             'account_id', (SELECT t.from_account_id FROM public.account_transfers t WHERE t.id = v_event.transfer_id));
     END IF;
@@ -1087,7 +1250,7 @@ BEGIN
     END IF;
 
     -- She is gone: only his side moves.
-    v_transfer_id := public.nafaqah_repayment_debit(p_household_id, v_actor, v_from, p_amount, 'former_member_debt_payment');
+    v_transfer_id := public.nafaqah_repayment_debit(p_household_id, v_actor, v_from, p_amount, 'former_member_payment');
 
     UPDATE public.former_member_debts
     SET paid_amount = paid_amount + p_amount,
@@ -1153,7 +1316,14 @@ DECLARE
     v_pass int;
     v_transfer uuid;
 BEGIN
-    PERFORM public.former_member_debt_require_manager(p_household_id, v_actor);
+    -- Never a wife (review R1-01). Otherwise who reverses follows the account the payment left
+    -- (review R1-07), checked under the locks below: a personal account's owner, while he is a
+    -- member, whatever his role now; a shared pool, any admin.
+    PERFORM public.nafaqah_require_member(p_household_id, v_actor);
+    IF public.nafaqah_is_spouse_member(p_household_id, v_actor) THEN
+        RAISE EXCEPTION 'Forbidden: a wife does not reverse a payment of this record'
+            USING ERRCODE = '42501', HINT = 'forbidden';
+    END IF;
     IF p_request_key IS NULL THEN
         RAISE EXCEPTION 'A request key is required' USING ERRCODE = '22023', HINT = 'request_key_required';
     END IF;
@@ -1172,13 +1342,14 @@ BEGIN
 
         SELECT * INTO v_event FROM public.former_member_debt_events WHERE debt_id = p_debt_id AND request_key = p_request_key;
         IF v_event.id IS NOT NULL THEN
-            IF v_event.kind <> 'reversal' OR v_event.reverses_event_id IS DISTINCT FROM p_event_id THEN
+            IF v_event.kind <> 'reversal' OR v_event.reverses_event_id IS DISTINCT FROM p_event_id
+               OR v_event.recorded_by IS DISTINCT FROM v_actor THEN
                 RAISE EXCEPTION 'This request key was used for something else' USING ERRCODE = '22023', HINT = 'request_key_reused';
             END IF;
             RETURN jsonb_build_object(
                 'success', true, 'replayed', true, 'event_id', v_event.id, 'debt_id', v_debt.id,
                 'reverses_event_id', v_event.reverses_event_id, 'amount', v_event.amount,
-                'remaining', v_event.remaining_after, 'status', v_debt.status, 'transfer_id', v_event.transfer_id,
+                'remaining', v_event.remaining_after, 'status', 'open', 'transfer_id', v_event.transfer_id,
                 'account_id', (SELECT t.to_account_id FROM public.account_transfers t WHERE t.id = v_event.transfer_id));
         END IF;
 
@@ -1208,7 +1379,7 @@ BEGIN
         END IF;
     END LOOP;
 
-    v_transfer := public.nafaqah_repayment_credit(p_household_id, v_actor, v_account, v_orig.amount, 'former_member_debt_payment_reversal');
+    v_transfer := public.nafaqah_repayment_credit(p_household_id, v_actor, v_account, v_orig.amount, 'former_member_payment_reversal');
 
     UPDATE public.former_member_debts
     SET paid_amount = paid_amount - v_orig.amount,
@@ -1633,6 +1804,8 @@ REVOKE ALL ON FUNCTION public.nafaqah_repayment_credit(uuid, uuid, uuid, numeric
 REVOKE ALL ON FUNCTION public.nafaqah_repay_from_account(uuid, uuid, uuid, numeric, text, text, uuid, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.nafaqah_repayment_replay(public.spouse_reimbursements, uuid) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.nafaqah_request_close(public.spouse_reimbursement_requests, text, text, uuid) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.nafaqah_may_repay(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.nafaqah_close_unfit_requests(uuid, uuid, numeric) FROM PUBLIC, anon, authenticated, service_role;
 -- As 001200 left it.
 REVOKE ALL ON FUNCTION public.former_member_debt_outstanding(uuid, uuid) FROM PUBLIC, anon, authenticated;
 -- As 20261020900000 left them.

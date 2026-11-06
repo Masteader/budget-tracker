@@ -354,10 +354,13 @@ DECLARE
     v_counts text := pg_temp.counts();
     v_res jsonb;
 BEGIN
-    -- The same tap again, even with other figures: the first answer, nothing new.
-    v_res := pg_temp.repay(1, 1, 2, '99', 9, 1)::jsonb;
-    PERFORM pg_temp.expect('a replay answers the first', (v_res ->> 'replayed') || '/' || (v_res ->> 'amount') || '/' || (v_res ->> 'account_id'),
-        'true/100.00/' || pg_temp.a(3)::text);
+    -- The same tap again: the first answer, nothing new. With other figures it is not the same tap
+    -- (review R1-04): refused, nothing new either.
+    v_res := pg_temp.repay(1, 1, 2, '100', 3, 1)::jsonb;
+    PERFORM pg_temp.expect('a replay answers the first', (v_res ->> 'replayed') || '/' || (v_res ->> 'amount') || '/' || (v_res ->> 'account_id')
+        || '/' || (v_res ->> 'outstanding_before') || '/' || (v_res ->> 'outstanding_after'),
+        'true/100.00/' || pg_temp.a(3)::text || '/400.00/300.00');
+    PERFORM pg_temp.expect('the same key with other figures', pg_temp.repay(1, 1, 2, '99', 9, 1), 'ERR:request_key_reused');
     PERFORM pg_temp.expect('replays move nothing', pg_temp.balances(), v_bal);
     PERFORM pg_temp.expect('replays write nothing', pg_temp.counts(), v_counts);
     PERFORM pg_temp.expect('a key used for another wife', pg_temp.repay(1, 1, 10, '5', 3, 1), 'ERR:request_key_reused');
@@ -541,8 +544,10 @@ BEGIN
     v_counts := pg_temp.counts();
     v_res := pg_temp.fpay(1, 1, '40', 3, 40)::jsonb;
     PERFORM pg_temp.expect('a replay', (v_res ->> 'replayed') || '/' || (v_res ->> 'account_id'), 'true/' || pg_temp.a(3)::text);
-    -- Even with an account that would now be refused: the replay answers before any account check.
-    PERFORM pg_temp.expect('a replay with another account answers the first', (pg_temp.fpay(1, 1, '1', 9, 40)::jsonb ->> 'account_id'), pg_temp.a(3)::text);
+    -- Another amount or account with the same key is not the same tap (review R1-04), and is refused
+    -- before any account is checked or locked.
+    PERFORM pg_temp.expect('the same key with another account', pg_temp.fpay(1, 1, '40', 9, 40), 'ERR:request_key_reused');
+    PERFORM pg_temp.expect('the same key with another amount', pg_temp.fpay(1, 1, '1', 3, 40), 'ERR:request_key_reused');
     PERFORM pg_temp.expect('overpayment from an account', pg_temp.fpay(1, 1, '150.01', 3, 41), 'ERR:overpayment');
     PERFORM pg_temp.expect('another member''s account', pg_temp.fpay(1, 1, '10', 8, 42), 'ERR:account_forbidden');
     PERFORM pg_temp.expect('insufficient funds', pg_temp.fpay(1, 1, '5.01', 15, 43), 'ERR:insufficient_funds');

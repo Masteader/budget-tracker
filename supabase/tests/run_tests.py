@@ -68,6 +68,20 @@ ROLLOUT_HOTFIXES = ("20261105000500",)
 # them an amount-only 6-argument payment), so 001300 must follow it, as OWNER_ACTIONS says; then
 # 001300 again must itself be harmless.
 ROLLOUT_RERUN = ("20261105000500", "20261105000600", "20261105000700", "20261105001200", "20261105001300")
+# Checked right after that file's second run, before the next one. 001200 again, before 001300
+# again: its amount-only payment is back, but no client can call it (review R1-11); only the API,
+# as the service role, which checks the caller.
+ROLLOUT_RERUN_CHECKS = {
+    "20261105001200": """
+DO $$
+BEGIN
+    IF has_function_privilege('authenticated', 'public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid)', 'EXECUTE')
+       OR has_function_privilege('anon', 'public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid)', 'EXECUTE') THEN
+        RAISE EXCEPTION 'R1-11: a client can call the amount-only former member payment';
+    END IF;
+END $$;
+""",
+}
 # Run by hand on live (2026-11-05). Live has no cost_control_templates table.
 ROLLOUT_ALREADY_ON_LIVE = """
 REVOKE TRUNCATE ON public.inquiries FROM anon, authenticated;
@@ -256,7 +270,17 @@ def rollout_order_check(db_name, test_files, suffix="rollout", skip=(), seed_sql
     failed = [t for t in test_files if not run_sql_file(t, db_name=rollout_db, use_psql=True, quiet=True)]
 
     print("Running " + ", ".join(ROLLOUT_RERUN) + " again, in that order, as an operator following the chain might.")
-    rerun_failed = apply([m for prefix in ROLLOUT_RERUN for m in migrations_of([prefix])], "re-run")
+    rerun_failed = []
+    for prefix in ROLLOUT_RERUN:
+        rerun_failed = apply(migrations_of([prefix]), "re-run")
+        check = ROLLOUT_RERUN_CHECKS.get(prefix)
+        if not rerun_failed and check:
+            proc = subprocess.run(psql_command(rollout_db, True), input=check.encode("utf-8"), capture_output=True)
+            if proc.returncode != 0:
+                print(f"  check after re-running {prefix} failed: {proc.stderr.decode('utf-8', errors='replace').strip()}")
+                rerun_failed = [f"check:{prefix}"]
+        if rerun_failed:
+            break
     if rerun_failed:
         drop()
         return sorted(set(failed)) + rerun_failed

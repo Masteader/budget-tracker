@@ -10,7 +10,7 @@
 --     an account (the normal repayment: debit, idempotent, overpayment refused, linked to the
 --     request) or declines it with an optional reason. She can cancel her own pending request.
 --     Approval uses the requested amount exactly and re-checks what is owed at that moment.
---     Pending requests together never exceed what is owed when a new one is made.
+--     Pending requests together never exceed what is owed (review R1-03: those that no longer fit close).
 --   * Nothing is deleted, edited or voided. A tracked repayment is corrected by a reversal: one
 --     per original (unique), crediting the original account back in full and adding the amount
 --     back to what is owed. Refused for a legacy row without a transfer, an archived or deleted
@@ -24,7 +24,8 @@
 --   4. Approve: the debit of exactly the requested amount, linked to the request; replay; refusals
 --      (the wife herself, a member, another member's account, insufficient funds, no account)
 --      leave the request pending; a second approval or a cancel afterwards is refused.
---   5. Approve after what is owed dropped: refused, nothing moves; the wife cannot record directly.
+--   5. What is owed drops below a pending request: it closes as already repaid, nothing moves; the wife
+--      cannot record directly.
 --   6. Reversal of a repayment: credits the original account back, restores what is owed, refused
 --      twice, refused for a reversal, a legacy row, an archived or a deleted account, and for the
 --      wrong people; a corrected repayment afterwards.
@@ -329,9 +330,11 @@ BEGIN
     PERFORM pg_temp.expect('it writes no repayment', (SELECT count(*)::text FROM public.spouse_reimbursements WHERE household_id = pg_temp.h(1)), '0');
 
     v_counts := pg_temp.counts();
-    v_res := pg_temp.req(2, 1, '77', 1)::jsonb;
+    v_res := pg_temp.req(2, 1, '100', 1)::jsonb;
     PERFORM pg_temp.expect('a double tap answers the first', (v_res ->> 'replayed') || '/' || (v_res ->> 'request_id') || '/' || (v_res ->> 'amount'),
         'true/' || pg_temp.kept('r1') || '/100.00');
+    -- Another amount with the same key is not the same tap (review R1-04).
+    PERFORM pg_temp.expect('the same key with another amount', pg_temp.req(2, 1, '77', 1), 'ERR:request_key_reused');
     PERFORM pg_temp.expect('the replay writes nothing', pg_temp.counts(), v_counts);
 
     PERFORM pg_temp.expect('the husband does not ask', pg_temp.req(1, 1, '10', 2), 'ERR:forbidden');
@@ -424,21 +427,23 @@ BEGIN
 
     v_bal := pg_temp.balances();
     v_counts := pg_temp.counts();
-    v_res := pg_temp.approve(1, 1, pg_temp.id('r1'), 4, 10)::jsonb;
+    v_res := pg_temp.approve(1, 1, pg_temp.id('r1'), 3, 10)::jsonb;
     PERFORM pg_temp.expect('a double tap answers the first', (v_res ->> 'replayed') || '/' || (v_res ->> 'reimbursement_id') || '/' || (v_res ->> 'account_id'),
         'true/' || pg_temp.kept('p_r1') || '/' || pg_temp.a(3)::text);
+    -- From another account it is not the same tap (review R1-04).
+    PERFORM pg_temp.expect('the same key from another account', pg_temp.approve(1, 1, pg_temp.id('r1'), 4, 10), 'ERR:request_key_reused');
     PERFORM pg_temp.expect('a second approval', pg_temp.approve(4, 1, pg_temp.id('r1'), 1, 11), 'ERR:request_not_pending');
     PERFORM pg_temp.expect('a cancel after approval', pg_temp.cancel(2, 1, pg_temp.id('r1')), 'ERR:request_not_pending');
     PERFORM pg_temp.expect('a decline after approval', pg_temp.decline(1, 1, pg_temp.id('r1'), NULL), 'ERR:request_not_pending');
     PERFORM pg_temp.expect('approving a cancelled request', pg_temp.approve(1, 1, pg_temp.id('r2'), 3, 12), 'ERR:request_not_pending');
-    PERFORM pg_temp.expect('the approval key is not a record key', pg_temp.repay(1, 1, 2, '5', 3, 10)::jsonb ->> 'replayed', 'true');
+    PERFORM pg_temp.expect('the approval key is not a record key', pg_temp.repay(1, 1, 2, '5', 3, 10), 'ERR:request_key_reused');
     PERFORM pg_temp.expect('replays and refusals move nothing', pg_temp.balances(), v_bal);
     PERFORM pg_temp.expect('replays and refusals write nothing', pg_temp.counts(), v_counts);
     PERFORM pg_temp.expect('no budget moved (approve)', pg_temp.budgets(), pg_temp.kept('budgets'));
     RAISE NOTICE 'PASSED: approval debits exactly the requested amount from his account, once, linked to the request.';
 END $$;
 
--- 5. Approve after what is owed dropped; she cannot record directly --------------------------------
+-- 5. What is owed dropped below a pending request; she cannot record directly ---------------------------
 DO $$
 DECLARE
     v_bal text;
@@ -449,20 +454,26 @@ BEGIN
     v_res := pg_temp.repay(1, 1, 2, '150', 3, 14)::jsonb;
     PERFORM pg_temp.keep('p_150', v_res ->> 'reimbursement_id');
     PERFORM pg_temp.expect('he paid 150 meanwhile', (v_res ->> 'outstanding_after') || '/' || pg_temp.bal(3), '150.00/750.00');
+    -- What is owed (150) dropped below her pending 200 in the same transaction: the request no longer
+    -- fits and closed as already repaid, with nothing moved (review R1-03).
+    PERFORM pg_temp.expect('the request that no longer fits is closed', pg_temp.outcome(pg_temp.id('r4')), 'already_repaid/-');
+    PERFORM pg_temp.expect('nothing pending above what is owed', pg_temp.balance_of(1, 2, 'pending_requested'), '0.00');
     v_bal := pg_temp.balances();
-    PERFORM pg_temp.expect('approval re-checks what is owed', pg_temp.approve(1, 1, pg_temp.id('r4'), 3, 15), 'ERR:request_exceeds_outstanding');
+    PERFORM pg_temp.expect('approving it is refused', pg_temp.approve(1, 1, pg_temp.id('r4'), 3, 15), 'ERR:request_not_pending');
     PERFORM pg_temp.expect('nothing moved', pg_temp.balances(), v_bal);
-    PERFORM pg_temp.expect('it stays pending', pg_temp.outcome(pg_temp.id('r4')), 'pending');
-    PERFORM pg_temp.expect('no new request beyond what is owed', pg_temp.req(2, 1, '1', 16), 'ERR:pending_exceeds_outstanding');
-    PERFORM pg_temp.expect('he declines it', pg_temp.decline(1, 1, pg_temp.id('r4'), '')::jsonb ->> 'outcome', 'declined');
-    PERFORM pg_temp.expect('an empty reason is none', pg_temp.outcome(pg_temp.id('r4')), 'declined/-');
+    PERFORM pg_temp.expect('nor is it declined', pg_temp.decline(1, 1, pg_temp.id('r4'), ''), 'ERR:request_not_pending');
+    PERFORM pg_temp.expect('no new request beyond what is owed', pg_temp.req(2, 1, '150.01', 16), 'ERR:pending_exceeds_outstanding');
+    v_res := pg_temp.req(2, 1, '10', 19)::jsonb;
+    PERFORM pg_temp.keep('r5', v_res ->> 'request_id');
+    PERFORM pg_temp.expect('he declines one', pg_temp.decline(1, 1, pg_temp.id('r5'), '')::jsonb ->> 'outcome', 'declined');
+    PERFORM pg_temp.expect('an empty reason is none', pg_temp.outcome(pg_temp.id('r5')), 'declined/-');
 
     PERFORM pg_temp.expect('the wife cannot record directly', pg_temp.repay(2, 1, 2, '10', 2, 17), 'ERR:wife_must_request');
     PERFORM pg_temp.expect('nor with the pool', pg_temp.repay(2, 1, 2, '10', 1, 18), 'ERR:wife_must_request');
     PERFORM pg_temp.expect('nothing moved (wife)', pg_temp.balances(), v_bal);
     PERFORM pg_temp.expect('owed 150', pg_temp.owed(1, 2), '150.00');
     PERFORM pg_temp.expect('no budget moved (re-check)', pg_temp.budgets(), pg_temp.kept('budgets'));
-    RAISE NOTICE 'PASSED: approval refuses an amount now above what is owed; the wife never records directly.';
+    RAISE NOTICE 'PASSED: a request that no longer fits what is owed closes as already repaid; the wife never records directly.';
 END $$;
 
 -- 6. Reversal of a repayment --------------------------------------------------------------------
@@ -498,7 +509,8 @@ BEGIN
     PERFORM pg_temp.expect('reversed twice', pg_temp.rev(1, 1, pg_temp.id('p_150'), 21), 'ERR:already_reversed');
     PERFORM pg_temp.expect('a reversal is not reversed', pg_temp.rev(1, 1, pg_temp.id('rev_150'), 22), 'ERR:not_reversible');
     PERFORM pg_temp.expect('the wife does not reverse', pg_temp.rev(2, 1, pg_temp.id('p_r1'), 23), 'ERR:forbidden');
-    PERFORM pg_temp.expect('a member does not reverse', pg_temp.rev(3, 1, pg_temp.id('p_r1'), 23), 'ERR:forbidden');
+    -- Who reverses follows the account it left (review R1-07): not his, so refused there.
+    PERFORM pg_temp.expect('a member does not reverse another''s', pg_temp.rev(3, 1, pg_temp.id('p_r1'), 23), 'ERR:account_forbidden');
     PERFORM pg_temp.expect('a co-admin does not credit his personal account', pg_temp.rev(4, 1, pg_temp.id('p_r1'), 23), 'ERR:account_forbidden');
     PERFORM pg_temp.expect('an unknown repayment', pg_temp.rev(1, 1, gen_random_uuid(), 23), 'ERR:reimbursement_not_found');
     PERFORM pg_temp.expect('another household''s repayment', pg_temp.rev(6, 2, pg_temp.id('p_r1'), 23), 'ERR:reimbursement_not_found');

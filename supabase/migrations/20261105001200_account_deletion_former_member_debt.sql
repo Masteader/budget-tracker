@@ -15,11 +15,17 @@
 --   2. At the purge, before her membership ends, each surviving household where the outstanding
 --      amount (her wife_reimbursable advances there less the repayments) is above zero keeps ONE
 --      record: former_member_debts. No name, id, email or free text of hers.
---   3. The provider or any admin (co-admins included) closes it: record_former_member_debt_payment
+--   3. The provider or any admin (co-admins included) who is not a wife (a spouse member) of the
+--      household closes it (review R1-01, owner decision 2026-11-06: no wife acts on a former
+--      member's record, even as an admin): record_former_member_debt_payment
 --      (amount up to what remains, plus a payment method, exactly as record_spouse_reimbursement
 --      takes them) or waive_former_member_debt (her release, إبراء). Like an ordinary reimbursement,
 --      neither touches an account, a budget or a transaction: only these two tables change.
---      Both lock the record row and take a client request key, so a double tap records once.
+--      Both lock the record row and take a client request key, so a double tap records once; the
+--      same key for anything else (another amount, method, kind or person) is request_key_reused.
+--      The payment is executable by the service role only (the API, which checks the caller): no
+--      client calls it directly, so the window before 20261105001300 (which replaces it with one
+--      that takes the account it is paid from) has no amount-only path for a client (review R1-11).
 --   4. Members read both tables under the reimbursement ledger's rule (their active household). No
 --      client writes them.
 --
@@ -171,7 +177,8 @@ BEGIN
 END;
 $$;
 
--- The husband (the household's provider) or an admin of the household; anyone else is refused.
+-- The husband (the household's provider) or an admin of the household, never a wife (a spouse
+-- member), even an admin; anyone else is refused.
 CREATE OR REPLACE FUNCTION public.former_member_debt_require_manager(p_household_id uuid, p_actor uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -186,9 +193,10 @@ BEGIN
         JOIN public.households h ON h.id = m.household_id
         WHERE m.household_id = p_household_id
           AND m.user_id = p_actor
+          AND m.financial_role IS DISTINCT FROM 'spouse'
           AND (m.role = 'admin' OR h.nafaqah_provider_user_id = p_actor)
     ) THEN
-        RAISE EXCEPTION 'Forbidden: only the husband or a household admin can close this record'
+        RAISE EXCEPTION 'Forbidden: only the husband or a household admin who is not a wife can close this record'
             USING ERRCODE = '42501', HINT = 'forbidden';
     END IF;
 END;
@@ -358,7 +366,8 @@ BEGIN
     SELECT * INTO v_event FROM public.former_member_debt_events
     WHERE debt_id = p_debt_id AND request_key = p_request_key;
     IF v_event.id IS NOT NULL THEN
-        IF v_event.kind <> 'payment' THEN
+        IF v_event.kind <> 'payment' OR v_event.amount IS DISTINCT FROM p_amount
+           OR v_event.payment_method IS DISTINCT FROM v_method OR v_event.recorded_by IS DISTINCT FROM v_actor THEN
             RAISE EXCEPTION 'This request key was used for something else' USING ERRCODE = '22023', HINT = 'request_key_reused';
         END IF;
         RETURN jsonb_build_object(
@@ -434,7 +443,7 @@ BEGIN
     SELECT * INTO v_event FROM public.former_member_debt_events
     WHERE debt_id = p_debt_id AND request_key = p_request_key;
     IF v_event.id IS NOT NULL THEN
-        IF v_event.kind <> 'waiver' THEN
+        IF v_event.kind <> 'waiver' OR v_event.recorded_by IS DISTINCT FROM v_actor THEN
             RAISE EXCEPTION 'This request key was used for something else' USING ERRCODE = '22023', HINT = 'request_key_reused';
         END IF;
         RETURN jsonb_build_object(
@@ -844,7 +853,7 @@ REVOKE ALL ON FUNCTION public.former_member_debt_require_manager(uuid, uuid) FRO
 REVOKE ALL ON FUNCTION public.account_deletion_snapshot_former_member_debts(uuid) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.list_former_member_debt_notices_due() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.get_former_member_debt_deletion_notices(uuid, uuid) FROM PUBLIC, anon;
-REVOKE ALL ON FUNCTION public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.waive_former_member_debt(uuid, uuid, uuid, uuid) FROM PUBLIC, anon;
 -- As 000300 and 000400 left them.
 REVOKE ALL ON FUNCTION public.prepare_account_purge(uuid) FROM PUBLIC, anon, authenticated;
@@ -852,7 +861,9 @@ REVOKE ALL ON FUNCTION public.mark_account_deletion_notice_sent(uuid, text) FROM
 
 GRANT EXECUTE ON FUNCTION public.list_former_member_debt_notices_due() TO service_role;
 GRANT EXECUTE ON FUNCTION public.get_former_member_debt_deletion_notices(uuid, uuid) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid) TO authenticated, service_role;
+-- The service role only: the API checks the caller. No client calls this amount-only payment
+-- directly, before 20261105001300 replaces it or after this file runs again (review R1-11).
+GRANT EXECUTE ON FUNCTION public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.waive_former_member_debt(uuid, uuid, uuid, uuid) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.prepare_account_purge(uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.mark_account_deletion_notice_sent(uuid, text) TO service_role;
