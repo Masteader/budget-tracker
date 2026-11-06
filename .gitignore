@@ -44,3 +44,4 @@ docs/review/audit_spend.json
 
 # Agent & CLI worktrees
 .claude/worktrees/
+.claude/settings.local.json
