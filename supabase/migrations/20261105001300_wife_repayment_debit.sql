@@ -3,7 +3,8 @@
 -- Proof tests: supabase/tests/56_wife_repayment_debit.sql, 57_wife_repayment_debit_concurrency.sql,
 --              58_wife_repayment_requests_and_reversals.sql, 59_wife_repayment_review_fixes.sql,
 --              60_wife_repayment_r2_fixes.sql, 61_wife_repayment_r2_concurrency.sql,
---              62_wife_repayment_r3_fixes.sql, 63_wife_allowance_access.sql
+--              62_wife_repayment_r3_fixes.sql, 63_wife_allowance_access.sql,
+--              64_wife_personal_privacy.sql
 -- Rule: .agents/rules/02-saudi-fintech-and-islamic-compliance.md, family mode rules 2 and 3
 --
 -- Owner decisions 2026-11-06. Repaying the wife for shared things she paid (wife_reimbursable):
@@ -64,6 +65,12 @@
 --      admin, nor an ordinary member (the read policy of member_allowances through
 --      nafaqah_caller_sees_allowances, and get_member_allowance_status). It is set as before by the
 --      husband or an admin, never by a wife: set_member_allowance refuses a wife who is an admin.
+--   8. Her personal purchases (rule 3; owner decision 2026-11-06, section 10d): transactions with
+--      nafaqah_class 'wife_personal' are read by the same people as her allowance (her own, her
+--      husband, an admin who is not a wife), and so is the receipt photo of one; never by a
+--      co-wife, even an admin, nor an ordinary member (the read policy of transactions through
+--      nafaqah_caller_sees_allowances, the receipts read policy through nafaqah_receipt_hidden).
+--      Every other transaction keeps its household-wide read. Who writes them is unchanged.
 --
 -- What is owed is advances less repayments plus reversals (nafaqah_net_repaid); pending requests
 -- never count. get_spouse_reimbursement_balance, former_member_debt_outstanding (the purge's
@@ -104,6 +111,8 @@
 -- get_spouse_reimbursement_balance (20261020300000) and its policy spouse_reimbursements_select_household,
 -- get_member_allowance_status, set_member_allowance and their table's policy
 -- member_allowances_select_household (20261020300000),
+-- the read policies transactions_select_household and storage's receipts_select_household
+-- (20261020100000),
 -- guard_wife_reimbursable_ledger and remove_nafaqah_ledger_on_membership_end (20261020900000),
 -- former_member_debt_outstanding and prepare_account_purge (20261105001200). Re-running 001200 after
 -- this file puts its own versions back (an amount-only 6-argument payment among them, which both
@@ -128,6 +137,21 @@
 --   CREATE POLICY member_allowances_select_household ON public.member_allowances
 --       FOR SELECT TO authenticated
 --       USING (household_id = (SELECT public.get_auth_user_household_id()));
+--   DROP POLICY transactions_select_household ON public.transactions;
+--   CREATE POLICY transactions_select_household ON public.transactions
+--       FOR SELECT TO authenticated
+--       USING (household_id = (SELECT public.get_auth_user_household_id()));
+--   DROP POLICY receipts_select_household ON storage.objects;
+--   CREATE POLICY receipts_select_household ON storage.objects
+--       FOR SELECT TO authenticated
+--       USING (bucket_id = 'receipts'
+--           AND (SELECT auth.uid()) IS NOT NULL
+--           AND (storage.foldername(name))[1] IN (
+--               SELECT m.household_id::text
+--               FROM public.household_memberships m
+--               WHERE m.user_id = (SELECT auth.uid())
+--           ));
+--   DROP INDEX public.idx_transactions_wife_personal_receipt;
 --   DROP FUNCTION public.request_spouse_reimbursement(uuid, numeric, text, uuid, uuid),
 --     public.cancel_spouse_reimbursement_request(uuid, uuid, uuid),
 --     public.decline_spouse_reimbursement_request(uuid, uuid, text, uuid),
@@ -145,6 +169,7 @@
 --     public.nafaqah_close_unfit_requests(uuid, uuid, numeric),
 --     public.nafaqah_may_repay(uuid, uuid),
 --     public.nafaqah_refuse_account_delete(),
+--     public.nafaqah_receipt_hidden(text),
 --     public.nafaqah_caller_sees_allowances(),
 --     public.nafaqah_may_see_allowances(uuid, uuid);
 --   Then run these CREATE OR REPLACE statements: record_spouse_reimbursement,
@@ -2123,7 +2148,88 @@ BEGIN
 END;
 $$;
 
+-- 10d. Her personal purchases: who reads them (owner decision 2026-11-06) ----------------------
+-- A wife's personal purchases (transactions with nafaqah_class 'wife_personal') are read by the
+-- same people as her allowance (10c): she herself (her own), her husband, and an admin of the
+-- household who is not a wife. A co-wife (even an admin) and an ordinary member read none of those
+-- rows, and so nothing derived from them through RLS: no amount, merchant, note, receipt photo,
+-- nafaqah_spouse_id link or sum. Every other transaction keeps the household-wide read of
+-- 20261020100000 (her wife_reimbursable advances among them). Who creates, edits or voids is
+-- unchanged (the write triggers and policies); a caller who cannot read a row cannot pick it.
+-- Replaces 20261020100000's transactions_select_household and receipts_select_household.
+--
+-- The policy is on the hottest read path. The class is tested first, on the row itself; the
+-- caller's half (nafaqah_caller_sees_allowances: one membership row and the provider) runs once per
+-- statement as an InitPlan and only when a personal row is met; the household filter keeps using
+-- the household indexes.
+DROP POLICY IF EXISTS transactions_select_household ON public.transactions;
+CREATE POLICY transactions_select_household ON public.transactions
+    FOR SELECT TO authenticated
+    USING (household_id = (SELECT public.get_auth_user_household_id())
+           AND (nafaqah_class IS DISTINCT FROM 'wife_personal'
+                OR nafaqah_spouse_id = (SELECT auth.uid())
+                OR (SELECT public.nafaqah_caller_sees_allowances())));
+
+-- Her receipt photo follows her purchase. Receipts are stored under the household's folder
+-- (<household id>/<file>); transactions.receipt_url holds that path, or a legacy URL ending in
+-- /receipts/<path>?..., read the same way as the purge reads it. True when the object is the
+-- photo of a personal purchase in a household of the caller that the caller does not read. It
+-- answers only about a path the caller names, inside a household the caller belongs to.
+CREATE OR REPLACE FUNCTION public.nafaqah_receipt_hidden(p_name text)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_uid uuid := auth.uid();
+    v_folder text := split_part(COALESCE(p_name, ''), '/', 1);
+    v_household uuid;
+BEGIN
+    IF v_uid IS NULL
+       OR v_folder !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+        RETURN false;
+    END IF;
+    v_household := v_folder::uuid;
+    IF NOT EXISTS (
+        SELECT 1
+        FROM public.transactions t
+        WHERE t.household_id = v_household
+          AND t.nafaqah_class = 'wife_personal'
+          AND t.receipt_url IS NOT NULL
+          AND t.nafaqah_spouse_id IS DISTINCT FROM v_uid
+          AND split_part(regexp_replace(t.receipt_url, '^.*/receipts/', ''), '?', 1) = p_name
+    ) THEN
+        RETURN false;
+    END IF;
+    RETURN EXISTS (SELECT 1 FROM public.household_memberships m
+                   WHERE m.household_id = v_household AND m.user_id = v_uid)
+       AND NOT public.nafaqah_may_see_allowances(v_household, v_uid);
+END;
+$$;
+
+-- The lookup above reads only the household's personal purchases that carry a photo.
+CREATE INDEX IF NOT EXISTS idx_transactions_wife_personal_receipt
+    ON public.transactions (household_id)
+    WHERE nafaqah_class = 'wife_personal' AND receipt_url IS NOT NULL;
+
+DROP POLICY IF EXISTS receipts_select_household ON storage.objects;
+CREATE POLICY receipts_select_household ON storage.objects
+    FOR SELECT TO authenticated
+    USING (bucket_id = 'receipts'
+        AND (SELECT auth.uid()) IS NOT NULL
+        AND (storage.foldername(name))[1] IN (
+            SELECT m.household_id::text
+            FROM public.household_memberships m
+            WHERE m.user_id = (SELECT auth.uid())
+        )
+        AND NOT public.nafaqah_receipt_hidden(name));
+
 -- 11. Privileges ---------------------------------------------------------------------------------
+-- Her receipt photo: the storage policy runs the helper as the caller.
+REVOKE ALL ON FUNCTION public.nafaqah_receipt_hidden(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.nafaqah_receipt_hidden(text) TO authenticated, service_role;
 -- Her allowance: the helper is internal; the policy's half runs as the caller; both RPCs keep
 -- 20261020300000's privileges (CREATE OR REPLACE keeps them; stated again for a fresh replay).
 REVOKE ALL ON FUNCTION public.nafaqah_may_see_allowances(uuid, uuid) FROM PUBLIC, anon, authenticated;
