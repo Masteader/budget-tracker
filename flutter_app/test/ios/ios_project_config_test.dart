@@ -25,6 +25,8 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xml/xml.dart';
 
+import '../support/brand_names.dart';
+
 const _expectedBundleId = 'com.budgettracker';
 const _usageKeys = {
   'NSCameraUsageDescription',
@@ -33,6 +35,11 @@ const _usageKeys = {
   'NSSpeechRecognitionUsageDescription',
 };
 const _localizedNames = {'en': 'Qawam Money', 'ar': 'قوام المال', 'ur': 'Qawam Money'};
+
+/// No iOS text means "household budget", so the former Arabic name is banned
+/// outright here.
+bool _hasOldOrWithdrawnName(String text) =>
+    withdrawnAppName.hasMatch(text) || formerAppName.hasMatch(text) || text.contains(formerArabicAppName);
 
 String _read(String path) => File(path).readAsStringSync();
 
@@ -529,6 +536,18 @@ void main() {
       expect(_info['CFBundleName'], 'Qawam Money');
     });
 
+    test('no string value has an old or withdrawn name', () {
+      Iterable<String> strings(Object? value) sync* {
+        if (value is String) yield value;
+        if (value is List) yield* value.expand(strings);
+        if (value is Map) yield* value.values.expand(strings);
+      }
+
+      final values = strings(_info).toList();
+      expect(values, containsAll(['Qawam Money', _info['NSCameraUsageDescription']]));
+      expect(values.where(_hasOldOrWithdrawnName), isEmpty);
+    });
+
     test('declares exactly the usage descriptions the plugins need', () {
       final declared = _info.keys.where((key) => key.endsWith('UsageDescription')).toSet();
       expect(declared, _usageKeys);
@@ -574,11 +593,23 @@ void main() {
         }
       });
 
-      test('$lang has no withdrawn names', () {
-        final withdrawn = RegExp('wafeer|budget tracker', caseSensitive: false);
-        expect(_strings(lang).values.where(withdrawn.hasMatch), isEmpty);
+      test('$lang has no old or withdrawn names', () {
+        expect(_strings(lang).values.where(_hasOldOrWithdrawnName), isEmpty);
       });
     }
+
+    test('the name guard catches every script of the old and withdrawn names', () {
+      const caught = [
+        'Wafeer', 'Budget Tracker', 'يستخدم وفيير الكاميرا', 'يستخدم وفير الكاميرا', 'وفیر', 'لوفير', 'بوفيير', //
+        'ميزانية الأسرة', 'بجٹ ٹریکر کیمرا استعمال کرتا ہے',
+      ];
+      for (final text in caught) {
+        expect(_hasOldOrWithdrawnName(text), isTrue, reason: text);
+      }
+      for (final text in ['توفير الوقت', 'توفیر', 'Qawam Money', 'قوام المال']) {
+        expect(_hasOldOrWithdrawnName(text), isFalse, reason: text);
+      }
+    });
 
     test('English matches the Info.plist defaults', () {
       _strings('en').forEach((key, value) => expect(_info[key], value, reason: key));
