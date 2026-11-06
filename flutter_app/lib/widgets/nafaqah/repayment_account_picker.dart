@@ -6,11 +6,9 @@ import '../../models/account.dart';
 import '../../providers/account_provider.dart';
 import '../../providers/household_role_provider.dart';
 import '../../services/household_permissions.dart';
+import '../../models/nafaqah.dart';
 import '../../theme/app_themes.dart';
-
-/// The "cash, not tracked in the app" choice: the amount and method are
-/// recorded, and no balance changes.
-const String kRepayNotTracked = 'not_tracked';
+import '../accounts/add_edit_account_dialog.dart';
 
 int _halalas(double sar) => (sar * 100).round();
 
@@ -18,6 +16,8 @@ int _halalas(double sar) => (sar * 100).round();
 /// 20261105001300): their own personal accounts, plus the household's shared
 /// pools when they are an admin; never archived or outside SAR. The server
 /// checks the same, and refuses an account that does not hold the amount.
+/// Every repayment leaves one of them (owner decision 2026-11-06): a cash
+/// payment comes out of his Cash account, and there is no "not tracked".
 List<Account> repaymentAccounts(
   List<Account> accounts, {
   required String householdId,
@@ -66,12 +66,7 @@ class RepaymentSources {
 
   /// The account behind [selection], if it is one of [accounts].
   Account? accountFor(String? selection) =>
-      selection == null || selection == kRepayNotTracked ? null : accounts.where((a) => a.id == selection).firstOrNull;
-
-  /// What counts as chosen: [selection], or "not tracked" when the viewer has
-  /// no account in the app to pay from (nothing else could be chosen).
-  String? effective(String? selection) =>
-      selection ?? (loaded && accounts.isEmpty ? kRepayNotTracked : null);
+      selection == null ? null : accounts.where((a) => a.id == selection).firstOrNull;
 
   /// Loads the accounts once if they are not yet, for this household only.
   static void ensureLoaded(BuildContext context, String householdId) {
@@ -107,35 +102,100 @@ String? repaymentAccountErrorKey(String code) => const {
       'account_forbidden': 'repay_err_account_forbidden',
     }[code];
 
-/// The history line under a repayment: which account it came from, or that it
-/// moved no balance. Null for rows read from a server that does not say.
-String? repaymentSourceLine(BuildContext context, {required bool? movedBalance, String? accountId}) {
+/// The localized text for a refusal that tracked repayments, requests and
+/// reversals bring (migration 20261105001300), the account refusals included;
+/// null for any other. [owedNow] fills the amount of
+/// 'request_exceeds_outstanding' and 'pending_exceeds_outstanding' when the
+/// server sends none.
+String? trackedRepaymentErrorText(BuildContext context, Object error, {double? owedNow}) {
+  if (error is! NafaqahApiException) return null;
+  final amount = error.outstanding ?? owedNow ?? 0;
+  switch (error.code) {
+    case 'app_update_required':
+      return context.tr('repay_err_update_app');
+    case 'wife_must_request':
+      return context.tr('repay_err_wife_must_request');
+    case 'request_not_pending':
+      return context.tr('req_err_not_pending');
+    case 'request_not_found':
+      return context.tr('req_err_not_found');
+    case 'request_exceeds_outstanding':
+      return context.trArgs('req_err_exceeds', {'amount': context.sar(amount)});
+    case 'pending_exceeds_outstanding':
+      return context.trArgs('req_err_pending_cap', {'amount': context.sar(amount)});
+    case 'already_reversed':
+      return context.tr('rev_err_already');
+    case 'reversal_not_tracked':
+      return context.tr('rev_err_not_tracked');
+    case 'reversal_account_unavailable':
+      return context.tr('rev_err_account');
+    case 'reversal_after_waiver':
+      return context.tr('rev_err_after_waiver');
+    case 'not_reversible':
+      return context.tr('rev_err_not_reversible');
+    case 'reimbursement_not_found':
+    case 'payment_not_found':
+      return context.tr('rev_err_not_found');
+  }
+  final accountKey = repaymentAccountErrorKey(error.code);
+  return accountKey == null ? null : context.tr(accountKey);
+}
+
+/// The history line under a repayment: which account it came from (or, for a
+/// reversal, went back to), or that it moved no balance (a row from before
+/// every repayment was tracked). Null for rows from a server that does not say.
+String? repaymentSourceLine(BuildContext context, {required bool? movedBalance, String? accountId, bool reversal = false}) {
   if (movedBalance == null) return null;
   if (!movedBalance) return context.tr('repay_history_not_tracked');
   final name = repaymentAccountName(context, accountId);
+  if (reversal) {
+    return name == null ? context.tr('repay_history_back_to_account') : context.trArgs('repay_history_back_to', {'account': name});
+  }
   return name == null ? context.tr('repay_history_from_account') : context.trArgs('repay_history_from', {'account': name});
 }
 
-/// Where a repayment to the wife (or of a former member's record) is paid
-/// from: one of [accounts], with its balance, or [kRepayNotTracked]. The choice
-/// is required; what it will do is said under it.
+/// Where a repayment to the wife (or of a former member's record, or an
+/// approval of her request) is paid from: one of [accounts], with its
+/// balance. The choice is required; what it will do is said under it. With no
+/// account to pay from, it says so and offers to add one.
 class RepaymentAccountPicker extends StatelessWidget {
+  final String householdId;
   final List<Account> accounts;
   final String? selected;
   final double amount;
   final ValueChanged<String> onChanged;
 
-  /// A former member: she is gone, so nothing is credited to her.
+  /// A former member: she is gone, so the line under the choice says nothing of her.
   final bool formerMember;
+
+  /// Opens "Add account"; by default the app's account dialog, after which
+  /// the accounts reload.
+  final VoidCallback? onAddAccount;
 
   const RepaymentAccountPicker({
     super.key,
+    required this.householdId,
     required this.accounts,
     required this.selected,
     required this.amount,
     required this.onChanged,
     this.formerMember = false,
+    this.onAddAccount,
   });
+
+  void _addAccount(BuildContext context) {
+    if (onAddAccount != null) {
+      onAddAccount!();
+      return;
+    }
+    AccountProvider? provider;
+    try {
+      provider = Provider.of<AccountProvider>(context, listen: false);
+    } on ProviderNotFoundException {
+      provider = null;
+    }
+    AddEditAccountDialog.show(context, householdId: householdId, onSuccess: () => provider?.refresh(force: true));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -163,17 +223,23 @@ class RepaymentAccountPicker extends StatelessWidget {
           const SizedBox(height: 6),
         ],
         if (accounts.isEmpty) ...[
-          Text(context.tr('repay_no_accounts'), style: TextStyle(color: context.textSecondary, fontSize: 12)),
-          const SizedBox(height: 6),
+          Text(
+            context.tr('repay_no_accounts'),
+            key: const ValueKey('repay_no_accounts'),
+            style: TextStyle(color: context.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: OutlinedButton.icon(
+              key: const ValueKey('repay_add_account'),
+              style: OutlinedButton.styleFrom(foregroundColor: context.accentText),
+              onPressed: () => _addAccount(context),
+              icon: const Icon(Icons.add_card_rounded, size: 18),
+              label: Text(context.tr('add_account')),
+            ),
+          ),
         ],
-        _SourceTile(
-          key: const ValueKey('repay_source_not_tracked'),
-          icon: Icons.money_off_csred_outlined,
-          title: context.tr('repay_not_tracked'),
-          subtitle: context.tr('repay_not_tracked_desc'),
-          selected: selected == kRepayNotTracked,
-          onTap: () => onChanged(kRepayNotTracked),
-        ),
         if (chosen != null) ...[
           const SizedBox(height: 8),
           Text(

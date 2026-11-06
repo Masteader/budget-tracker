@@ -4,11 +4,12 @@ import 'package:budget_tracker/widgets/dashboard/family_reimbursement_card.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../support/payer_account.dart';
 
 const _husband = 'u-husband';
 const _wife = 'u-wife';
 
-Widget _app(Widget child, {Locale locale = const Locale('en')}) => MaterialApp(
+Widget _app(Widget child, {Locale locale = const Locale('en')}) => withPayerAccount(MaterialApp(
       locale: locale,
       supportedLocales: const [Locale('en'), Locale('ar'), Locale('ur')],
       localizationsDelegates: const [
@@ -18,7 +19,7 @@ Widget _app(Widget child, {Locale locale = const Locale('en')}) => MaterialApp(
         GlobalCupertinoLocalizations.delegate,
       ],
       home: Scaffold(body: SingleChildScrollView(child: child)),
-    );
+    ));
 
 NafaqahSummary _summary({
   String role = 'husband',
@@ -86,7 +87,7 @@ void main() {
     expect(find.text('Change allowance'), findsOneWidget);
   });
 
-  testWidgets('wife sees her claim, records receipt, cannot set her allowance', (tester) async {
+  testWidgets('wife sees her claim, marks what she received, cannot set her allowance', (tester) async {
     await tester.pumpWidget(_app(FamilyReimbursementCard(
       householdId: 'hh',
       summary: _summary(role: 'wife', allocated: 800, spent: 300),
@@ -94,7 +95,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Your husband owes you:'), findsOneWidget);
-    expect(find.text('Record amount received'), findsOneWidget);
+    expect(find.text('Mark as received'), findsOneWidget);
+    expect(find.text('Reimburse Wife'), findsNothing);
     expect(find.text('My personal allowance'), findsOneWidget);
     expect(find.text('SAR 500.00'), findsOneWidget); // remaining 800 - 300
     expect(find.text('Set by the husband or a household admin.'), findsOneWidget);
@@ -114,7 +116,7 @@ void main() {
         loads++;
         return _summary(outstanding: 300.5);
       },
-      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String? accountId, required String requestKey}) async {
+      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey}) async {
         calls.add({'amount': amount, 'method': paymentMethod, 'wife': wifeUserId});
         return 300.5;
       },
@@ -128,6 +130,9 @@ void main() {
 
     await tester.enterText(find.byKey(const ValueKey('reimburse_amount_field')), '200');
     await tester.tap(find.text('Cash'));
+    await pickPayerAccount(tester);
+    await tester.ensureVisible(find.text('Record Settlement Payment'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Record Settlement Payment'));
     await tester.pumpAndSettle();
 
@@ -145,7 +150,7 @@ void main() {
       householdId: 'hh',
       summary: _summary(),
       loadSummary: (_) async => _summary(),
-      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String? accountId, required String requestKey}) async {
+      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey}) async {
         amounts.add(amount);
         return 0;
       },
@@ -155,6 +160,9 @@ void main() {
     await tester.tap(find.text('Reimburse Wife'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('reimburse_amount_field')), '٠٫٢٨٥');
+    await pickPayerAccount(tester);
+    await tester.ensureVisible(find.text('Record Settlement Payment'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Record Settlement Payment'));
     await tester.pump();
     expect(find.text('0.29'), findsOneWidget, reason: 'the field shows the stored, rounded amount');
@@ -167,7 +175,7 @@ void main() {
     await tester.pumpWidget(_app(FamilyReimbursementCard(
       householdId: 'hh',
       summary: _summary(),
-      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String? accountId, required String requestKey}) async {
+      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey}) async {
         called = true;
         return 0;
       },
@@ -177,6 +185,9 @@ void main() {
     await tester.tap(find.text('Reimburse Wife'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('reimburse_amount_field')), '500.51');
+    await pickPayerAccount(tester);
+    await tester.ensureVisible(find.text('Record Settlement Payment'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Record Settlement Payment'));
     await tester.pumpAndSettle();
 
@@ -191,12 +202,15 @@ void main() {
       householdId: 'hh',
       summary: _summary(),
       onReimbursed: () => reimbursed = true,
-      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String? accountId, required String requestKey}) async =>
+      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey}) async =>
           throw const NafaqahApiException('overpayment', 'exceeds', statusCode: 409),
     )));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Reimburse Wife'));
+    await tester.pumpAndSettle();
+    await pickPayerAccount(tester);
+    await tester.ensureVisible(find.text('Record Settlement Payment'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Record Settlement Payment'));
     await tester.pumpAndSettle();

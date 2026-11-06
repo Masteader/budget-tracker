@@ -18,13 +18,22 @@ import 'repayment_account_picker.dart';
 
 /// Records a payment of a former member's record. [requestKey] is the same for
 /// every retry from one sheet, so the server records the payment once.
-/// [accountId] is the account it is paid from (null: not tracked in the app).
+/// [accountId] is the account it is paid from: every payment leaves one
+/// (owner decision 2026-11-06).
 typedef FormerMemberDebtPaymentRecorder = Future<FormerMemberDebtReceipt> Function({
   required String debtId,
   required double amount,
   required String paymentMethod,
   required String requestKey,
-  required String? accountId,
+  required String accountId,
+});
+
+/// Reverses a tracked payment of a former member's record: the money goes back
+/// to its account and the amount back to what remains.
+typedef FormerMemberDebtReverser = Future<FormerMemberDebtReceipt> Function({
+  required String debtId,
+  required String eventId,
+  required String requestKey,
 });
 
 /// Records her waiver (إبراء) of what remains of a former member's record.
@@ -51,8 +60,10 @@ bool _isStale(Object error) => error is NafaqahApiException && (error.code == 'd
 String formerMemberDebtErrorText(BuildContext context, Object error, {required double remaining, required bool payment}) {
   final fallback = context.tr(payment ? 'settle_record_failed_msg' : 'fmd_waive_failed');
   if (error is! NafaqahApiException) return fallback;
-  final accountKey = repaymentAccountErrorKey(error.code);
-  if (accountKey != null) return context.tr(accountKey);
+  if (error.code != 'overpayment') {
+    final tracked = trackedRepaymentErrorText(context, error, owedNow: remaining);
+    if (tracked != null) return tracked;
+  }
   switch (error.code) {
     case 'overpayment':
       return context.trArgs('fmd_pay_over', {'amount': context.sar(error.outstanding ?? remaining)});
@@ -80,6 +91,7 @@ class FormerMemberDebtPanel extends StatelessWidget {
   final String householdId;
   final FormerMemberDebtPaymentRecorder? recordPayment;
   final FormerMemberDebtWaiver? waive;
+  final FormerMemberDebtReverser? reverse;
 
   /// A payment or a waiver was recorded.
   final VoidCallback onChanged;
@@ -96,6 +108,7 @@ class FormerMemberDebtPanel extends StatelessWidget {
     required this.onRefresh,
     this.recordPayment,
     this.waive,
+    this.reverse,
   });
 
   void _openPaymentSheet(BuildContext context) {
@@ -135,7 +148,13 @@ class FormerMemberDebtPanel extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _FormerDebtHistorySheet(debt: debt),
+      builder: (ctx) => _FormerDebtHistorySheet(
+        debt: debt,
+        householdId: householdId,
+        reverse: reverse,
+        onChanged: onChanged,
+        onRefresh: onRefresh,
+      ),
     );
   }
 
@@ -336,13 +355,98 @@ class _DebtPill extends StatelessWidget {
 
 // ── History ─────────────────────────────────────────────────────────────────
 
-class _FormerDebtHistorySheet extends StatelessWidget {
+class _FormerDebtHistorySheet extends StatefulWidget {
   final FormerMemberDebt debt;
+  final String householdId;
+  final FormerMemberDebtReverser? reverse;
 
-  const _FormerDebtHistorySheet({required this.debt});
+  /// A reversal was recorded: the record changed.
+  final VoidCallback onChanged;
+
+  /// The outcome is unknown or the record changed elsewhere: reload it.
+  final VoidCallback onRefresh;
+
+  const _FormerDebtHistorySheet({
+    required this.debt,
+    required this.householdId,
+    required this.onChanged,
+    required this.onRefresh,
+    this.reverse,
+  });
+
+  @override
+  State<_FormerDebtHistorySheet> createState() => _FormerDebtHistorySheetState();
+}
+
+class _FormerDebtHistorySheetState extends State<_FormerDebtHistorySheet> {
+  bool _busy = false;
+
+  Future<void> _reverse(FormerMemberDebtEvent e) async {
+    final account = repaymentAccountName(context, e.accountId) ?? context.tr('repay_history_from_account');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        scrollable: true,
+        backgroundColor: ctx.cardBg,
+        title: Text(ctx.tr('rev_confirm_title'), style: TextStyle(color: ctx.textPrimary, fontWeight: FontWeight.bold)),
+        content: Text(
+          ctx.trArgs('rev_confirm_body_former', {'amount': ctx.sar(e.amount), 'account': account}),
+          key: const ValueKey('rev_confirm_body'),
+          style: TextStyle(color: ctx.textPrimary),
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('rev_confirm_cancel'),
+            style: TextButton.styleFrom(foregroundColor: ctx.textSecondary),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(ctx.tr('cancel')),
+          ),
+          ElevatedButton(
+            key: const ValueKey('rev_confirm_ok'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppThemes.champagneGold,
+              foregroundColor: VelvetBurgundyColors.primaryLight,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(ctx.tr('rev_action')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _busy = true);
+    final sources = RepaymentSources.of(context, widget.householdId, listen: false);
+    try {
+      final reverse = widget.reverse ??
+          ({required String debtId, required String eventId, required String requestKey}) =>
+              ApiService.instance.reverseFormerMemberDebtPayment(widget.householdId,
+                  debtId: debtId, eventId: eventId, requestKey: requestKey);
+      await reverse(debtId: widget.debt.id, eventId: e.id, requestKey: const Uuid().v4());
+    } catch (err) {
+      logFailure('FormerMemberDebt.reverse', err);
+      if (!mounted) return;
+      setState(() => _busy = false);
+      AppSnackBar.showError(
+        context,
+        _isUnknownOutcome(err)
+            ? context.tr('fmd_unconfirmed_msg')
+            : formerMemberDebtErrorText(context, err, remaining: widget.debt.remaining, payment: true),
+        title: context.tr('settle_record_failed'),
+      );
+      widget.onRefresh();
+      return;
+    }
+    // The money is back in its account: the balances show it now.
+    sources.provider?.refresh(force: true);
+    if (!mounted) return;
+    AppSnackBar.showSuccess(context, context.trArgs('rev_done', {'amount': context.sar(e.amount)}), icon: Icons.check_circle_outline);
+    Navigator.of(context).pop();
+    widget.onChanged();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final debt = widget.debt;
     final l10n = AppLocalizations.of(context);
     final rows = <Widget>[
       _HistoryRow(
@@ -354,14 +458,39 @@ class _FormerDebtHistorySheet extends StatelessWidget {
       ),
       for (final e in debt.events)
         _HistoryRow(
-          icon: e.isWaiver ? Icons.volunteer_activism_outlined : Icons.south_west_rounded,
-          color: e.isWaiver ? context.accentText : context.successText,
+          key: e.id.isEmpty ? null : ValueKey('fmd_event_${e.id}'),
+          icon: e.isWaiver
+              ? Icons.volunteer_activism_outlined
+              : e.isReversal
+                  ? Icons.undo_rounded
+                  : Icons.south_west_rounded,
+          color: e.isWaiver
+              ? context.accentText
+              : e.isReversal
+                  ? context.goldText
+                  : context.successText,
           title: e.isWaiver
               ? context.tr('fmd_history_waiver')
-              : context.trArgs('fmd_history_payment', {'method': _methodLabel(context, e.paymentMethod)}),
-          amount: '−${context.sar(e.amount)}',
-          source: e.isWaiver ? null : repaymentSourceLine(context, movedBalance: e.movedBalance, accountId: e.accountId),
+              : e.isReversal
+                  ? context.tr('rev_entry')
+                  : context.trArgs('fmd_history_payment', {'method': _methodLabel(context, e.paymentMethod)}),
+          // What remains: a payment or waiver takes away, a reversal adds back.
+          amount: '${e.isReversal ? '+' : '−'}${context.sar(e.amount)}',
+          source: e.isWaiver
+              ? null
+              : repaymentSourceLine(context, movedBalance: e.movedBalance, accountId: e.accountId, reversal: e.isReversal),
           date: e.createdAt == null ? null : l10n.date(e.createdAt!, 'd MMM yyyy'),
+          reversed: e.reversed,
+          reversedKey: 'fmd_rev_badge_${e.id}',
+          action: e.canReverse && !e.reversed
+              ? TextButton.icon(
+                  key: ValueKey('fmd_reverse_${e.id}'),
+                  style: TextButton.styleFrom(foregroundColor: context.accentText),
+                  onPressed: _busy ? null : () => _reverse(e),
+                  icon: const Icon(Icons.undo_rounded, size: 16),
+                  label: Text(context.tr('rev_action')),
+                )
+              : null,
         ),
     ];
     return Container(
@@ -402,16 +531,28 @@ class _HistoryRow extends StatelessWidget {
   final String amount;
   final String? date;
 
-  /// Which account a payment came from, or that it moved no balance.
+  /// Which account a payment came from (or a reversal went back to), or that
+  /// it moved no balance.
   final String? source;
 
+  /// A payment that a later reversal undid: it stays, with a "Reversed" badge.
+  final bool reversed;
+  final String? reversedKey;
+
+  /// Reverse, when the viewer may.
+  final Widget? action;
+
   const _HistoryRow({
+    super.key,
     required this.icon,
     required this.color,
     required this.title,
     required this.amount,
     this.date,
     this.source,
+    this.reversed = false,
+    this.reversedKey,
+    this.action,
   });
 
   @override
@@ -437,6 +578,23 @@ class _HistoryRow extends StatelessWidget {
                 titleText,
                 if (large) amountText,
                 if (dateText != null) dateText,
+                if (reversed) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    key: reversedKey == null ? null : ValueKey(reversedKey),
+                    padding: const EdgeInsetsDirectional.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: context.textSecondary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: context.textSecondary.withValues(alpha: 0.4)),
+                    ),
+                    child: Text(
+                      context.tr('rev_badge'),
+                      style: TextStyle(color: context.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+                if (action != null) Align(alignment: AlignmentDirectional.centerStart, child: action!),
               ],
             ),
           ),
@@ -482,7 +640,7 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
   String _paymentMethod = 'stc_pay';
   bool _isSubmitting = false;
 
-  /// An account id or [kRepayNotTracked]; null until chosen.
+  /// The account it is paid from; null until chosen.
   String? _source;
 
   @override
@@ -501,7 +659,7 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
     super.dispose();
   }
 
-  Future<bool> _confirm(double amount, Account? account) async {
+  Future<bool> _confirm(double amount, Account account) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -518,9 +676,7 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
             ),
             const SizedBox(height: 8),
             Text(
-              account != null
-                  ? ctx.trArgs('repay_effect_former', {'account': account.name, 'amount': ctx.sar(amount)})
-                  : ctx.tr('repay_not_tracked_desc'),
+              ctx.trArgs('repay_effect_former', {'account': account.name, 'amount': ctx.sar(amount)}),
               key: const ValueKey('fmd_confirm_source'),
               style: TextStyle(color: ctx.textSecondary, fontSize: 12),
             ),
@@ -565,20 +721,23 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
       );
       return;
     }
-    // Where the money comes from (rule 02): required, so balances stay right.
+    // Where the money comes from (rule 02): every payment leaves an account.
     final sources = RepaymentSources.of(context, widget.householdId, listen: false);
-    final choice = sources.effective(_source);
-    if (choice == null) {
-      AppSnackBar.showError(context, context.tr('repay_source_required'), title: context.tr('settle_record_failed'));
+    if (_source == null) {
+      AppSnackBar.showError(
+        context,
+        context.tr(sources.accounts.isEmpty ? 'repay_no_accounts' : 'repay_source_required'),
+        title: context.tr('settle_record_failed'),
+      );
       return;
     }
-    final account = sources.accountFor(choice);
-    if (choice != kRepayNotTracked && account == null) {
+    final account = sources.accountFor(_source);
+    if (account == null) {
       setState(() => _source = null);
       AppSnackBar.showError(context, context.tr('repay_err_unavailable'), title: context.tr('settle_record_failed'));
       return;
     }
-    if (account != null && _halalas(account.balance) < _halalas(amt)) {
+    if (_halalas(account.balance) < _halalas(amt)) {
       AppSnackBar.showError(
         context,
         context.trArgs('repay_err_insufficient', {
@@ -602,7 +761,7 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
             required double amount,
             required String paymentMethod,
             required String requestKey,
-            required String? accountId,
+            required String accountId,
           }) =>
               ApiService.instance.recordFormerMemberDebtPayment(
                 widget.householdId,
@@ -617,7 +776,7 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
         amount: amt,
         paymentMethod: method,
         requestKey: _requestKey,
-        accountId: account?.id,
+        accountId: account.id,
       );
       // A retry of a lost answer replays what the server stored first, whatever was typed since.
       if (receipt.amount > 0) recorded = receipt.amount;
@@ -646,13 +805,11 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
     }
 
     // His balance changed on the server: the accounts show it now.
-    if (account != null) sources.provider?.refresh(force: true);
+    sources.provider?.refresh(force: true);
     if (!mounted) return;
     AppSnackBar.showSuccess(
       context,
-      account != null
-          ? context.trArgs('repay_paid_from', {'amount': context.sar(recorded), 'account': account.name})
-          : context.trArgs('fmd_paid_success', {'amount': context.sar(recorded), 'method': _methodLabel(context, method)}),
+      context.trArgs('repay_paid_from', {'amount': context.sar(recorded), 'account': account.name}),
       title: context.tr('settle_recorded_title'),
       icon: Icons.check_circle_outline,
     );
@@ -733,8 +890,9 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
               Center(child: CircularProgressIndicator(strokeWidth: 2, color: context.accentText))
             else
               RepaymentAccountPicker(
+                householdId: widget.householdId,
                 accounts: sources.accounts,
-                selected: sources.effective(_source),
+                selected: _source,
                 amount: parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0,
                 formerMember: true,
                 onChanged: (id) => setState(() => _source = id),

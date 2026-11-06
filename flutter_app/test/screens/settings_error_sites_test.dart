@@ -24,6 +24,7 @@ import 'package:budget_tracker/widgets/settings/role_invite_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../support/payer_account.dart';
 import 'package:permission_handler_platform_interface/permission_handler_platform_interface.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -332,16 +333,19 @@ void main() {
     });
 
     testWidgets('family reimbursement: recording fails', (tester) async {
-      await tester.pumpWidget(localizedApp(
+      await tester.pumpWidget(withPayerAccount(localizedApp(
         FamilyReimbursementCard(
           householdId: 'hh',
           summary: _familySummary(),
-          recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String? accountId, required String requestKey}) async => throw const _RawException(),
+          recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey}) async => throw const _RawException(),
         ),
         lang: 'en',
-      ));
+      )));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Reimburse Wife'));
+      await tester.pumpAndSettle();
+      await pickPayerAccount(tester);
+      await tester.ensureVisible(find.text('Record Settlement Payment'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Record Settlement Payment'));
       await tester.pumpAndSettle();

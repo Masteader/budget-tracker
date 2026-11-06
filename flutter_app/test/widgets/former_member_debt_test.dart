@@ -9,6 +9,7 @@ import 'package:budget_tracker/widgets/dashboard/family_reimbursement_card.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../support/payer_account.dart';
 
 const _husband = 'u-husband';
 const _wife = 'u-wife';
@@ -20,7 +21,7 @@ Widget _app(
   bool dark = false,
   double scale = 1.0,
 }) =>
-    MaterialApp(
+    withPayerAccount(MaterialApp(
       locale: Locale(lang),
       theme: dark ? AppThemes.darkTheme : AppThemes.lightTheme,
       supportedLocales: const [Locale('en'), Locale('ar'), Locale('ur')],
@@ -35,7 +36,7 @@ Widget _app(
         child: page!,
       ),
       home: Scaffold(body: SingleChildScrollView(child: child)),
-    );
+    ));
 
 Map<String, dynamic> _openDebt({String id = 'd-open', double original = 900, double paid = 500}) => {
       'id': id,
@@ -330,7 +331,7 @@ void main() {
             required double amount,
             required String paymentMethod,
             required String requestKey,
-            required String? accountId,
+            required String accountId,
           }) async {
             calls.add((debtId: debtId, amount: amount, paymentMethod: paymentMethod, requestKey: requestKey));
             final failure = failWith?.call(calls.length);
@@ -369,6 +370,7 @@ void main() {
         await tester.pumpAndSettle();
         await _tapKey(tester, 'fmd_pay_d-open');
         await tester.enterText(_k('fmd_amount_field'), typed);
+        await pickPayerAccount(tester);
         await _tapKey(tester, 'fmd_pay_submit');
         expect(calls, isEmpty);
         expect(_k('fmd_confirm_ok'), findsNothing, reason: 'no confirmation for a refused amount');
@@ -386,6 +388,7 @@ void main() {
       await tester.pumpAndSettle();
       await _tapKey(tester, 'fmd_pay_d-open');
       await tester.enterText(_k('fmd_amount_field'), '400.00');
+      await pickPayerAccount(tester);
       await _tapKey(tester, 'fmd_pay_submit');
       await _tapKey(tester, 'fmd_confirm_ok');
       expect(calls.single.amount, 400.0);
@@ -398,6 +401,7 @@ void main() {
       await tester.enterText(_k('fmd_amount_field'), '150.25');
       await tester.tap(find.text('Cash'));
       await tester.pumpAndSettle();
+      await pickPayerAccount(tester);
       await _tapKey(tester, 'fmd_pay_submit');
 
       expect(calls, isEmpty, reason: 'nothing is sent before the confirmation');
@@ -409,7 +413,7 @@ void main() {
       expect(calls.single.amount, 150.25);
       expect(calls.single.paymentMethod, 'cash');
       expect(calls.single.requestKey, matches(_uuidV4));
-      expect(find.text('Recorded SAR 150.25 via Cash'), findsOneWidget);
+      expect(find.text('Recorded SAR 150.25, paid from Payer bank'), findsOneWidget);
       expect(_k('fmd_pay_submit'), findsNothing, reason: 'the sheet closes');
       expect(loads, 1, reason: 'the summary is refreshed');
       expect(reimbursed, 1);
@@ -419,6 +423,7 @@ void main() {
       await tester.pumpWidget(_app(card()));
       await tester.pumpAndSettle();
       await _tapKey(tester, 'fmd_pay_d-open');
+      await pickPayerAccount(tester);
       await _tapKey(tester, 'fmd_pay_submit');
       await _tapKey(tester, 'fmd_confirm_cancel');
       expect(calls, isEmpty);
@@ -432,6 +437,7 @@ void main() {
       await tester.pumpAndSettle();
       await _tapKey(tester, 'fmd_pay_d-open');
       await tester.enterText(_k('fmd_amount_field'), '100');
+      await pickPayerAccount(tester);
       await _tapKey(tester, 'fmd_pay_submit');
       await _tapKey(tester, 'fmd_confirm_ok');
 
@@ -441,11 +447,12 @@ void main() {
       expect(loads, 1, reason: 'refreshed to show what the server holds');
       expect(_k('fmd_pay_submit'), findsOneWidget, reason: 'the sheet stays open for a safe retry');
 
+      await pickPayerAccount(tester);
       await _tapKey(tester, 'fmd_pay_submit');
       await _tapKey(tester, 'fmd_confirm_ok');
       expect(calls, hasLength(2));
       expect(calls[1].requestKey, calls[0].requestKey);
-      expect(find.text('Recorded SAR 100.00 via STC Pay'), findsOneWidget);
+      expect(find.text('Recorded SAR 100.00, paid from Payer bank'), findsOneWidget);
     });
 
     testWidgets('a replayed retry reports what the server recorded, not what was typed again', (tester) async {
@@ -461,7 +468,7 @@ void main() {
           required double amount,
           required String paymentMethod,
           required String requestKey,
-          required String? accountId,
+          required String accountId,
         }) async {
           n++;
           if (n == 1) throw const NafaqahApiException('network', 'timeout', noResponse: true);
@@ -474,15 +481,17 @@ void main() {
       await tester.pumpAndSettle();
       await _tapKey(tester, 'fmd_pay_d-open');
       await tester.enterText(_k('fmd_amount_field'), '100');
+      await pickPayerAccount(tester);
       await _tapKey(tester, 'fmd_pay_submit');
       await _tapKey(tester, 'fmd_confirm_ok');
       await tester.enterText(_k('fmd_amount_field'), '50');
       await tester.tap(find.text('Cash'));
       await tester.pumpAndSettle();
+      await pickPayerAccount(tester);
       await _tapKey(tester, 'fmd_pay_submit');
       await _tapKey(tester, 'fmd_confirm_ok');
       expect(n, 2);
-      expect(find.text('Recorded SAR 100.00 via STC Pay'), findsOneWidget);
+      expect(find.text('Recorded SAR 100.00, paid from Payer bank'), findsOneWidget);
       expect(find.textContaining('SAR 50.00 via Cash'), findsNothing);
     });
 
@@ -492,15 +501,18 @@ void main() {
       )));
       await tester.pumpAndSettle();
       await _tapKey(tester, 'fmd_pay_d-open');
+      await pickPayerAccount(tester);
       await _tapKey(tester, 'fmd_pay_submit');
       await _tapKey(tester, 'fmd_confirm_ok');
       expect(find.text('Settlement Failed'), findsOneWidget);
+      await pickPayerAccount(tester);
       await _tapKey(tester, 'fmd_pay_submit');
       await _tapKey(tester, 'fmd_confirm_ok');
       expect(calls, hasLength(2));
       expect(calls[1].requestKey, calls[0].requestKey);
 
       await _tapKey(tester, 'fmd_pay_d-open');
+      await pickPayerAccount(tester);
       await _tapKey(tester, 'fmd_pay_submit');
       await _tapKey(tester, 'fmd_confirm_ok');
       expect(calls, hasLength(3));
@@ -543,6 +555,7 @@ void main() {
         await tester.pumpWidget(_app(card(failWith: (_) => c.$1)));
         await tester.pumpAndSettle();
         await _tapKey(tester, 'fmd_pay_d-open');
+        await pickPayerAccount(tester);
         await _tapKey(tester, 'fmd_pay_submit');
         await _tapKey(tester, 'fmd_confirm_ok');
         expect(find.text(c.$2), findsOneWidget);
@@ -738,7 +751,7 @@ void main() {
                 required double amount,
                 required String paymentMethod,
                 required String requestKey,
-                required String? accountId,
+                required String accountId,
               }) async =>
                   const FormerMemberDebtReceipt(),
               waiveFormerMemberDebt: ({required String debtId, required String requestKey}) async => const FormerMemberDebtReceipt(),
@@ -753,6 +766,7 @@ void main() {
 
           await _tapKey(tester, 'fmd_pay_d-open');
           expect(tester.takeException(), isNull, reason: 'payment sheet');
+          await pickPayerAccount(tester);
           await _tapKey(tester, 'fmd_pay_submit');
           expect(_k('fmd_confirm_ok'), findsOneWidget);
           expect(tester.takeException(), isNull, reason: 'payment confirmation');

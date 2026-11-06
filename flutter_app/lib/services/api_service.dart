@@ -289,10 +289,10 @@ class ApiService {
     String householdId, {
     required double amount,
     required String paymentMethod,
+    required String accountId,
+    required String requestKey,
     String? wifeUserId,
     String? notes,
-    String? accountId,
-    String? requestKey,
   }) =>
       nafaqah.recordReimbursement(
         householdId: householdId,
@@ -304,15 +304,36 @@ class ApiService {
         requestKey: requestKey,
       );
 
-  /// A payment of what a deleted wife was owed (husband or admin), from
-  /// [accountId] or not tracked in the app (null).
+  /// Reverses a tracked repayment to the wife (husband or admin).
+  Future<double> reverseNafaqahReimbursement(String householdId,
+          {required String reimbursementId, required String requestKey}) =>
+      nafaqah.reverseReimbursement(householdId: householdId, reimbursementId: reimbursementId, requestKey: requestKey);
+
+  /// The wife's "I received X": a pending request.
+  Future<void> createNafaqahReimbursementRequest(String householdId,
+          {required double amount, required String paymentMethod, required String requestKey}) =>
+      nafaqah.createReimbursementRequest(
+          householdId: householdId, amount: amount, paymentMethod: paymentMethod, requestKey: requestKey);
+
+  Future<void> cancelNafaqahReimbursementRequest(String householdId, {required String requestId}) =>
+      nafaqah.cancelReimbursementRequest(householdId: householdId, requestId: requestId);
+
+  Future<double> approveNafaqahReimbursementRequest(String householdId,
+          {required String requestId, required String accountId, required String requestKey}) =>
+      nafaqah.approveReimbursementRequest(
+          householdId: householdId, requestId: requestId, accountId: accountId, requestKey: requestKey);
+
+  Future<void> declineNafaqahReimbursementRequest(String householdId, {required String requestId, String? reason}) =>
+      nafaqah.declineReimbursementRequest(householdId: householdId, requestId: requestId, reason: reason);
+
+  /// A payment of what a deleted wife was owed (husband or admin), from [accountId].
   Future<FormerMemberDebtReceipt> recordFormerMemberDebtPayment(
     String householdId, {
     required String debtId,
     required double amount,
     required String paymentMethod,
     required String requestKey,
-    String? accountId,
+    required String accountId,
   }) =>
       nafaqah.recordFormerMemberDebtPayment(
         householdId: householdId,
@@ -322,6 +343,12 @@ class ApiService {
         requestKey: requestKey,
         accountId: accountId,
       );
+
+  /// Reverses a tracked payment of a deleted wife's record.
+  Future<FormerMemberDebtReceipt> reverseFormerMemberDebtPayment(String householdId,
+          {required String debtId, required String eventId, required String requestKey}) =>
+      nafaqah.reverseFormerMemberDebtPayment(
+          householdId: householdId, debtId: debtId, eventId: eventId, requestKey: requestKey);
 
   /// Her waiver (إبراء) of what remains of a former member's record.
   Future<FormerMemberDebtReceipt> waiveFormerMemberDebt(

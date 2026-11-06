@@ -220,11 +220,17 @@ class ReimbursementBalance {
   /// repayment, before the ledger guard existed). Never negative.
   final double overpaid;
 
+  /// Her requests awaiting approval: shown, never subtracted from [outstanding].
+  final double pendingRequested;
+  final int pendingCount;
+
   const ReimbursementBalance({
     this.grossAdvanced = 0.0,
     this.reimbursed = 0.0,
     this.outstanding = 0.0,
     this.overpaid = 0.0,
+    this.pendingRequested = 0.0,
+    this.pendingCount = 0,
   });
 
   bool get isSettled => outstanding < 0.005;
@@ -236,6 +242,8 @@ class ReimbursementBalance {
         reimbursed: _num(map['reimbursed']),
         outstanding: _num(map['outstanding']),
         overpaid: _num(map['overpaid']),
+        pendingRequested: _num(map['pending_requested']),
+        pendingCount: (map['pending_count'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -299,6 +307,59 @@ class NafaqahPendingDeletion {
   }
 }
 
+const String kRequestPending = 'pending';
+const String kRequestApproved = 'approved';
+const String kRequestDeclined = 'declined';
+const String kRequestCancelled = 'cancelled';
+const String kRequestClosed = 'closed';
+
+/// The wife's "I received X" (migration 20261105001300): pending until the
+/// husband or an admin approves it (a repayment from his account) or declines
+/// it, or she cancels it, or an account deletion closes it. A pending request
+/// moves no money and lowers nothing owed.
+class ReimbursementRequest {
+  final String id;
+  final double amount;
+  final String? paymentMethod;
+
+  /// [kRequestPending], [kRequestApproved], [kRequestDeclined],
+  /// [kRequestCancelled] or [kRequestClosed].
+  final String status;
+
+  /// Only a decline carries one, and only if he gave it.
+  final String? reason;
+  final DateTime? createdAt;
+  final DateTime? decidedAt;
+
+  const ReimbursementRequest({
+    required this.id,
+    required this.amount,
+    this.paymentMethod,
+    this.status = kRequestPending,
+    this.reason,
+    this.createdAt,
+    this.decidedAt,
+  });
+
+  bool get isPending => status == kRequestPending;
+
+  factory ReimbursementRequest.fromMap(Map<String, dynamic> map) => ReimbursementRequest(
+        id: map['id']?.toString() ?? '',
+        amount: _num(map['amount']),
+        paymentMethod: map['payment_method'] as String?,
+        status: map['status']?.toString() ?? kRequestPending,
+        reason: (map['reason'] as String?)?.trim().isEmpty ?? true ? null : (map['reason'] as String).trim(),
+        createdAt: _date(map['created_at']),
+        decidedAt: _date(map['decided_at']),
+      );
+
+  static List<ReimbursementRequest> listFrom(Object? raw) => (raw is List ? raw : const [])
+      .whereType<Map>()
+      .map((r) => ReimbursementRequest.fromMap(Map<String, dynamic>.from(r)))
+      .where((r) => r.id.isNotEmpty)
+      .toList();
+}
+
 class NafaqahWife {
   final String id;
   final String? displayName;
@@ -306,13 +367,28 @@ class NafaqahWife {
   final AllowanceStatus allowance;
   final NafaqahPendingDeletion? pendingDeletion;
 
+  /// Her requests and their outcomes, newest first.
+  final List<ReimbursementRequest> requests;
+
+  /// The viewer is this wife and may ask; null from a server that does not say.
+  final bool? canRequest;
+
+  /// The viewer is the husband or an admin (never this wife) and may record,
+  /// approve, decline and reverse; null from a server that does not say.
+  final bool? canDecide;
+
   const NafaqahWife({
     required this.id,
     this.displayName,
     this.reimbursement = const ReimbursementBalance(),
     this.allowance = const AllowanceStatus(),
     this.pendingDeletion,
+    this.requests = const [],
+    this.canRequest,
+    this.canDecide,
   });
+
+  List<ReimbursementRequest> get pendingRequests => requests.where((r) => r.isPending).toList();
 
   factory NafaqahWife.fromMap(Map<String, dynamic> map) => NafaqahWife(
         id: map['id'] as String? ?? '',
@@ -324,6 +400,9 @@ class NafaqahWife {
           Map<String, dynamic>.from(map['allowance'] as Map? ?? const {}),
         ),
         pendingDeletion: NafaqahPendingDeletion.fromValue(map['pending_deletion']),
+        requests: ReimbursementRequest.listFrom(map['requests']),
+        canRequest: map['can_request'] as bool?,
+        canDecide: map['can_decide'] as bool?,
       );
 }
 
@@ -334,30 +413,44 @@ const String kFormerMemberDebtWaived = 'waived';
 /// One step that reduced a former member's record: a payment, or her waiver
 /// (إبراء) of what remained, in which no money moved.
 class FormerMemberDebtEvent {
-  final String kind; // 'payment' | 'waiver'
+  /// Empty from a server that does not send it (no reverse action then).
+  final String id;
+  final String kind; // 'payment' | 'waiver' | 'reversal'
   final double amount;
   final String? paymentMethod;
   final double remainingAfter;
   final DateTime? createdAt;
 
-  /// Whether the payment moved money out of an account in the app (migration
-  /// 20261105001300), and which; null from a server that does not say.
+  /// Whether it moved money in an account in the app (migration
+  /// 20261105001300), and which: the account a payment left, or the one a
+  /// reversal returned it to; null from a server that does not say.
   final bool? movedBalance;
   final String? accountId;
+
+  /// A payment that a later reversal undid (it stays, marked reversed).
+  final bool reversed;
+
+  /// The viewer may reverse this payment now (the server decides).
+  final bool canReverse;
 
   const FormerMemberDebtEvent({
     required this.kind,
     required this.amount,
+    this.id = '',
     this.paymentMethod,
     this.remainingAfter = 0.0,
     this.createdAt,
     this.movedBalance,
     this.accountId,
+    this.reversed = false,
+    this.canReverse = false,
   });
 
   bool get isWaiver => kind == 'waiver';
+  bool get isReversal => kind == 'reversal';
 
   factory FormerMemberDebtEvent.fromMap(Map<String, dynamic> map) => FormerMemberDebtEvent(
+        id: map['id']?.toString() ?? '',
         kind: map['kind']?.toString() ?? 'payment',
         amount: _num(map['amount']),
         paymentMethod: map['payment_method'] as String?,
@@ -365,6 +458,8 @@ class FormerMemberDebtEvent {
         createdAt: _date(map['created_at']),
         movedBalance: map['moved_balance'] as bool?,
         accountId: map['account_id']?.toString(),
+        reversed: map['reversed'] == true,
+        canReverse: map['can_reverse'] == true && (map['id']?.toString() ?? '').isNotEmpty,
       );
 }
 
@@ -516,6 +611,13 @@ class NafaqahSummary {
   bool get isFamily => mode == 'family_nafaqah' || householdType == 'family' || wives.isNotEmpty;
   bool get callerIsWife => callerRole == 'wife';
 
+  /// The viewer is [wife] herself: she marks what she received (a request).
+  bool canRequestFor(NafaqahWife wife) => wife.canRequest ?? (callerIsWife && callerUserId == wife.id);
+
+  /// The viewer is the husband or an admin (never [wife]): records, approves,
+  /// declines and reverses repayments to her.
+  bool canDecideFor(NafaqahWife wife) => wife.canDecide ?? (canRecordReimbursement && !callerIsWife);
+
   /// The wife the caller is concerned with: herself, or the first wife.
   NafaqahWife? get primaryWife {
     if (wives.isEmpty) return null;
@@ -570,7 +672,8 @@ class NafaqahProviderChange {
       );
 }
 
-/// One line of the wife's ledger: an advance she made or a repayment to her.
+/// One line of the wife's ledger: an advance she made, a repayment to her, or
+/// the reversal of one.
 class NafaqahLedgerEntry {
   final String type; // 'advance' | 'reimbursement'
   final String id;
@@ -580,10 +683,20 @@ class NafaqahLedgerEntry {
   final String? paymentMethod;
   final String? notes;
 
-  /// A repayment: whether it moved money out of an account in the app
-  /// (migration 20261105001300), and which; null from a server that does not say.
+  /// A repayment or reversal: whether it moved money in an account in the app
+  /// (migration 20261105001300), and which (the account a repayment left, or
+  /// the one a reversal returned it to); null from a server that does not say.
   final bool? movedBalance;
   final String? accountId;
+
+  /// 'payment' or 'reversal' (a repayment's reversing entry).
+  final String kind;
+
+  /// A repayment that a later reversal undid: it stays, marked reversed.
+  final bool reversed;
+
+  /// The viewer may reverse this repayment now (the server decides).
+  final bool canReverse;
 
   const NafaqahLedgerEntry({
     required this.type,
@@ -595,9 +708,13 @@ class NafaqahLedgerEntry {
     this.notes,
     this.movedBalance,
     this.accountId,
+    this.kind = 'payment',
+    this.reversed = false,
+    this.canReverse = false,
   });
 
   bool get isAdvance => type == 'advance';
+  bool get isReversal => !isAdvance && kind == 'reversal';
 
   factory NafaqahLedgerEntry.fromMap(Map<String, dynamic> map) => NafaqahLedgerEntry(
         type: map['type'] as String? ?? 'advance',
@@ -609,14 +726,18 @@ class NafaqahLedgerEntry {
         notes: map['notes'] as String?,
         movedBalance: map['moved_balance'] as bool?,
         accountId: map['account_id']?.toString(),
+        kind: map['kind']?.toString() ?? 'payment',
+        reversed: map['reversed'] == true,
+        canReverse: map['can_reverse'] == true,
       );
 }
 
 class NafaqahLedger {
   final ReimbursementBalance balance;
   final List<NafaqahLedgerEntry> history;
+  final List<ReimbursementRequest> requests;
 
-  const NafaqahLedger({this.balance = const ReimbursementBalance(), this.history = const []});
+  const NafaqahLedger({this.balance = const ReimbursementBalance(), this.history = const [], this.requests = const []});
 
   factory NafaqahLedger.fromMap(Map<String, dynamic> map) => NafaqahLedger(
         balance: ReimbursementBalance.fromMap(Map<String, dynamic>.from(map['balance'] as Map? ?? const {})),
@@ -624,6 +745,7 @@ class NafaqahLedger {
             .whereType<Map>()
             .map((e) => NafaqahLedgerEntry.fromMap(Map<String, dynamic>.from(e)))
             .toList(),
+        requests: ReimbursementRequest.listFrom(map['requests']),
       );
 }
 
@@ -634,7 +756,14 @@ class NafaqahLedger {
 /// is no allowance or reimbursement to record), 'invalid' or 'network'.
 /// A former member's record adds 'debt_closed' (already settled or waived),
 /// 'debt_not_found' and 'request_key_reused' (the key was used for another
-/// request).
+/// request). Tracked repayments (migration 20261105001300) add the account
+/// refusals, 'app_update_required' (HTTP 426: this build predates them),
+/// 'wife_must_request', the request codes ('request_not_found',
+/// 'request_not_pending', 'request_exceeds_outstanding',
+/// 'pending_exceeds_outstanding') and the reversal codes
+/// ('already_reversed', 'reversal_not_tracked', 'reversal_account_unavailable',
+/// 'reversal_after_waiver', 'not_reversible', 'reimbursement_not_found',
+/// 'payment_not_found').
 class NafaqahApiException implements Exception {
   final String code;
   final String message;
@@ -645,7 +774,9 @@ class NafaqahApiException implements Exception {
   /// No answer arrived at all (offline, DNS, timeout).
   final bool noResponse;
 
-  /// With 'overpayment': what the server says remains (`detail.outstanding`).
+  /// With 'overpayment' or 'request_exceeds_outstanding': what the server says
+  /// is owed now (`detail.outstanding`). With 'pending_exceeds_outstanding':
+  /// what she can still ask for (`detail.available`).
   final double? outstanding;
 
   /// The request may have taken effect: no answer came back, or the server
@@ -668,13 +799,33 @@ class NafaqahApiException implements Exception {
       'debt_closed',
       'debt_not_found',
       'request_key_reused',
-      // Migration 20261105001300: the account a repayment is paid from.
+      // Migration 20261105001300: the account a repayment is paid from,
+      // the wife's requests and reversals.
       'account_unavailable',
       'account_forbidden',
       'insufficient_funds',
+      'app_update_required',
+      'wife_must_request',
+      'request_not_found',
+      'request_not_pending',
+      'request_exceeds_outstanding',
+      'pending_exceeds_outstanding',
+      'reimbursement_not_found',
+      'payment_not_found',
+      'not_reversible',
+      'already_reversed',
+      'reversal_not_tracked',
+      'reversal_account_unavailable',
+      'reversal_after_waiver',
+      'account_required',
+      'request_key_required',
+      'invalid_reason',
     };
     if (stateCodes.contains(detailCode)) {
       code = detailCode!;
+    } else if (status == 426) {
+      // Upgrade Required: this build predates what the server now asks for.
+      code = 'app_update_required';
     } else if (status == 403) {
       code = 'forbidden';
     } else if (status == 422 || status == 400) {
@@ -682,7 +833,7 @@ class NafaqahApiException implements Exception {
     } else {
       code = 'network';
     }
-    final outstanding = detail is Map ? detail['outstanding'] : null;
+    final outstanding = detail is Map ? (detail['outstanding'] ?? detail['available']) : null;
     // `BaseApiClient.networkErrorKey`: a model does not depend on the API layer.
     return NafaqahApiException(
       code,

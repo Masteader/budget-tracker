@@ -10,6 +10,7 @@ import 'package:budget_tracker/widgets/dashboard/family_reimbursement_card.dart'
 import 'package:budget_tracker/widgets/dashboard/multi_roommate_settlement_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../support/payer_account.dart';
 
 import '../support/fake_settings_supabase.dart';
 import '../support/localized_app.dart';
@@ -123,18 +124,21 @@ void main() {
   group('family reimbursement', () {
     Future<int Function()> reimburseFailing(WidgetTester tester, Object error, {String lang = 'en'}) async {
       var reimbursed = 0;
-      await tester.pumpWidget(localizedApp(
+      await tester.pumpWidget(withPayerAccount(localizedApp(
         FamilyReimbursementCard(
           householdId: 'hh',
           summary: _family(),
           onReimbursed: () => reimbursed++,
-          recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String? accountId, required String requestKey}) async => throw error,
+          recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey}) async => throw error,
         ),
         lang: lang,
-      ));
+      )));
       await tester.pumpAndSettle();
       final l = AppLocalizations(Locale(lang));
       await tester.tap(find.text(l.get('reimburse_wife')));
+      await tester.pumpAndSettle();
+      await pickPayerAccount(tester);
+      await tester.ensureVisible(find.text(l.get('settle_record_payment')));
       await tester.pumpAndSettle();
       await tester.tap(find.text(l.get('settle_record_payment')));
       await tester.pumpAndSettle();

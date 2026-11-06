@@ -36,6 +36,8 @@ Future<NafaqahApiException> _familyFailure(http.Client client) async {
       amount: 10,
       paymentMethod: 'cash',
       wifeUserId: 'w',
+      accountId: 'a',
+      requestKey: 'k',
     );
   } on NafaqahApiException catch (e) {
     return e;

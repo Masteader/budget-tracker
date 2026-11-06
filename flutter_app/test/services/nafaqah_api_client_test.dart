@@ -46,21 +46,75 @@ void main() {
     expect(s.isFamily, isTrue);
   });
 
-  test('recordReimbursement posts a 2-decimal amount and returns the new balance', () async {
+  test('recordReimbursement posts a 2-decimal amount, the account and the key, and returns the new balance', () async {
     final base = _FakeBase()..response = {'status': 'success', 'outstanding_after': 300.5};
-    final after = await NafaqahApiClient(baseClient: base)
-        .recordReimbursement(householdId: 'hh', amount: 200, paymentMethod: 'cash', wifeUserId: 'w');
+    final after = await NafaqahApiClient(baseClient: base).recordReimbursement(
+        householdId: 'hh', amount: 200, paymentMethod: 'cash', wifeUserId: 'w', accountId: 'a-1', requestKey: 'k-1');
     expect(base.method, 'POST');
     expect(base.path, '/households/hh/nafaqah/reimbursements');
-    expect(base.body, {'amount': 200.0, 'payment_method': 'cash', 'wife_user_id': 'w'});
+    expect(base.body, {'amount': 200.0, 'payment_method': 'cash', 'wife_user_id': 'w', 'account_id': 'a-1', 'request_key': 'k-1'});
     expect(after, 300.5);
   });
+
+  test('an old build is told to update: 426 is app_update_required', () async {
+    final base = _FakeBase()..response = {'status': 'error', 'status_code': 426, 'detail': 'Upgrade required'};
+    expect(
+      () => NafaqahApiClient(baseClient: base)
+          .recordReimbursement(householdId: 'hh', amount: 1, paymentMethod: 'cash', accountId: 'a', requestKey: 'k'),
+      throwsA(isA<NafaqahApiException>().having((e) => e.code, 'code', 'app_update_required')),
+    );
+  });
+
+  test('her request, its cancel, approval and decline go to their routes', () async {
+    final base = _FakeBase()..response = {'status': 'success', 'outstanding_after': 70};
+    final client = NafaqahApiClient(baseClient: base);
+    await client.createReimbursementRequest(householdId: 'hh', amount: 30.456, paymentMethod: 'cash', requestKey: 'k-r');
+    expect(base.path, '/households/hh/nafaqah/reimbursement-requests');
+    expect(base.body, {'amount': 30.46, 'payment_method': 'cash', 'request_key': 'k-r'});
+    await client.cancelReimbursementRequest(householdId: 'hh', requestId: 'q-1');
+    expect(base.path, '/households/hh/nafaqah/reimbursement-requests/q-1/cancel');
+    final after = await client.approveReimbursementRequest(householdId: 'hh', requestId: 'q-1', accountId: 'a-1', requestKey: 'k-a');
+    expect(base.path, '/households/hh/nafaqah/reimbursement-requests/q-1/approve');
+    expect(base.body, {'account_id': 'a-1', 'request_key': 'k-a'});
+    expect(after, 70);
+    await client.declineReimbursementRequest(householdId: 'hh', requestId: 'q-1', reason: '  Not yet  ');
+    expect(base.path, '/households/hh/nafaqah/reimbursement-requests/q-1/decline');
+    expect(base.body, {'reason': 'Not yet'});
+    await client.declineReimbursementRequest(householdId: 'hh', requestId: 'q-1');
+    expect(base.body, <String, dynamic>{});
+  });
+
+  test('reversals post only the key', () async {
+    final base = _FakeBase()..response = {'status': 'success', 'outstanding_after': 125, 'remaining': 30, 'event_id': 'e-r'};
+    final client = NafaqahApiClient(baseClient: base);
+    expect(await client.reverseReimbursement(householdId: 'hh', reimbursementId: 'r-1', requestKey: 'k-v'), 125);
+    expect(base.path, '/households/hh/nafaqah/reimbursements/r-1/reversal');
+    expect(base.body, {'request_key': 'k-v'});
+    final r = await client.reverseFormerMemberDebtPayment(householdId: 'hh', debtId: 'd1', eventId: 'e1', requestKey: 'k-w');
+    expect(base.path, '/households/hh/nafaqah/former-member-debts/d1/payments/e1/reversal');
+    expect(base.body, {'request_key': 'k-w'});
+    expect(r.remaining, 30);
+  });
+
+  for (final code in [
+    'request_not_pending', 'request_exceeds_outstanding', 'pending_exceeds_outstanding', 'already_reversed',
+    'reversal_not_tracked', 'reversal_account_unavailable', 'reversal_after_waiver', 'wife_must_request',
+  ]) {
+    test('the server code $code reaches the app', () async {
+      final base = _FakeBase()..response = {'status': 'error', 'status_code': 409, 'detail': {'code': code, 'available': 12.5}};
+      await expectLater(
+        NafaqahApiClient(baseClient: base).reverseReimbursement(householdId: 'hh', reimbursementId: 'r', requestKey: 'k'),
+        throwsA(isA<NafaqahApiException>().having((e) => e.code, 'code', code).having((e) => e.outstanding, 'amount', 12.5)),
+      );
+    });
+  }
 
   test('a rejected reimbursement throws instead of looking recorded', () async {
     final base = _FakeBase()
       ..response = {'status': 'error', 'status_code': 409, 'detail': {'code': 'overpayment'}};
     expect(
-      () => NafaqahApiClient(baseClient: base).recordReimbursement(householdId: 'hh', amount: 999, paymentMethod: 'cash'),
+      () => NafaqahApiClient(baseClient: base)
+          .recordReimbursement(householdId: 'hh', amount: 999, paymentMethod: 'cash', accountId: 'a', requestKey: 'k'),
       throwsA(isA<NafaqahApiException>().having((e) => e.code, 'code', 'overpayment')),
     );
   });
@@ -107,7 +161,7 @@ void main() {
     );
   });
 
-  test('a former member payment posts amount, method and key, nothing else', () async {
+  test('a former member payment posts amount, method, key and account, nothing else', () async {
     final base = _FakeBase()
       ..response = {
         'status': 'open',
@@ -124,10 +178,11 @@ void main() {
       amount: 150.25,
       paymentMethod: 'cash',
       requestKey: 'k-1',
+      accountId: 'a-1',
     );
     expect(base.method, 'POST');
     expect(base.path, '/households/hh/nafaqah/former-member-debts/d1/payments');
-    expect(base.body, {'amount': 150.25, 'payment_method': 'cash', 'request_key': 'k-1'});
+    expect(base.body, {'amount': 150.25, 'payment_method': 'cash', 'request_key': 'k-1', 'account_id': 'a-1'});
     expect(r.replayed, isTrue);
     expect(r.debtId, 'd1');
     expect(r.amount, 150.25);
@@ -156,7 +211,8 @@ void main() {
       };
     final client = NafaqahApiClient(baseClient: base);
     await expectLater(
-      client.recordFormerMemberDebtPayment(householdId: 'hh', debtId: 'd1', amount: 20, paymentMethod: 'cash', requestKey: 'k'),
+      client.recordFormerMemberDebtPayment(
+          householdId: 'hh', debtId: 'd1', amount: 20, paymentMethod: 'cash', requestKey: 'k', accountId: 'a'),
       throwsA(isA<NafaqahApiException>()
           .having((e) => e.code, 'code', 'overpayment')
           .having((e) => e.outstanding, 'outstanding', 12.5)),

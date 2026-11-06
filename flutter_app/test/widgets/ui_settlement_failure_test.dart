@@ -6,6 +6,7 @@ import 'package:budget_tracker/widgets/dashboard/multi_roommate_settlement_card.
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../support/payer_account.dart';
 
 Widget _app(Widget child, {Locale locale = const Locale('en')}) => MaterialApp(
       locale: locale,
@@ -24,7 +25,7 @@ void main() {
   // "Settlement Recorded" and fired the confirmation callback.
   testWidgets('family reimbursement failure is reported, sheet stays open', (tester) async {
     var confirmed = false;
-    await tester.pumpWidget(_app(FamilyReimbursementCard(
+    await tester.pumpWidget(withPayerAccount(householdId: 'hh-1', userId: 'u-h', _app(FamilyReimbursementCard(
       householdId: 'hh-1',
       summary: const NafaqahSummary(
         mode: 'family_nafaqah',
@@ -34,12 +35,15 @@ void main() {
         canRecordReimbursement: true,
       ),
       onReimbursed: () => confirmed = true,
-      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String? accountId, required String requestKey}) async =>
+      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey}) async =>
           throw Exception('HTTP 500'),
-    )));
+    ))));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Reimburse Wife'));
+    await tester.pumpAndSettle();
+    await pickPayerAccount(tester);
+    await tester.ensureVisible(find.text('Record Settlement Payment'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Record Settlement Payment'));
     await tester.pumpAndSettle();

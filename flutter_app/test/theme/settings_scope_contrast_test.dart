@@ -22,6 +22,7 @@ import 'package:budget_tracker/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../support/payer_account.dart';
 
 /// The real scaler reaches routes (sheets, dialogs) through MaterialApp.builder.
 Widget _app(Widget child, {String lang = 'en', bool dark = false, double scale = 1.0, bool scaffold = true}) => MaterialApp(
@@ -85,7 +86,7 @@ void main() {
       tester.view.physicalSize = const Size(390, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
-      await tester.pumpWidget(_app(child, lang: lang, dark: dark, scale: scale));
+      await tester.pumpWidget(withPayerAccount(_app(child, lang: lang, dark: dark, scale: scale)));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       return tester.element(find.byWidget(child));
@@ -118,7 +119,7 @@ void main() {
           FamilyReimbursementCard(
             householdId: 'hh',
             summary: _family,
-            recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String? accountId, required String requestKey}) => pending.future,
+            recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey}) => pending.future,
           ),
         );
         await tester.tap(find.text('Reimburse Wife'));
@@ -132,6 +133,7 @@ void main() {
         final copy = tester.widget<OutlinedButton>(find.ancestor(of: find.text(_copyNote), matching: find.byWidgetPredicate((w) => w is OutlinedButton)));
         expect(_contrast(_fg(copy)!, ctx.cardBg), greaterThanOrEqualTo(4.5));
 
+        await pickPayerAccount(tester);
         final recordFinder = find.ancestor(of: find.text(_recordPayment), matching: find.byWidgetPredicate((w) => w is ElevatedButton));
         await tester.ensureVisible(recordFinder);
         await tester.pump();

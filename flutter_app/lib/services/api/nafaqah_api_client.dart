@@ -30,18 +30,18 @@ class NafaqahApiClient {
     return NafaqahLedger.fromMap(_ok(res));
   }
 
-  /// Records a partial or full repayment; returns the outstanding balance after it.
-  /// [accountId] is the account it is paid from (his balance goes down, hers up
-  /// when she has one); null when not tracked in the app, which moves nothing.
+  /// The husband (or an admin) records a partial or full repayment, paid from
+  /// [accountId]: that account goes down by the amount, hers never changes
+  /// and no budget moves. Returns the outstanding balance after it.
   /// [requestKey] is made once per sheet: a retry is recorded once.
   Future<double> recordReimbursement({
     required String householdId,
     required double amount,
     required String paymentMethod,
+    required String accountId,
+    required String requestKey,
     String? wifeUserId,
     String? notes,
-    String? accountId,
-    String? requestKey,
   }) async {
     final res = await baseClient.post(
       '/households/$householdId/nafaqah/reimbursements',
@@ -50,28 +50,95 @@ class NafaqahApiClient {
         'payment_method': paymentMethod,
         if (wifeUserId != null && wifeUserId.isNotEmpty) 'wife_user_id': wifeUserId,
         if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
-        if (accountId != null && accountId.isNotEmpty) 'account_id': accountId,
-        if (requestKey != null && requestKey.isNotEmpty) 'request_key': requestKey,
+        'account_id': accountId,
+        'request_key': requestKey,
       },
       shouldSign: false,
     );
     return (_ok(res)['outstanding_after'] as num?)?.toDouble() ?? 0.0;
   }
 
+  /// Reverses a tracked repayment in full: the money goes back to the account
+  /// it left and the amount is owed again. Returns what is owed after it.
+  Future<double> reverseReimbursement({
+    required String householdId,
+    required String reimbursementId,
+    required String requestKey,
+  }) async {
+    final res = await baseClient.post(
+      '/households/$householdId/nafaqah/reimbursements/${Uri.encodeComponent(reimbursementId)}/reversal',
+      {'request_key': requestKey},
+      shouldSign: false,
+    );
+    return (_ok(res)['outstanding_after'] as num?)?.toDouble() ?? 0.0;
+  }
+
+  static String _requestsPath(String householdId) => '/households/$householdId/nafaqah/reimbursement-requests';
+
+  /// The wife marks what she received: a pending request. Nothing moves until
+  /// the husband or an admin approves it.
+  Future<void> createReimbursementRequest({
+    required String householdId,
+    required double amount,
+    required String paymentMethod,
+    required String requestKey,
+  }) async {
+    _ok(await baseClient.post(
+      _requestsPath(householdId),
+      {'amount': double.parse(amount.toStringAsFixed(2)), 'payment_method': paymentMethod, 'request_key': requestKey},
+      shouldSign: false,
+    ));
+  }
+
+  /// She cancels her own pending request.
+  Future<void> cancelReimbursementRequest({required String householdId, required String requestId}) async {
+    _ok(await baseClient.post('${_requestsPath(householdId)}/${Uri.encodeComponent(requestId)}/cancel', const {},
+        shouldSign: false));
+  }
+
+  /// The husband or an admin approves her request from [accountId]: exactly
+  /// the requested amount. Returns what is owed after it.
+  Future<double> approveReimbursementRequest({
+    required String householdId,
+    required String requestId,
+    required String accountId,
+    required String requestKey,
+  }) async {
+    final res = await baseClient.post(
+      '${_requestsPath(householdId)}/${Uri.encodeComponent(requestId)}/approve',
+      {'account_id': accountId, 'request_key': requestKey},
+      shouldSign: false,
+    );
+    return (_ok(res)['outstanding_after'] as num?)?.toDouble() ?? 0.0;
+  }
+
+  /// The husband or an admin declines her request, with an optional reason.
+  Future<void> declineReimbursementRequest({
+    required String householdId,
+    required String requestId,
+    String? reason,
+  }) async {
+    _ok(await baseClient.post(
+      '${_requestsPath(householdId)}/${Uri.encodeComponent(requestId)}/decline',
+      {if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim()},
+      shouldSign: false,
+    ));
+  }
+
   static String _debtPath(String householdId, String debtId) =>
       '/households/$householdId/nafaqah/former-member-debts/${Uri.encodeComponent(debtId)}';
 
   /// Records a payment of what was owed to a former member: an amount, a method
-  /// and [accountId], the account it is paid from (its balance goes down; null
-  /// when not tracked in the app). No budget changes. [requestKey] is made once
-  /// per sheet and reused on every retry, so the server records it once.
+  /// and [accountId], the account it is paid from (its balance goes down). No
+  /// budget changes. [requestKey] is made once per sheet and reused on every
+  /// retry, so the server records it once.
   Future<FormerMemberDebtReceipt> recordFormerMemberDebtPayment({
     required String householdId,
     required String debtId,
     required double amount,
     required String paymentMethod,
     required String requestKey,
-    String? accountId,
+    required String accountId,
   }) async {
     final res = await baseClient.post(
       '${_debtPath(householdId, debtId)}/payments',
@@ -79,8 +146,25 @@ class NafaqahApiClient {
         'amount': double.parse(amount.toStringAsFixed(2)),
         'payment_method': paymentMethod,
         'request_key': requestKey,
-        if (accountId != null && accountId.isNotEmpty) 'account_id': accountId,
+        'account_id': accountId,
       },
+      shouldSign: false,
+    );
+    return FormerMemberDebtReceipt.fromMap(_ok(res));
+  }
+
+  /// Reverses a tracked payment of a former member's record: the money goes
+  /// back to its account and the amount back to what remains (a settled record
+  /// opens again).
+  Future<FormerMemberDebtReceipt> reverseFormerMemberDebtPayment({
+    required String householdId,
+    required String debtId,
+    required String eventId,
+    required String requestKey,
+  }) async {
+    final res = await baseClient.post(
+      '${_debtPath(householdId, debtId)}/payments/${Uri.encodeComponent(eventId)}/reversal',
+      {'request_key': requestKey},
       shouldSign: false,
     );
     return FormerMemberDebtReceipt.fromMap(_ok(res));
