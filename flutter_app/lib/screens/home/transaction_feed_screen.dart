@@ -1380,7 +1380,10 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                                   context.read<InstallmentProvider>().fetchPlans(silent: true);
                                                 } catch (_) {}
                                               }
-                                            } else if (res == 'updated') {
+                                            } else if (res == 'updated' || res == 'gone') {
+                                              // 'gone': the row is no longer one this viewer reads
+                                              // (deleted, or a wife's personal purchase they do not
+                                              // read): the reload drops it.
                                               if (context.mounted) {
                                                 context.read<TransactionProvider>().fetchTransactions();
                                                 context.read<BudgetProvider>().refresh();

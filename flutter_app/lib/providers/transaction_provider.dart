@@ -226,10 +226,24 @@ class TransactionProvider extends ChangeNotifier {
   }
 
   void _handleRealtimePayload(PostgresChangePayload payload) {
-    final eventType = payload.eventType;
+    applyRealtimeChange(payload.eventType, newRecord: payload.newRecord, oldRecord: payload.oldRecord);
+  }
 
+  /// Applies one Realtime change of the household's transactions to the list.
+  ///
+  /// Realtime follows the transactions read policy: a viewer only ever gets
+  /// the rows they read (a wife's personal purchase only for her, her husband
+  /// and an admin who is not a wife; owner decision 2026-11-06). An update can
+  /// therefore bring a row the viewer did not have (it became readable to
+  /// them): it is taken in at its place by date, as a fetch would order it. A
+  /// delete carries the id only, and removes nothing the viewer does not have.
+  @visibleForTesting
+  void applyRealtimeChange(
+    PostgresChangeEvent eventType, {
+    Map<String, dynamic> newRecord = const {},
+    Map<String, dynamic> oldRecord = const {},
+  }) {
     if (eventType == PostgresChangeEvent.insert) {
-      final newRecord = payload.newRecord;
       if (newRecord.isNotEmpty) {
         final tx = Transaction.fromMap(Map<String, dynamic>.from(newRecord));
         // Prevent duplicate insertion if already in list
@@ -241,18 +255,20 @@ class TransactionProvider extends ChangeNotifier {
         }
       }
     } else if (eventType == PostgresChangeEvent.update) {
-      final updatedRecord = payload.newRecord;
-      if (updatedRecord.isNotEmpty) {
-        final tx = Transaction.fromMap(Map<String, dynamic>.from(updatedRecord));
+      if (newRecord.isNotEmpty) {
+        final tx = Transaction.fromMap(Map<String, dynamic>.from(newRecord));
         final idx = _transactions.indexWhere((t) => t.id == tx.id);
         if (idx != -1) {
           _transactions[idx] = tx;
-          _recomputeFiltered();
-          notifyListeners();
+        } else {
+          // Newest first, as fetchTransactions orders them.
+          final at = _transactions.indexWhere((t) => t.timestamp.isBefore(tx.timestamp));
+          _transactions.insert(at == -1 ? _transactions.length : at, tx);
         }
+        _recomputeFiltered();
+        notifyListeners();
       }
     } else if (eventType == PostgresChangeEvent.delete) {
-      final oldRecord = payload.oldRecord;
       final deletedId = oldRecord['id'] as String?;
       if (deletedId != null) {
         _transactions.removeWhere((t) => t.id == deletedId);

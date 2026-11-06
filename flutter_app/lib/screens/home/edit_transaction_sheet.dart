@@ -34,6 +34,20 @@ import '../../utils/failure_log.dart';
 /// Reads the stored Nafaqah fields (`nafaqah_class`, `nafaqah_spouse_id`) of a transaction.
 typedef NafaqahFieldsLoader = Future<Map<String, dynamic>?> Function(String transactionId);
 
+/// The row an edit or a delete was for is no longer one the viewer reads:
+/// another member deleted it, or it became a wife's personal purchase the
+/// viewer does not read (owner decision 2026-11-06). The database changed
+/// nothing (RLS filters the row out without an error).
+class TransactionRowGone implements Exception {
+  const TransactionRowGone();
+}
+
+/// Throws [TransactionRowGone] when a write's returned rows (`.select()`) are
+/// empty: it reached no row.
+void requireRowReached(Object? rows) {
+  if (rows is List && rows.isEmpty) throw const TransactionRowGone();
+}
+
 /// Writes [values] to the transaction row (defaults to a Supabase update).
 typedef TransactionRowUpdater = Future<void> Function(String transactionId, Map<String, dynamic> values);
 
@@ -852,13 +866,21 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   Future<void> _updateRow(Map<String, dynamic> values) async {
     final update = widget.updateRow;
     if (update != null) return update(widget.transaction.id, values);
-    await supabase.from('transactions').update(values).eq('id', widget.transaction.id);
+    requireRowReached(await supabase.from('transactions').update(values).eq('id', widget.transaction.id).select('id'));
   }
 
   Future<void> _deleteRow() async {
     final delete = widget.deleteRow;
     if (delete != null) return delete(widget.transaction.id);
-    await supabase.from('transactions').delete().eq('id', widget.transaction.id);
+    requireRowReached(await supabase.from('transactions').delete().eq('id', widget.transaction.id).select('id'));
+  }
+
+  /// The row is gone for this viewer: say so, change nothing, and close with
+  /// 'gone' so the feed reloads.
+  void _rowGone() {
+    if (!mounted) return;
+    AppSnackBar.showError(context, context.tr('fmd_err_not_found'), title: context.tr('update_error'));
+    Navigator.pop(context, 'gone');
   }
 
   Future<void> _saveChanges() async {
@@ -938,6 +960,8 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
           title: context.tr('changes_saved'),
         );
       }
+    } on TransactionRowGone {
+      _rowGone();
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -995,6 +1019,8 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
           title: context.tr('tx_deleted'),
         );
       }
+    } on TransactionRowGone {
+      _rowGone();
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
