@@ -107,6 +107,72 @@ void main() {
     );
   });
 
+  test('a former member payment posts amount, method and key, nothing else', () async {
+    final base = _FakeBase()
+      ..response = {
+        'status': 'open',
+        'replayed': true,
+        'debt_id': 'd1',
+        'event_id': 'e1',
+        'amount': 150.25,
+        'payment_method': 'cash',
+        'remaining': 249.75,
+      };
+    final r = await NafaqahApiClient(baseClient: base).recordFormerMemberDebtPayment(
+      householdId: 'hh',
+      debtId: 'd1',
+      amount: 150.25,
+      paymentMethod: 'cash',
+      requestKey: 'k-1',
+    );
+    expect(base.method, 'POST');
+    expect(base.path, '/households/hh/nafaqah/former-member-debts/d1/payments');
+    expect(base.body, {'amount': 150.25, 'payment_method': 'cash', 'request_key': 'k-1'});
+    expect(r.replayed, isTrue);
+    expect(r.debtId, 'd1');
+    expect(r.amount, 150.25);
+    expect(r.paymentMethod, 'cash');
+    expect(r.remaining, 249.75);
+  });
+
+  test('a former member waiver posts only the key', () async {
+    final base = _FakeBase()
+      ..response = {'status': 'waived', 'replayed': false, 'debt_id': 'd1', 'event_id': 'e2', 'waived_amount': 400, 'remaining': 0};
+    final r = await NafaqahApiClient(baseClient: base).waiveFormerMemberDebt(householdId: 'hh', debtId: 'd1', requestKey: 'k-2');
+    expect(base.method, 'POST');
+    expect(base.path, '/households/hh/nafaqah/former-member-debts/d1/waiver');
+    expect(base.body, {'request_key': 'k-2'});
+    expect(r.status, 'waived');
+    expect(r.amount, 400);
+    expect(r.remaining, 0);
+  });
+
+  test('a refused former member write throws its code', () async {
+    final base = _FakeBase()
+      ..response = {
+        'status': 'error',
+        'status_code': 409,
+        'detail': {'code': 'overpayment', 'outstanding': 12.5},
+      };
+    final client = NafaqahApiClient(baseClient: base);
+    await expectLater(
+      client.recordFormerMemberDebtPayment(householdId: 'hh', debtId: 'd1', amount: 20, paymentMethod: 'cash', requestKey: 'k'),
+      throwsA(isA<NafaqahApiException>()
+          .having((e) => e.code, 'code', 'overpayment')
+          .having((e) => e.outstanding, 'outstanding', 12.5)),
+    );
+    base.response = {'status': 'error', 'status_code': 409, 'detail': {'code': 'debt_closed'}};
+    await expectLater(
+      client.waiveFormerMemberDebt(householdId: 'hh', debtId: 'd1', requestKey: 'k'),
+      throwsA(isA<NafaqahApiException>().having((e) => e.code, 'code', 'debt_closed')),
+    );
+    base.response = {'status': 'error', 'status_code': 503};
+    await expectLater(
+      client.waiveFormerMemberDebt(householdId: 'hh', debtId: 'd1', requestKey: 'k'),
+      throwsA(isA<NafaqahApiException>().having((e) => e.outcomeUnknown, 'outcomeUnknown', isTrue)),
+    );
+  });
+
   test('fetchLedger forwards the wife id', () async {
     final base = _FakeBase()..response = {'balance': {'outstanding': 1}, 'history': []};
     final l = await NafaqahApiClient(baseClient: base).fetchLedger(householdId: 'hh', wifeUserId: 'w');

@@ -10,6 +10,8 @@
 /// 4. Whatever the husband pays is an ordinary household expense (no class).
 library;
 
+import 'dart:math' as math;
+
 const String kWifeReimbursable = 'wife_reimbursable';
 const String kWifePersonal = 'wife_personal';
 
@@ -277,17 +279,39 @@ class AllowanceStatus {
       );
 }
 
+DateTime? _date(Object? v) => v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
+
+/// The wife has scheduled her account's deletion while the husband still owes
+/// her. Sent only to the creditor (the husband, or the admins of a family with
+/// no provider), so he can settle before the purge keeps an anonymised record.
+class NafaqahPendingDeletion {
+  final DateTime scheduledFor;
+  final double outstanding;
+
+  const NafaqahPendingDeletion({required this.scheduledFor, required this.outstanding});
+
+  /// Null for anything but a map with a readable date: no date, no notice.
+  static NafaqahPendingDeletion? fromValue(Object? value) {
+    if (value is! Map) return null;
+    final when = _date(value['scheduled_for']);
+    if (when == null) return null;
+    return NafaqahPendingDeletion(scheduledFor: when, outstanding: _num(value['outstanding']));
+  }
+}
+
 class NafaqahWife {
   final String id;
   final String? displayName;
   final ReimbursementBalance reimbursement;
   final AllowanceStatus allowance;
+  final NafaqahPendingDeletion? pendingDeletion;
 
   const NafaqahWife({
     required this.id,
     this.displayName,
     this.reimbursement = const ReimbursementBalance(),
     this.allowance = const AllowanceStatus(),
+    this.pendingDeletion,
   });
 
   factory NafaqahWife.fromMap(Map<String, dynamic> map) => NafaqahWife(
@@ -299,6 +323,130 @@ class NafaqahWife {
         allowance: AllowanceStatus.fromMap(
           Map<String, dynamic>.from(map['allowance'] as Map? ?? const {}),
         ),
+        pendingDeletion: NafaqahPendingDeletion.fromValue(map['pending_deletion']),
+      );
+}
+
+const String kFormerMemberDebtOpen = 'open';
+const String kFormerMemberDebtSettled = 'settled';
+const String kFormerMemberDebtWaived = 'waived';
+
+/// One step that reduced a former member's record: a payment, or her waiver
+/// (إبراء) of what remained, in which no money moved.
+class FormerMemberDebtEvent {
+  final String kind; // 'payment' | 'waiver'
+  final double amount;
+  final String? paymentMethod;
+  final double remainingAfter;
+  final DateTime? createdAt;
+
+  const FormerMemberDebtEvent({
+    required this.kind,
+    required this.amount,
+    this.paymentMethod,
+    this.remainingAfter = 0.0,
+    this.createdAt,
+  });
+
+  bool get isWaiver => kind == 'waiver';
+
+  factory FormerMemberDebtEvent.fromMap(Map<String, dynamic> map) => FormerMemberDebtEvent(
+        kind: map['kind']?.toString() ?? 'payment',
+        amount: _num(map['amount']),
+        paymentMethod: map['payment_method'] as String?,
+        remainingAfter: _num(map['remaining_after']),
+        createdAt: _date(map['created_at']),
+      );
+}
+
+/// What a wife who deleted her account was still owed, kept by the household
+/// without her name (one record per household). The husband or an admin
+/// closes it by payments or by recording her waiver; it then stays in history.
+class FormerMemberDebt {
+  final String id;
+  final double originalAmount;
+  final double paidAmount;
+  final double remaining;
+
+  /// 'open' | 'settled' | 'waived'. Anything else is shown but offers no action.
+  final String status;
+  final DateTime? createdAt;
+  final DateTime? closedAt;
+
+  /// Oldest first.
+  final List<FormerMemberDebtEvent> events;
+
+  const FormerMemberDebt({
+    required this.id,
+    this.originalAmount = 0.0,
+    this.paidAmount = 0.0,
+    this.remaining = 0.0,
+    this.status = '',
+    this.createdAt,
+    this.closedAt,
+    this.events = const [],
+  });
+
+  bool get isOpen => status == kFormerMemberDebtOpen;
+  bool get isSettled => status == kFormerMemberDebtSettled;
+  bool get isWaived => status == kFormerMemberDebtWaived;
+
+  /// What her waiver released (no money moved for it).
+  double get waivedAmount => events.where((e) => e.isWaiver).fold(0.0, (sum, e) => sum + e.amount);
+
+  factory FormerMemberDebt.fromMap(Map<String, dynamic> map) {
+    final original = _num(map['original_amount']);
+    final paid = _num(map['paid_amount']);
+    final rawEvents = map['events'];
+    return FormerMemberDebt(
+      id: map['id']?.toString() ?? '',
+      originalAmount: original,
+      paidAmount: paid,
+      remaining: map['remaining'] is num
+          ? _num(map['remaining'])
+          : math.max(0, ((original - paid) * 100).round()) / 100,
+      status: map['status']?.toString() ?? '',
+      createdAt: _date(map['created_at']),
+      closedAt: _date(map['closed_at']),
+      events: (rawEvents is List ? rawEvents : const [])
+          .whereType<Map>()
+          .map((e) => FormerMemberDebtEvent.fromMap(Map<String, dynamic>.from(e)))
+          .toList(),
+    );
+  }
+}
+
+/// The answer to a payment or a waiver of a former member's record.
+/// [replayed]: the server had already recorded this request key.
+class FormerMemberDebtReceipt {
+  final String? status;
+  final bool replayed;
+  final String? debtId;
+  final String? eventId;
+
+  /// The payment, or for a waiver what it released.
+  final double amount;
+  final String? paymentMethod;
+  final double remaining;
+
+  const FormerMemberDebtReceipt({
+    this.status,
+    this.replayed = false,
+    this.debtId,
+    this.eventId,
+    this.amount = 0.0,
+    this.paymentMethod,
+    this.remaining = 0.0,
+  });
+
+  factory FormerMemberDebtReceipt.fromMap(Map<String, dynamic> map) => FormerMemberDebtReceipt(
+        status: map['status'] as String?,
+        replayed: map['replayed'] == true,
+        debtId: map['debt_id']?.toString(),
+        eventId: map['event_id']?.toString(),
+        amount: _num(map['amount'] ?? map['waived_amount']),
+        paymentMethod: map['payment_method'] as String?,
+        remaining: _num(map['remaining']),
       );
 }
 
@@ -327,6 +475,12 @@ class NafaqahSummary {
   /// 'family' | 'roommates' (`household_type`), when the server sends it.
   final String? householdType;
 
+  /// What deleted wives were still owed, newest first, visible to every member.
+  final List<FormerMemberDebt> formerMemberDebts;
+
+  /// The caller (the husband/provider or an admin) may record payments or a waiver.
+  final bool canManageFormerMemberDebts;
+
   const NafaqahSummary({
     this.mode = 'not_family',
     this.callerRole,
@@ -341,6 +495,8 @@ class NafaqahSummary {
     this.needsProvider = false,
     this.canSetProvider = false,
     this.householdType,
+    this.formerMemberDebts = const [],
+    this.canManageFormerMemberDebts = false,
   });
 
   bool get isFamily => mode == 'family_nafaqah' || householdType == 'family' || wives.isNotEmpty;
@@ -374,6 +530,12 @@ class NafaqahSummary {
       needsProvider: map['needs_provider'] as bool? ?? false,
       canSetProvider: map['can_set_provider'] as bool? ?? false,
       householdType: map['household_type'] as String?,
+      formerMemberDebts: (map['former_member_debts'] is List ? map['former_member_debts'] as List : const [])
+          .whereType<Map>()
+          .map((d) => FormerMemberDebt.fromMap(Map<String, dynamic>.from(d)))
+          .where((d) => d.id.isNotEmpty)
+          .toList(),
+      canManageFormerMemberDebts: map['can_manage_former_member_debts'] == true,
     );
   }
 }
@@ -447,15 +609,21 @@ class NafaqahLedger {
 /// ledger repaid beyond her advances), 'no_provider' (the family has no
 /// Nafaqah provider yet), 'no_wife' (the family has no wife member, so there
 /// is no allowance or reimbursement to record), 'invalid' or 'network'.
+/// A former member's record adds 'debt_closed' (already settled or waived),
+/// 'debt_not_found' and 'request_key_reused' (the key was used for another
+/// request).
 class NafaqahApiException implements Exception {
   final String code;
   final String message;
   final int? statusCode;
 
-  const NafaqahApiException(this.code, this.message, {this.statusCode, this.noResponse = false});
+  const NafaqahApiException(this.code, this.message, {this.statusCode, this.noResponse = false, this.outstanding});
 
   /// No answer arrived at all (offline, DNS, timeout).
   final bool noResponse;
+
+  /// With 'overpayment': what the server says remains (`detail.outstanding`).
+  final double? outstanding;
 
   /// The request may have taken effect: no answer came back, or the server
   /// failed without saying what it stored. See `ApiRequestException.outcomeUnknown`.
@@ -474,6 +642,9 @@ class NafaqahApiException implements Exception {
       'no_provider',
       'no_wife',
       'account_pending_deletion',
+      'debt_closed',
+      'debt_not_found',
+      'request_key_reused',
     };
     if (stateCodes.contains(detailCode)) {
       code = detailCode!;
@@ -484,8 +655,15 @@ class NafaqahApiException implements Exception {
     } else {
       code = 'network';
     }
+    final outstanding = detail is Map ? detail['outstanding'] : null;
     // `BaseApiClient.networkErrorKey`: a model does not depend on the API layer.
-    return NafaqahApiException(code, message, statusCode: status, noResponse: res['network_error'] == true);
+    return NafaqahApiException(
+      code,
+      message,
+      statusCode: status,
+      noResponse: res['network_error'] == true,
+      outstanding: outstanding is num ? outstanding.toDouble() : double.tryParse('${outstanding ?? ''}'),
+    );
   }
 
   @override

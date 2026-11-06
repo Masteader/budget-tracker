@@ -51,6 +51,46 @@ class NafaqahApiClient {
     return (_ok(res)['outstanding_after'] as num?)?.toDouble() ?? 0.0;
   }
 
+  static String _debtPath(String householdId, String debtId) =>
+      '/households/$householdId/nafaqah/former-member-debts/${Uri.encodeComponent(debtId)}';
+
+  /// Records a payment of what was owed to a former member: an amount and a
+  /// method, never an account (no balance or budget changes). [requestKey] is
+  /// made once per sheet and reused on every retry, so the server records it once.
+  Future<FormerMemberDebtReceipt> recordFormerMemberDebtPayment({
+    required String householdId,
+    required String debtId,
+    required double amount,
+    required String paymentMethod,
+    required String requestKey,
+  }) async {
+    final res = await baseClient.post(
+      '${_debtPath(householdId, debtId)}/payments',
+      {
+        'amount': double.parse(amount.toStringAsFixed(2)),
+        'payment_method': paymentMethod,
+        'request_key': requestKey,
+      },
+      shouldSign: false,
+    );
+    return FormerMemberDebtReceipt.fromMap(_ok(res));
+  }
+
+  /// Records that the former member waived what remained (إبراء): the record
+  /// closes as waived and no money moves.
+  Future<FormerMemberDebtReceipt> waiveFormerMemberDebt({
+    required String householdId,
+    required String debtId,
+    required String requestKey,
+  }) async {
+    final res = await baseClient.post(
+      '${_debtPath(householdId, debtId)}/waiver',
+      {'request_key': requestKey},
+      shouldSign: false,
+    );
+    return FormerMemberDebtReceipt.fromMap(_ok(res));
+  }
+
   /// Chooses the household's Nafaqah provider (husband): a non-spouse member.
   /// Household admins only; the server answers 403 for anyone else and 422
   /// for a wife or a non-member.

@@ -14,8 +14,11 @@ import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
 import '../card_error_state.dart';
+import '../nafaqah/former_member_debt_panel.dart';
 import '../nafaqah/wife_allowance_card.dart';
 import '../settings/settings_section.dart' show isLargeText;
+
+export '../nafaqah/former_member_debt_panel.dart' show FormerMemberDebtPaymentRecorder, FormerMemberDebtWaiver;
 
 /// Records a roommate settlement payment (used by the roommate card).
 typedef ReimbursementRecorder = Future<Map<String, dynamic>> Function(ReimbursementRecordRequest request);
@@ -51,6 +54,8 @@ class FamilyReimbursementCard extends StatefulWidget {
   final NafaqahReimbursementRecorder? recordReimbursement;
   final NafaqahLedgerLoader? loadLedger;
   final AllowanceSetter? setAllowance;
+  final FormerMemberDebtPaymentRecorder? recordFormerMemberDebtPayment;
+  final FormerMemberDebtWaiver? waiveFormerMemberDebt;
   final Widget? emptyPlaceholder;
 
   const FamilyReimbursementCard({
@@ -63,6 +68,8 @@ class FamilyReimbursementCard extends StatefulWidget {
     this.recordReimbursement,
     this.loadLedger,
     this.setAllowance,
+    this.recordFormerMemberDebtPayment,
+    this.waiveFormerMemberDebt,
     this.emptyPlaceholder,
   });
 
@@ -161,13 +168,19 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
     }
     if (summary == null || !summary.isFamily) return widget.emptyPlaceholder ?? const SizedBox.shrink();
 
-    final wives = summary.callerIsWife
+    final wives = summary.callerIsWife && summary.primaryWife != null
         ? [summary.primaryWife!]
         : summary.wives;
     final showNames = wives.length > 1;
+    final debts = summary.formerMemberDebts;
 
-    if (wives.isEmpty && !summary.needsProvider && !_failed) {
+    if (wives.isEmpty && !summary.needsProvider && debts.isEmpty && !_failed) {
       return widget.emptyPlaceholder ?? const SizedBox.shrink();
+    }
+
+    void onDebtChanged() {
+      widget.onReimbursed?.call();
+      _loadSummary();
     }
 
     return Column(
@@ -212,6 +225,25 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
             showWifeName: showNames,
             setAllowance: widget.setAllowance,
             onChanged: _loadSummary,
+          ),
+        ],
+        // A deleted wife's record outlives her membership: shown even when no
+        // wife remains (the settings placeholder still explains the missing role).
+        if (debts.isNotEmpty && wives.isEmpty && !summary.needsProvider && widget.emptyPlaceholder != null) ...[
+          widget.emptyPlaceholder!,
+          const SizedBox(height: 12),
+        ],
+        for (var i = 0; i < debts.length; i++) ...[
+          if (i > 0 || wives.isNotEmpty) const SizedBox(height: 12),
+          FormerMemberDebtPanel(
+            key: ValueKey('fmd_panel_${debts[i].id}'),
+            debt: debts[i],
+            canManage: summary.canManageFormerMemberDebts,
+            householdId: widget.householdId,
+            recordPayment: widget.recordFormerMemberDebtPayment,
+            waive: widget.waiveFormerMemberDebt,
+            onChanged: onDebtChanged,
+            onRefresh: _loadSummary,
           ),
         ],
       ],
@@ -350,6 +382,21 @@ class _ReimbursementPanel extends StatelessWidget {
               ],
             ),
           const SizedBox(height: 14),
+          if (wife.pendingDeletion != null) ...[
+            _NoticeBanner(
+              key: ValueKey('fmd_pending_deletion_${wife.id}'),
+              icon: Icons.event_busy_rounded,
+              title: context.tr('fmd_notice_title'),
+              message: context.trArgs('fmd_notice_body', {
+                'name': (wife.displayName ?? '').trim().isNotEmpty
+                    ? wife.displayName!.trim()
+                    : context.tr(summary.callerRole == 'husband' ? 'fmd_notice_your_wife' : 'fmd_notice_the_wife'),
+                'date': AppLocalizations.of(context).date(wife.pendingDeletion!.scheduledFor, 'd MMMM yyyy'),
+                'amount': context.sar(wife.pendingDeletion!.outstanding),
+              }),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (!isSettled) ...[
             Text('$owedLabel:', style: TextStyle(color: context.textSecondary, fontSize: 12)),
             const SizedBox(height: 2),

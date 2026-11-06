@@ -300,6 +300,30 @@ class ApiService {
         notes: notes,
       );
 
+  /// A payment of what a deleted wife was owed (husband or admin; no account).
+  Future<FormerMemberDebtReceipt> recordFormerMemberDebtPayment(
+    String householdId, {
+    required String debtId,
+    required double amount,
+    required String paymentMethod,
+    required String requestKey,
+  }) =>
+      nafaqah.recordFormerMemberDebtPayment(
+        householdId: householdId,
+        debtId: debtId,
+        amount: amount,
+        paymentMethod: paymentMethod,
+        requestKey: requestKey,
+      );
+
+  /// Her waiver (إبراء) of what remains of a former member's record.
+  Future<FormerMemberDebtReceipt> waiveFormerMemberDebt(
+    String householdId, {
+    required String debtId,
+    required String requestKey,
+  }) =>
+      nafaqah.waiveFormerMemberDebt(householdId: householdId, debtId: debtId, requestKey: requestKey);
+
   Future<AllowanceStatus> setWifeAllowance(
     String householdId, {
     required double amount,
