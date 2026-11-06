@@ -6,9 +6,14 @@ import '../services/api_service.dart';
 
 /// Centralized reactive state provider for BNPL & installment plans (Tamara, Tabby, Bank).
 class InstallmentProvider extends ChangeNotifier {
-  InstallmentProvider({ApiService? api}) : _apiOverride = api;
+  InstallmentProvider({ApiService? api, @visibleForTesting Future<List<dynamic>> Function(String planId)? deleteRow})
+      : _apiOverride = api,
+        _deleteRowOverride = deleteRow;
 
   final ApiService? _apiOverride;
+
+  /// Deletes the plan row and returns the rows it reached (a Supabase delete by default).
+  final Future<List<dynamic>> Function(String planId)? _deleteRowOverride;
   ApiService get _api => _apiOverride ?? ApiService.instance;
 
   String? _householdId;
@@ -108,15 +113,22 @@ class InstallmentProvider extends ChangeNotifier {
     }
   }
 
-  /// Deletes an installment plan.
+  /// Deletes an installment plan. True when the delete reached the plan;
+  /// false when it reached no row: the plan is gone, or it is one the viewer
+  /// no longer reads (the plan of a wife's personal purchase is read only by
+  /// her, her husband and an admin who is not a wife; owner decision
+  /// 2026-11-06), which RLS filters out without an error. Either way the list
+  /// reloads. A failed delete throws.
   Future<bool> deletePlan(String planId) async {
     try {
-      await supabase.from('installment_plans').delete().eq('id', planId);
+      final deleteRow = _deleteRowOverride ??
+          (String id) async => await supabase.from('installment_plans').delete().eq('id', id).select('id');
+      final rows = await deleteRow(planId);
       await fetchPlans(silent: true);
-      return true;
+      return rows.isNotEmpty;
     } catch (e) {
       debugPrint('[InstallmentProvider] Error deleting installment plan: $e');
-      return false;
+      rethrow;
     }
   }
 

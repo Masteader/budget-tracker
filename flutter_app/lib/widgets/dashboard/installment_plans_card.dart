@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../../main.dart';
 import '../../models/installment_plan.dart';
 import '../../providers/installment_provider.dart';
 import '../../providers/transaction_provider.dart';
@@ -1238,16 +1237,25 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                             ),
                                           );
                                           if (confirmed == true && context.mounted) {
+                                            // False: the delete reached no row (the plan is gone, or
+                                            // it is one this viewer no longer reads): never "deleted".
+                                            bool deleted;
                                             try {
-                                              await context.read<InstallmentProvider>().deletePlan(plan.id);
-                                            } catch (_) {
-                                              try {
-                                                await supabase.from('installment_plans').delete().eq('id', plan.id);
-                                              } catch (_) {}
+                                              deleted = await context.read<InstallmentProvider>().deletePlan(plan.id);
+                                            } catch (e) {
+                                              if (context.mounted) {
+                                                AppSnackBar.showError(context, e.toString(), title: context.tr('delete_error'));
+                                              }
+                                              return;
                                             }
                                             if (!context.mounted) return;
                                             if (mounted) setState(() => _loadPlans());
-                                            AppSnackBar.showSuccess(context, context.tr('installment_deleted'));
+                                            if (deleted) {
+                                              AppSnackBar.showSuccess(context, context.tr('installment_deleted'));
+                                            } else {
+                                              AppSnackBar.showError(context, context.tr('fmd_err_not_found'),
+                                                  title: context.tr('delete_error'));
+                                            }
                                           }
                                         }
                                       },
