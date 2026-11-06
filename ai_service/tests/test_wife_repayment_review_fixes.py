@@ -141,6 +141,18 @@ def test_r1_01_a_wife_admin_reverses_no_pool_repayment(co_wife):
     assert _calls(co_wife, "reverse_spouse_reimbursement") == []
 
 
+def test_r1_01_a_wife_reverses_nothing_even_where_no_account_is_checked(co_wife):
+    """A row with no transfer has no account to check: she is refused as a wife, before the database."""
+    legacy = "b9000000-0000-4000-8000-0000000000ab"
+    co_wife.tables["spouse_reimbursements"].append(
+        {"id": legacy, "household_id": HH, "wife_user_id": WIFE, "paid_by_user_id": HUSBAND, "amount": 5.0,
+         "payment_method": "cash", "notes": None, "recorded_by": HUSBAND, "created_at": "2026-11-01T10:00:00+00:00"})
+    for caller in (WIFE, WIFE2):
+        resp = _reverse(caller, legacy)
+        assert resp.status_code == 403, (caller, resp.text)
+    assert _calls(co_wife, "reverse_spouse_reimbursement") == []
+
+
 def test_r1_01_the_summary_offers_a_wife_admin_nothing_to_decide(co_wife):
     body = client.get(f"/households/{HH}/nafaqah", headers=bearer(WIFE2)).json()
     assert body["can_record_reimbursement"] is False
