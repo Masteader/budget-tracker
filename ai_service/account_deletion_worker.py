@@ -13,7 +13,8 @@ storage or Auth call. A reminder names a date, and with the purge off that date 
 so no reminder goes out whatever the other switch says.
 
 ACCOUNT_DELETION_EMAILS_ENABLED: on top of the first, lets account holders and household members get
-email (T-7, T-1, completion, member marked, member T-7). Purge on and this off is allowed, so purges
+email (T-7, T-1, completion, member marked, member T-7, and the husband of a leaving wife still owed
+money, with the amount). Purge on and this off is allowed, so purges
 can be tested first: no notice is sent or marked sent, so reminders still in their window go out
 when it comes on. A completion email is skipped: the job still completes, and that email is never
 sent, because the address goes with the account. Developer alerts depend on neither switch.
@@ -236,12 +237,19 @@ def _mark_notice(client: Any, request_id: str, notice: str) -> None:
         logger.warning("Account deletion job %s: could not mark %s (%s).", request_id, notice, type(exc).__name__)
 
 
-def _send_notices(client: Any) -> None:
+def _list_notices(client: Any, name: str) -> List[Dict[str, Any]]:
     try:
-        rows = _rpc(client, "list_account_deletion_notices_due") or []
+        return list(_rpc(client, name) or [])
     except Exception as exc:  # noqa: BLE001 - mail never blocks a purge
         logger.warning("Could not list account deletion notices (%s).", type(exc).__name__)
-        return
+        return []
+
+
+def _send_notices(client: Any) -> None:
+    # The holder's and members' notices, then what a leaving wife is owed (creditor_owed, to the
+    # husband, with the amount). Each list failing alone leaves the other.
+    rows = _list_notices(client, "list_account_deletion_notices_due") + _list_notices(
+        client, "list_former_member_debt_notices_due")
 
     # holder_completion is sent by the job itself, after the Auth delete.
     rows = [r for r in rows if r.get("notice") != "holder_completion"]
@@ -267,7 +275,7 @@ def _send_notices(client: Any) -> None:
                 if email is None:
                     unreachable += 1
                     continue
-                message = notices.compose(notice, row.get("locale"), row.get("scheduled_for"))
+                message = notices.compose(notice, row.get("locale"), row.get("scheduled_for"), row.get("amount"))
             except Exception as exc:  # noqa: BLE001 - counts as not delivered
                 logger.warning("Account deletion job %s: %s not prepared (%s).", request_id, notice, type(exc).__name__)
                 continue

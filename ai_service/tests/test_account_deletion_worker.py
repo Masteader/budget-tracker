@@ -141,6 +141,7 @@ class FakeClient:
 DEFAULT_RESULTS = {
     "get_account_deletion_queue_summary": {"due": 3, "in_progress": 1, "failed": 2, "overdue": 1},
     "list_account_deletion_notices_due": [],
+    "list_former_member_debt_notices_due": [],
     "list_account_deletion_alerts_due": [],
     "prepare_account_purge": {"prepared": True, "deferred": False, "deleted_households": 0},
     "list_account_purge_storage": [],
@@ -200,7 +201,7 @@ def test_disabled_makes_no_purge_call_of_any_kind(monkeypatch, caplog, mailer, v
     client = FakeClient(jobs=[job()])
     boom = AssertionError("a purge call was made while disabled")
     for name in (DESTRUCTIVE_RPCS - PURGE_OFF_RPCS) | {"list_account_purge_storage", "list_account_deletion_notices_due",
-                                                       "auth.delete", "auth.get", "storage.remove"}:
+                                                       "list_former_member_debt_notices_due", "auth.delete", "auth.get", "storage.remove"}:
         client.failures[name] = boom
 
     with caplog.at_level("INFO"):
@@ -551,7 +552,7 @@ def test_an_empty_or_already_removed_folder_is_fine(enabled, mailer):
     "failing",
     ["prepare_account_purge", "list_account_purge_storage", "storage.remove", "mark_account_purge_storage_done",
      "auth.get", "auth.delete", "complete_account_purge", "list_account_deletion_notices_due",
-     "list_account_deletion_alerts_due", "record_account_deletion_worker_run", "purge_expired_account_deletion_inquiries"],
+     "list_former_member_debt_notices_due", "list_account_deletion_alerts_due", "record_account_deletion_worker_run", "purge_expired_account_deletion_inquiries"],
 )
 def test_raw_errors_emails_and_tokens_are_never_logged(enabled, mailer, caplog, failing):
     client = FakeClient(jobs=[job()])
@@ -785,7 +786,7 @@ def test_with_the_purge_off_no_reminder_goes_even_with_emails_on(monkeypatch, ma
     client = FakeClient(jobs=[job()])
     boom = AssertionError("a call was made while the purge is off")
     for name in (DESTRUCTIVE_RPCS - PURGE_OFF_RPCS) | {"list_account_purge_storage", "list_account_deletion_notices_due",
-                                                       "auth.delete", "auth.get", "storage.remove"}:
+                                                       "list_former_member_debt_notices_due", "auth.delete", "auth.get", "storage.remove"}:
         client.failures[name] = boom
     client.results["list_account_deletion_notices_due"] = _due_notices()
 
@@ -1008,7 +1009,12 @@ def test_notice_names_match_the_database():
     text = (MIGRATIONS / "20261105000400_account_deletion_worker_support.sql").read_text(encoding="utf-8")
     for notice in _ALL_NOTICES:
         assert f"'{notice}'" in text
-    assert set(notices.NOTICES) == set(_ALL_NOTICES)
+    # The creditor's notice (test_former_member_debt.py): its own list, the same mark function.
+    debt = (MIGRATIONS / "20261105001200_account_deletion_former_member_debt.sql").read_text(encoding="utf-8")
+    mark = debt[debt.index("FUNCTION public.mark_account_deletion_notice_sent"):]
+    for notice in _ALL_NOTICES + ("ops_failed", "ops_overdue", "creditor_owed"):
+        assert f"'{notice}'" in mark[:mark.index("$$;")], notice
+    assert set(notices.NOTICES) == set(_ALL_NOTICES) | {"creditor_owed"}
 
 
 def test_the_web_api_gains_no_purge_route():

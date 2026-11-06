@@ -18,9 +18,18 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from auth import get_current_user_id, verify_household_access, verify_household_admin_access
-from models import NafaqahAllowanceSetRequest, NafaqahProviderSetRequest, NafaqahReimbursementCreateRequest
+from models import (
+    FormerMemberDebtPaymentRequest,
+    FormerMemberDebtWaiverRequest,
+    NafaqahAllowanceSetRequest,
+    NafaqahProviderSetRequest,
+    NafaqahReimbursementCreateRequest,
+)
 from nafaqah_service import (
+    DebtClosed,
+    DebtNotFound,
     InvalidNafaqahRequest,
+    RequestKeyReused,
     NoWifeInHousehold,
     LedgerWouldBeOverpaid,
     NafaqahClassificationForbidden,
@@ -34,8 +43,10 @@ from nafaqah_service import (
     get_allowance,
     get_reimbursement_ledger,
     load_family_context,
+    record_former_member_debt_payment,
     record_reimbursement,
     resolve_wife_id,
+    waive_former_member_debt,
     set_allowance,
     set_provider,
 )
@@ -49,7 +60,8 @@ _CYCLE_KEY_PATTERN = r"^[0-9]{4}-(0[1-9]|1[0-2])$"
 
 
 def nafaqah_http_error(exc: NafaqahError) -> HTTPException:
-    """Rule violations → 403 (who), 409 (state: not a family / overpayment / ledger / no provider), 422 (input)."""
+    """Rule violations → 403 (who), 404 (no such record here), 409 (state: not a family / overpayment /
+    ledger / no provider / record closed), 422 (input)."""
     if isinstance(exc, NafaqahClassificationForbidden):
         # D2: the recorder may not classify (chat / receipt / DB refusal); the client shows why.
         return HTTPException(
@@ -68,6 +80,10 @@ def nafaqah_http_error(exc: NafaqahError) -> HTTPException:
         )
     if isinstance(exc, NoProviderError):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"message": str(exc), "code": "no_provider"})
+    if isinstance(exc, DebtNotFound):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"message": str(exc), "code": exc.code})
+    if isinstance(exc, (DebtClosed, RequestKeyReused)):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"message": str(exc), "code": exc.code})
     if isinstance(exc, NotFamilyHousehold):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"message": str(exc), "code": "not_family"})
     if isinstance(exc, AccountPendingDeletion):
@@ -224,3 +240,56 @@ async def nafaqah_set_provider(
         return {**result, "summary": build_summary(load_family_context(household_id), caller)}
 
     return await _run(work, public_message="Failed to set the Nafaqah provider.")
+
+
+# ─── A former member's record (migration 20261105001200) ────────────────────────
+# What the husband still owed a wife who deleted her account. The husband or any admin closes it:
+# a payment (amount and payment method, as an ordinary reimbursement: no account or budget moves)
+# or her waiver (إبراء). request_key makes a retried tap record once.
+
+
+@router.post(
+    "/households/{household_id}/nafaqah/former-member-debts/{debt_id}/payments",
+    tags=["nafaqah"],
+    summary="Record a payment of what was owed to a former member (husband or household admin).",
+)
+async def nafaqah_former_member_debt_payment(
+    household_id: str,
+    debt_id: str,
+    payload: FormerMemberDebtPaymentRequest,
+    request: Request,
+    _auth: str = Depends(verify_household_access),
+):
+    validate_uuid(household_id)
+    validate_uuid(debt_id)
+    caller = get_current_user_id(request)
+
+    def work():
+        return record_former_member_debt_payment(
+            load_family_context(household_id), caller, debt_id, str(payload.amount),
+            payload.payment_method, payload.request_key,
+        )
+
+    return await _run(work, public_message="Failed to record the payment.")
+
+
+@router.post(
+    "/households/{household_id}/nafaqah/former-member-debts/{debt_id}/waiver",
+    tags=["nafaqah"],
+    summary="Record that the former member waived what remained (husband or household admin).",
+)
+async def nafaqah_former_member_debt_waiver(
+    household_id: str,
+    debt_id: str,
+    payload: FormerMemberDebtWaiverRequest,
+    request: Request,
+    _auth: str = Depends(verify_household_access),
+):
+    validate_uuid(household_id)
+    validate_uuid(debt_id)
+    caller = get_current_user_id(request)
+
+    def work():
+        return waive_former_member_debt(load_family_context(household_id), caller, debt_id, payload.request_key)
+
+    return await _run(work, public_message="Failed to record the waiver.")

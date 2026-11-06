@@ -111,6 +111,24 @@ class OverpaymentError(NafaqahError):
         self.outstanding = outstanding
 
 
+class DebtNotFound(NafaqahError):
+    """No such former member record in this household (HTTP 404)."""
+
+    code = "debt_not_found"
+
+
+class DebtClosed(NafaqahError):
+    """The former member record is already settled or waived (HTTP 409)."""
+
+    code = "debt_closed"
+
+
+class RequestKeyReused(NafaqahError):
+    """The request key already recorded a different action on this record (HTTP 409)."""
+
+    code = "request_key_reused"
+
+
 # ─── Money ────────────────────────────────────────────────────────────────────
 
 def _decimal(value: Any) -> Decimal:
@@ -594,6 +612,17 @@ def _map_db_error(exc: Exception) -> Exception:
     guard = account_deletion_guard_error(exc)
     if guard is not None:
         return AccountPendingDeletion(str(guard), guard.code)
+    # Migration 20261105001200 (the former member record): every refusal carries a HINT.
+    if hint == "debt_not_found":
+        return DebtNotFound("No such record in this household.")
+    if hint == "debt_closed":
+        return DebtClosed("This record is already settled or waived.")
+    if hint == "request_key_reused":
+        return RequestKeyReused("This request was already used for a different action.")
+    if hint in ("invalid_amount", "invalid_payment_method", "request_key_required"):
+        return InvalidNafaqahRequest("The database rejected the request.")
+    if hint == "forbidden":
+        return NafaqahForbidden("Only the husband or a household admin can close this record.")
     if hint == "overpayment" or "exceeds the outstanding balance" in message:
         return OverpaymentError("Reimbursement exceeds the outstanding balance.")
     if hint == LEDGER_WOULD_BE_OVERPAID or "ledger overpaid" in message:
@@ -746,6 +775,186 @@ def record_reimbursement(
     }
 
 
+# ─── A former member's record (migration 20261105001200) ───────────────────────
+#
+# When a wife deletes her account, the purge keeps one anonymised record per household of what
+# the husband still owed her. It is closed by a payment (an amount and a payment method, exactly
+# as record_reimbursement takes them: no account, budget or transaction moves) or by her waiver
+# (إبراء). Both go through SECURITY DEFINER RPCs with the verified caller; the checks here only
+# answer early and clearly, the database decides.
+
+
+def can_manage_former_member_debts(ctx: FamilyContext, actor_id: Optional[str]) -> bool:
+    """The household's Nafaqah provider (the husband) or any admin, co-admins included."""
+    if not ctx.is_member(actor_id):
+        return False
+    return ctx.is_admin(actor_id) or (bool(ctx.provider_user_id) and str(actor_id) == ctx.provider_user_id)
+
+
+def _debt_view(row: Dict[str, Any], events: List[Dict[str, Any]]) -> Dict[str, Any]:
+    original_h = to_halalas(row.get("original_amount"))
+    paid_h = to_halalas(row.get("paid_amount"))
+    ordered = sorted(events, key=lambda e: (str(e.get("created_at") or ""), -to_halalas(e.get("remaining_after"))))
+    return {
+        "id": row.get("id"),
+        "original_amount": halalas_to_sar(original_h),
+        "paid_amount": halalas_to_sar(paid_h),
+        "remaining": halalas_to_sar(original_h - paid_h),
+        "status": row.get("status"),
+        "created_at": row.get("created_at"),
+        "closed_at": row.get("closed_at"),
+        # Who recorded each step is not shown: the record names no one.
+        "events": [
+            {
+                "kind": e.get("kind"),
+                "amount": halalas_to_sar(to_halalas(e.get("amount"))),
+                "payment_method": e.get("payment_method"),
+                "remaining_after": halalas_to_sar(to_halalas(e.get("remaining_after"))),
+                "created_at": e.get("created_at"),
+            }
+            for e in ordered
+        ],
+    }
+
+
+def list_former_member_debts(ctx: FamilyContext) -> List[Dict[str, Any]]:
+    """The household's records, newest first, each with its payments and waiver, oldest first."""
+    client = get_client()
+    rows = (
+        client.table("former_member_debts")
+        .select("id, original_amount, paid_amount, status, created_at, closed_at")
+        .eq("household_id", ctx.household_id)
+        .execute()
+    ).data or []
+    if not rows:
+        return []
+    ids = [str(r["id"]) for r in rows if r.get("id")]
+    events = (
+        client.table("former_member_debt_events")
+        .select("debt_id, kind, amount, payment_method, remaining_after, created_at")
+        .in_("debt_id", ids)
+        .execute()
+    ).data or []
+    by_debt: Dict[str, List[Dict[str, Any]]] = {}
+    for e in events:
+        by_debt.setdefault(str(e.get("debt_id")), []).append(e)
+    rows.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
+    return [_debt_view(r, by_debt.get(str(r.get("id")), [])) for r in rows]
+
+
+def _rpc_mapped(name: str, params: Dict[str, Any]) -> Any:
+    try:
+        return get_client().rpc(name, params).execute().data
+    except Exception as exc:
+        mapped = _map_db_error(exc)
+        if mapped is exc:
+            raise
+        raise mapped from exc
+
+
+def get_deletion_notices(ctx: FamilyContext, caller_id: str) -> Dict[str, Dict[str, Any]]:
+    """{wife id: {scheduled_for, outstanding}} for the creditor of the household (the husband, or
+    the admins when it has none); empty for anyone else. The database decides who that is."""
+    data = _rpc_mapped(
+        "get_former_member_debt_deletion_notices",
+        {"p_household_id": ctx.household_id, "p_actor_user_id": caller_id},
+    )
+    out: Dict[str, Dict[str, Any]] = {}
+    for row in data if isinstance(data, list) else []:
+        wife = str(row.get("wife_user_id") or "")
+        if wife:
+            out[wife] = {
+                "scheduled_for": row.get("scheduled_for"),
+                "outstanding": halalas_to_sar(to_halalas(row.get("outstanding"))),
+            }
+    return out
+
+
+def _former_member_debt(ctx: FamilyContext, debt_id: str) -> Dict[str, Any]:
+    row = first_row(
+        get_client()
+        .table("former_member_debts")
+        .select("id, household_id, original_amount, paid_amount, status")
+        .eq("id", debt_id)
+        .eq("household_id", ctx.household_id)
+    )
+    if not row:
+        raise DebtNotFound("No such record in this household.")
+    return row
+
+
+def _require_debt_manager(ctx: FamilyContext, actor_id: str) -> None:
+    _require_member(ctx, actor_id)
+    if not can_manage_former_member_debts(ctx, actor_id):
+        raise NafaqahForbidden("Only the husband or a household admin can close this record.")
+
+
+def record_former_member_debt_payment(
+    ctx: FamilyContext,
+    actor_id: str,
+    debt_id: str,
+    amount: Any,
+    payment_method: str,
+    request_key: str,
+) -> Dict[str, Any]:
+    """A partial or full payment of a former member's record; never more than remains."""
+    _require_debt_manager(ctx, actor_id)
+    value = parse_sar_amount(amount, allow_zero=False)
+    method = _norm(payment_method) or "cash"
+    if method not in PAYMENT_METHODS:
+        raise InvalidNafaqahRequest(f"Unsupported payment method {payment_method!r}.")
+
+    row = _former_member_debt(ctx, debt_id)
+    if row.get("status") != "open":
+        raise DebtClosed("This record is already settled or waived.")
+    remaining_h = to_halalas(row.get("original_amount")) - to_halalas(row.get("paid_amount"))
+    if to_halalas(value) > remaining_h:
+        raise OverpaymentError("Payment exceeds what remains of this record.", outstanding=halalas_to_sar(remaining_h))
+
+    data = _rpc_mapped("record_former_member_debt_payment", {
+        "p_household_id": ctx.household_id,
+        "p_debt_id": debt_id,
+        # Exact decimal text ("123.40"): PostgREST casts it to the numeric parameter.
+        "p_amount": format(value, "f"),
+        "p_payment_method": method,
+        "p_request_key": request_key,
+        "p_actor_user_id": actor_id,
+    })
+    data = data if isinstance(data, dict) else {}
+    return {
+        "status": data.get("status"),
+        "replayed": bool(data.get("replayed")),
+        "debt_id": data.get("debt_id") or debt_id,
+        "event_id": data.get("event_id"),
+        "amount": halalas_to_sar(to_halalas(data.get("amount", value))),
+        "payment_method": data.get("payment_method") or method,
+        "remaining": halalas_to_sar(to_halalas(data.get("remaining"))),
+    }
+
+
+def waive_former_member_debt(ctx: FamilyContext, actor_id: str, debt_id: str, request_key: str) -> Dict[str, Any]:
+    """Her release (إبراء): closes the record as waived; no money moves."""
+    _require_debt_manager(ctx, actor_id)
+    row = _former_member_debt(ctx, debt_id)
+    if row.get("status") != "open":
+        raise DebtClosed("This record is already settled or waived.")
+    data = _rpc_mapped("waive_former_member_debt", {
+        "p_household_id": ctx.household_id,
+        "p_debt_id": debt_id,
+        "p_request_key": request_key,
+        "p_actor_user_id": actor_id,
+    })
+    data = data if isinstance(data, dict) else {}
+    return {
+        "status": data.get("status"),
+        "replayed": bool(data.get("replayed")),
+        "debt_id": data.get("debt_id") or debt_id,
+        "event_id": data.get("event_id"),
+        "waived_amount": halalas_to_sar(to_halalas(data.get("waived_amount"))),
+        "remaining": halalas_to_sar(to_halalas(data.get("remaining"))),
+    }
+
+
 # ─── Personal allowance (rule 3) ──────────────────────────────────────────────
 
 def get_allowance(ctx: FamilyContext, wife_id: str, cycle_key: Optional[str]) -> Dict[str, Any]:
@@ -849,9 +1058,12 @@ def build_summary(ctx: FamilyContext, caller_id: str, cycle_key: Optional[str] =
             "wives": [],
             "can_set_allowance": False,
             "can_record_reimbursement": False,
+            "former_member_debts": [],
+            "can_manage_former_member_debts": False,
             **provider_fields,
         }
     cycle = _resolve_cycle(ctx, cycle_key)
+    pending = get_deletion_notices(ctx, caller_id) if ctx.wives else {}
     wives = []
     for wife in ctx.wives:
         wives.append({
@@ -859,6 +1071,8 @@ def build_summary(ctx: FamilyContext, caller_id: str, cycle_key: Optional[str] =
             "display_name": wife["display_name"],
             "reimbursement": get_reimbursement_ledger(ctx, wife["id"])["balance"],
             "allowance": get_allowance(ctx, wife["id"], cycle),
+            # Only for the husband (or the admins without one): she scheduled her deletion.
+            "pending_deletion": pending.get(wife["id"]),
         })
     return {
         "household_id": ctx.household_id,
@@ -873,6 +1087,8 @@ def build_summary(ctx: FamilyContext, caller_id: str, cycle_key: Optional[str] =
         "wives": wives,
         "can_set_allowance": can_set_allowance(ctx, caller_id),
         "can_record_reimbursement": can_record_reimbursement(ctx, caller_id),
+        "former_member_debts": list_former_member_debts(ctx),
+        "can_manage_former_member_debts": can_manage_former_member_debts(ctx, caller_id),
         **provider_fields,
     }
 

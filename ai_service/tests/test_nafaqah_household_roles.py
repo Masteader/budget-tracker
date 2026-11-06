@@ -151,9 +151,10 @@ def test_admin_changes_the_provider_through_the_rpc(homes):
     body = res.json()
     assert body["provider_user_id"] == HUSBAND and body["previous_provider_user_id"] == SON
     assert body["summary"]["husband"]["id"] == HUSBAND and body["summary"]["provider_user_id"] == HUSBAND
-    name, params = homes.rpc_calls[-1]
-    assert name == "set_nafaqah_provider"
-    assert params == {"p_household_id": SON_HOUSE, "p_user_id": HUSBAND, "p_actor_user_id": SON}
+    # The write, then only the summary's read of pending deletion notices (migration 20261105001200).
+    names = [n for n, _ in homes.rpc_calls]
+    assert names[-2:] == ["set_nafaqah_provider", "get_former_member_debt_deletion_notices"]
+    assert homes.rpc_calls[-2][1] == {"p_household_id": SON_HOUSE, "p_user_id": HUSBAND, "p_actor_user_id": SON}
     assert ns.load_family_context(SON_HOUSE).husband_id == HUSBAND
 
 

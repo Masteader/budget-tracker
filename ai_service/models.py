@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Annotated, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Monetary inputs: finite, non-negative, bounded. Pydantic floats accept NaN/Infinity by default
 # (and Starlette's JSON parser accepts the NaN/Infinity literals), which Postgres numeric stores,
@@ -222,6 +222,46 @@ class NafaqahReimbursementCreateRequest(BaseModel):
     @classmethod
     def validate_wife_uuid(cls, v: Optional[str]) -> Optional[str]:
         return _uuid_validator(v)
+
+
+def _required_uuid(v: str) -> str:
+    """A UUID, normalised to lowercase text (the client's idempotency key)."""
+    try:
+        return str(UUID(str(v)))
+    except (ValueError, AttributeError, TypeError):
+        raise ValueError("Invalid UUID")
+
+
+class FormerMemberDebtPaymentRequest(BaseModel):
+    """A payment of what was owed to a former member (migration 20261105001200). The same fields
+    as an ordinary reimbursement: an amount and a payment method, never an account."""
+    model_config = ConfigDict(extra="forbid")
+
+    amount: PositiveMoney = Field(..., description="Payment in SAR (partial or full; never above what remains)")
+    payment_method: str = Field(default="cash", pattern=r"^(stc_pay|urpay|bank_transfer|iban|cash|other)$")
+    request_key: str = Field(..., description="Client idempotency key (UUID), the same for every retry of one tap")
+
+    @field_validator("amount")
+    @classmethod
+    def validate_amount_precision(cls, v: float) -> float:
+        return _two_decimals(v)
+
+    @field_validator("request_key")
+    @classmethod
+    def validate_request_key(cls, v: str) -> str:
+        return _required_uuid(v)
+
+
+class FormerMemberDebtWaiverRequest(BaseModel):
+    """Her release (إبراء) of what remains of a former member's record."""
+    model_config = ConfigDict(extra="forbid")
+
+    request_key: str = Field(..., description="Client idempotency key (UUID)")
+
+    @field_validator("request_key")
+    @classmethod
+    def validate_request_key(cls, v: str) -> str:
+        return _required_uuid(v)
 
 
 class NafaqahAllowanceSetRequest(BaseModel):

@@ -3,7 +3,9 @@
 An account holder's email is in the language of their request. A household member's is in all
 three (Arabic, then English, then Urdu): members have no stored language of their own.
 
-The names are the ones public.list_account_deletion_notices_due returns. Plain text, no links: the
+The names are the ones public.list_account_deletion_notices_due returns, plus 'creditor_owed' from
+public.list_former_member_debt_notices_due: the husband of a wife who is still owed money, told the
+amount when she schedules her deletion, in all three languages like a member. Plain text, no links: the
 app is where a deletion is cancelled, and a link in a deletion email is what a phishing copy would
 imitate.
 """
@@ -11,6 +13,7 @@ imitate.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Optional, Union
 
 from mail_service import OutboundEmail
@@ -135,13 +138,48 @@ _TEMPLATES = {
             "جو کچھ رکھنا چاہتے ہیں اسے اس تاریخ سے پہلے ایکسپورٹ کر لیں۔\n",
         ),
     },
+    # To the husband (or the household's admins when it has no Nafaqah provider) when a wife who
+    # is still owed for shared expenses schedules her deletion (migration 20261105001200). It never
+    # names her: the household's own records do.
+    "creditor_owed": {
+        "en": (
+            "Qawam Money: a member of your household will delete her account on {date}",
+            "A member of your household in Qawam Money has scheduled her account to be deleted on {date}.\n\n"
+            "The household's Nafaqah records show SAR {amount} still owed to her for shared expenses she "
+            "paid from her own money.\n\n"
+            "Please settle it with her before that date. After the deletion, the household keeps one record "
+            "with no name: \"Outstanding owed to a former member: SAR {amount}\". You or a household admin "
+            "can then record what is paid, or record that she waived it.\n",
+        ),
+        "ar": (
+            "قوام المال: عضوة في منزلك ستحذف حسابها بتاريخ {date}",
+            "جدولت عضوة في منزلك في قوام المال حذف حسابها بتاريخ {date}.\n\n"
+            "تُظهر سجلات النفقة في المنزل مبلغ {amount} ريال ما زال مستحقاً لها عن مصروفات مشتركة دفعتها "
+            "من مالها الخاص.\n\n"
+            "يُرجى تسوية المبلغ معها قبل هذا التاريخ. بعد الحذف يحتفظ المنزل بسجل واحد بلا اسم: "
+            "\"مستحق لعضو سابق: {amount} ريال\". ويمكنك أنت أو مدير المنزل بعدها تسجيل ما يُدفع، "
+            "أو تسجيل أنها أبرأت منه.\n",
+        ),
+        "ur": (
+            "قوام المال: آپ کے گھرانے کی ایک رکن {date} کو اپنا اکاؤنٹ حذف کریں گی",
+            "قوام المال میں آپ کے گھرانے کی ایک رکن نے {date} کو اپنا اکاؤنٹ حذف کرنا طے کیا ہے۔\n\n"
+            "گھرانے کے نفقہ ریکارڈ کے مطابق مشترکہ اخراجات کے {amount} ریال، جو انہوں نے اپنی رقم سے ادا کیے تھے، "
+            "ابھی تک انہیں واجب الادا ہیں۔\n\n"
+            "براہ کرم اس تاریخ سے پہلے ان کے ساتھ یہ رقم طے کر لیں۔ حذف کے بعد گھرانے میں بغیر نام کے ایک ریکارڈ "
+            "رہے گا: \"سابق رکن کا واجب الادا: {amount} ریال\"۔ اس کے بعد آپ یا گھرانے کا منتظم ادا کی گئی رقم درج "
+            "کر سکتا ہے، یا یہ درج کر سکتا ہے کہ انہوں نے اسے معاف کر دیا۔\n",
+        ),
+    },
 }
 
 NOTICES = tuple(_TEMPLATES)
 
+# Notices that state an amount: never sent without it.
+AMOUNT_NOTICES = ("creditor_owed",)
+
 # Members have no stored language, and the request's locale is the requester's, so a member gets
-# every language, Arabic first.
-TRILINGUAL_NOTICES = ("member_marked", "member_t7")
+# every language, Arabic first. So does the creditor of a leaving wife.
+TRILINGUAL_NOTICES = ("member_marked", "member_t7", "creditor_owed")
 TRILINGUAL_ORDER = ("ar", "en", "ur")
 _SUBJECT_SEPARATOR = " / "
 _BODY_SEPARATOR = "\n----------\n\n"
@@ -156,14 +194,37 @@ def _riyadh_date(value: Union[str, datetime, None]) -> str:
     return parsed.astimezone(RIYADH_TZ).strftime("%Y-%m-%d")
 
 
-def compose(notice: str, locale: Optional[str], scheduled_for: Union[str, datetime, None] = None) -> OutboundEmail:
+def _sar(value: Union[str, int, float, Decimal, None]) -> str:
+    """A SAR amount as the email shows it: 1,234.50."""
+    try:
+        amount = Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except (InvalidOperation, ValueError):
+        raise ValueError("invalid amount") from None
+    if not amount.is_finite() or amount <= 0:
+        raise ValueError("invalid amount")
+    return f"{amount:,.2f}"
+
+
+def compose(
+    notice: str,
+    locale: Optional[str],
+    scheduled_for: Union[str, datetime, None] = None,
+    amount: Union[str, int, float, Decimal, None] = None,
+) -> OutboundEmail:
     """The email for ``notice``. A holder's is in their locale, an unknown one getting Arabic. A
-    member's is in Arabic, English and Urdu, in that order, whatever ``locale`` is. An unknown
-    notice raises ValueError."""
+    member's or a creditor's is in Arabic, English and Urdu, in that order, whatever ``locale`` is.
+    An unknown notice, or a creditor notice without a positive amount, raises ValueError."""
     languages = _TEMPLATES.get(notice)
     if languages is None:
         raise ValueError("unknown account deletion notice")
     date = _riyadh_date(scheduled_for)
+    if notice in AMOUNT_NOTICES:
+        if amount is None:
+            raise ValueError("this notice needs an amount")
+        sar = _sar(amount)
+        languages = {
+            lang: (subject, body.replace("{amount}", sar)) for lang, (subject, body) in languages.items()
+        }
     if notice in TRILINGUAL_NOTICES:
         parts = [languages[lang] for lang in TRILINGUAL_ORDER]
         subject = _SUBJECT_SEPARATOR.join(s for s, _ in parts)
