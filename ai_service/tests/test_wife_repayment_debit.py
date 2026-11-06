@@ -536,6 +536,23 @@ def test_the_summary_says_who_asks_and_who_decides(family, caller, can_request, 
     assert wife["reimbursement"]["outstanding"] == 225.0 and wife["reimbursement"]["pending_requested"] == 30.0
 
 
+def test_a_wife_who_is_an_admin_still_asks_and_decides_nothing_of_her_own(family):
+    """Admin rights never let her record, approve or reverse repayments to herself."""
+    for m in family.tables["household_memberships"]:
+        if m["user_id"] == WIFE:
+            m["role"] = "admin"
+    wife = client.get(f"/households/{HH}/nafaqah", headers=bearer(WIFE)).json()["wives"][0]
+    assert (wife["can_request"], wife["can_decide"]) == (True, False)
+    resp = client.get(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(WIFE))
+    assert not any(h.get("can_reverse") for h in resp.json()["history"])
+    assert _repay(WIFE, account_id=HER_ACCOUNT, request_key=KEY).json()["detail"]["code"] == "wife_must_request"
+    assert client.post(_q(f"/{Q_PENDING}/approve"), headers=bearer(WIFE),
+                       json={"account_id": POOL, "request_key": KEY}).status_code == 403
+    assert client.post(f"/households/{HH}/nafaqah/reimbursements/{R_NEW}/reversal", headers=bearer(WIFE),
+                       json={"request_key": KEY}).status_code == 403
+    assert _calls(family, "record_spouse_reimbursement") == _calls(family, "approve_spouse_reimbursement_request") == []
+
+
 def test_the_settlement_figures_are_net_of_reversals(family):
     from settlement_engine import _nafaqah_balance
 
