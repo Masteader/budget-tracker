@@ -64,7 +64,8 @@ REPLAY_DEPENDENCIES = {
 ROLLOUT_BATCH = "20261105000000"
 ROLLOUT_HOTFIXES = ("20261105000500",)
 # Files an operator may run again while following the chain. Each must be harmless the second time.
-ROLLOUT_RERUN = ("20261105000500", "20261105000600", "20261105000700", "20261105001200")
+# Run in this order: 001200 after 001300 puts its own 6-argument payment back, which must stay harmless.
+ROLLOUT_RERUN = ("20261105000500", "20261105000600", "20261105000700", "20261105001300", "20261105001200")
 # Run by hand on live (2026-11-05). Live has no cost_control_templates table.
 ROLLOUT_ALREADY_ON_LIVE = """
 REVOKE TRUNCATE ON public.inquiries FROM anon, authenticated;
@@ -74,7 +75,7 @@ REVOKE TRUNCATE ON public.inquiries FROM anon, authenticated;
 DRIFT_MISSING = ("20261026120000",)
 # Tests that do not need what the drifted database lacks (42 and 43 test that migration's objects).
 DRIFT_TESTS = ("36_", "37_", "38_", "39_", "40_", "41_", "44_", "45_", "46_", "47_", "49_", "50_", "51_", "52_", "53_",
-               "54_", "55_")
+               "54_", "55_", "56_", "57_")
 
 # Live as measured read-only on 2026-11-05: exactly these two older files never ran, 000500 and
 # REVOKE TRUNCATE on inquiries did, and cost_control_sub_categories holds 50 rows with no
@@ -252,8 +253,8 @@ def rollout_order_check(db_name, test_files, suffix="rollout", skip=(), seed_sql
 
     failed = [t for t in test_files if not run_sql_file(t, db_name=rollout_db, use_psql=True, quiet=True)]
 
-    print("Running " + ", ".join(ROLLOUT_RERUN) + " again, as an operator following the chain might.")
-    rerun_failed = apply(migrations_of(ROLLOUT_RERUN), "re-run")
+    print("Running " + ", ".join(ROLLOUT_RERUN) + " again, in that order, as an operator following the chain might.")
+    rerun_failed = apply([m for prefix in ROLLOUT_RERUN for m in migrations_of([prefix])], "re-run")
     if rerun_failed:
         drop()
         return sorted(set(failed)) + rerun_failed
