@@ -6,9 +6,11 @@
 -- Rule: .agents/rules/02-saudi-fintech-and-islamic-compliance.md, family mode rule 2
 --
 -- Verifies, one finding each (every check is collected, so a failing run lists them all):
---   R1-01  Only the husband, or a household admin who is not a wife, records, approves, declines,
---          pays a former member's record, waives it or reverses; a wife never does, even as an
---          admin, for a co-wife or a former member; a wife never pays from a pool.
+--   R1-01  Only the husband (when he is gone, a household admin who is not a wife: review R3-01,
+--          test 62) records, approves, declines, pays a former member's record, waives it or
+--          reverses; a wife never does, even as an admin, for a co-wife or a former member; a
+--          wife never pays from a pool. Where an admin acts below, the husband is gone (the
+--          provider cleared for that step).
 --   R1-03  A repayment, an approval or a smaller advance that leaves her pending requests above
 --          what is owed closes the ones that no longer fit ('already_repaid', nothing moves):
 --          kept oldest first while they fit, so the most recent close first and a later one that
@@ -16,7 +18,8 @@
 --   R1-04  The same key with a different amount, account, actor or kind: request_key_reused.
 --   R1-05  A replay answers the stored outstanding_before / outstanding_after.
 --   R1-07  A personal-account repayment is reversed by the account's owner while he is a member
---          and not a wife, whatever his role now; a pool repayment by any admin who is not a wife.
+--          and not a wife, whatever his role now; a pool repayment by the husband if he is an
+--          admin (an admin who is not a wife when he is gone: review R3-01).
 --   R1-08  The ledger records who actually paid; the purge still anonymises a deleted payer.
 --   R1-13  Each debit and credit is labelled on the transfer row (purpose), which the account's
 --          members read; a former member's line carries no text of hers.
@@ -359,13 +362,16 @@ BEGIN
         pg_temp.raw(format('SELECT public.nafaqah_repayment_lock_account(%L, %L, %L)::text', pg_temp.h(1), pg_temp.u(3), pg_temp.a(1))),
         'ERR:account_forbidden');
 
-    -- Those who may still do it.
-    v_res := pg_temp.repay(5, 1, 2, '10', 1, 110);   -- A, from the pool
-    PERFORM pg_temp.check('R1-01 a non-wife admin pays from a pool', pg_temp.j(v_res, 'success'), 'true');
-    PERFORM pg_temp.keep('pA', pg_temp.j(v_res, 'reimbursement_id'));
+    -- Those who may still do it: the husband; while he is there, no admin (review R3-01).
     v_res := pg_temp.repay(1, 1, 2, '10', 2, 111);   -- H, not an admin, from his own
     PERFORM pg_temp.check('R1-01 the husband pays from his own account', pg_temp.j(v_res, 'success'), 'true');
     PERFORM pg_temp.keep('pH', pg_temp.j(v_res, 'reimbursement_id'));
+    PERFORM pg_temp.check('R3-01 a non-wife admin, while the husband is there', pg_temp.repay(5, 1, 2, '10', 1, 109), 'ERR:forbidden');
+    -- The husband gone (the provider cleared until the R1-07 section): the admins who are not wives.
+    UPDATE public.households SET nafaqah_provider_user_id = NULL WHERE id = pg_temp.h(1);
+    v_res := pg_temp.repay(5, 1, 2, '10', 1, 110);   -- A, from the pool
+    PERFORM pg_temp.check('R1-01 a non-wife admin pays from a pool', pg_temp.j(v_res, 'success'), 'true');
+    PERFORM pg_temp.keep('pA', pg_temp.j(v_res, 'reimbursement_id'));
     v_res := pg_temp.repay(4, 1, 2, '10', 5, 112);   -- C, co-admin, from his own
     PERFORM pg_temp.check('R1-01 a co-admin pays from his own account', pg_temp.j(v_res, 'success'), 'true');
     PERFORM pg_temp.keep('pC', pg_temp.j(v_res, 'reimbursement_id'));
@@ -401,6 +407,8 @@ DO $$
 DECLARE
     v_res text;
 BEGIN
+    -- The husband is back (the provider again): C's own repayments stay his to reverse.
+    UPDATE public.households SET nafaqah_provider_user_id = pg_temp.u(1) WHERE id = pg_temp.h(1);
     UPDATE public.household_memberships SET role = 'member' WHERE household_id = pg_temp.h(1) AND user_id = pg_temp.u(4);
     v_res := pg_temp.rev(4, 1, pg_temp.id('pC'), 120);
     PERFORM pg_temp.check('R1-07 a former co-admin reverses his own repayment', pg_temp.j(v_res, 'kind'), 'reversal');
@@ -419,12 +427,15 @@ BEGIN
     PERFORM pg_temp.check('R1-07 his account is credited back', pg_temp.bal(2), '1000.00');
     UPDATE public.households SET nafaqah_provider_user_id = pg_temp.u(1) WHERE id = pg_temp.h(1);
 
-    -- A pool repayment: any admin who is not a wife; never a member, never another's account.
-    PERFORM pg_temp.check('R1-07 a non-admin cannot reverse a pool repayment', pg_temp.rev(1, 1, pg_temp.id('pA'), 123), 'ERR:account_forbidden');
+    -- A pool repayment: the husband if he is an admin (review R3-01); never a member, never
+    -- another's account, and no other admin while he is there.
+    PERFORM pg_temp.check('R1-07 a non-admin husband cannot reverse a pool repayment', pg_temp.rev(1, 1, pg_temp.id('pA'), 123), 'ERR:account_forbidden');
     PERFORM pg_temp.check('R1-07 an admin cannot reverse another''s personal repayment', pg_temp.rev(5, 1, pg_temp.id('apC'), 124), 'ERR:account_forbidden');
     UPDATE public.household_memberships SET role = 'admin' WHERE household_id = pg_temp.h(1) AND user_id = pg_temp.u(6);
-    v_res := pg_temp.rev(6, 1, pg_temp.id('pA'), 125);
-    PERFORM pg_temp.check('R1-07 another admin reverses a pool repayment', pg_temp.j(v_res, 'kind'), 'reversal');
+    PERFORM pg_temp.check('R3-01 another admin, while the husband is there', pg_temp.rev(6, 1, pg_temp.id('pA'), 125), 'ERR:forbidden');
+    UPDATE public.household_memberships SET role = 'admin' WHERE household_id = pg_temp.h(1) AND user_id = pg_temp.u(1);
+    v_res := pg_temp.rev(1, 1, pg_temp.id('pA'), 127);
+    PERFORM pg_temp.check('R1-07 the husband, an admin now, reverses a pool repayment', pg_temp.j(v_res, 'kind'), 'reversal');
     PERFORM pg_temp.check('R1-07 the pool is credited back', pg_temp.bal(1), '5000.00');
     PERFORM pg_temp.check('R1-07 a wife is never the one to reverse', pg_temp.rev(2, 1, pg_temp.id('apC'), 126), 'ERR:forbidden');
 END $$;
@@ -484,6 +495,9 @@ DECLARE
     v_req uuid;
     v_ev text;
 BEGIN
+    -- "Another actor" needs two people allowed to act: the F2 husband gone for this section (review
+    -- R3-01), H2 and C2 are both admins who are not wives.
+    UPDATE public.households SET nafaqah_provider_user_id = NULL WHERE id = pg_temp.h(2);
     v_first := pg_temp.repay(7, 2, 8, '10', 11, 210);
     PERFORM pg_temp.check('R1-04 a repayment', pg_temp.j(v_first, 'success'), 'true');
     PERFORM pg_temp.check('R1-04 same key, another amount', pg_temp.repay(7, 2, 8, '20', 11, 210), 'ERR:request_key_reused');
@@ -517,12 +531,16 @@ BEGIN
 
     -- R1-05: what the first call answered, whatever happened since.
     v_first := pg_temp.repay(7, 2, 8, '7', 11, 230);
+    UPDATE public.households SET nafaqah_provider_user_id = pg_temp.u(7) WHERE id = pg_temp.h(2);
     PERFORM pg_temp.advance(2, 8, 50);
+    UPDATE public.households SET nafaqah_provider_user_id = NULL WHERE id = pg_temp.h(2);
     v_res := pg_temp.repay(7, 2, 8, '7', 11, 230);
     PERFORM pg_temp.check('R1-05 replay: outstanding before as first answered', pg_temp.j(v_res, 'outstanding_before'), pg_temp.j(v_first, 'outstanding_before'));
     PERFORM pg_temp.check('R1-05 replay: outstanding after as first answered', pg_temp.j(v_res, 'outstanding_after'), pg_temp.j(v_first, 'outstanding_after'));
     v_rev := pg_temp.rev(7, 2, pg_temp.uid(pg_temp.j(v_first, 'reimbursement_id')), 231);
+    UPDATE public.households SET nafaqah_provider_user_id = pg_temp.u(7) WHERE id = pg_temp.h(2);
     PERFORM pg_temp.advance(2, 8, 20);
+    UPDATE public.households SET nafaqah_provider_user_id = NULL WHERE id = pg_temp.h(2);
     v_res := pg_temp.rev(7, 2, pg_temp.uid(pg_temp.j(v_first, 'reimbursement_id')), 231);
     PERFORM pg_temp.check('R1-05 reversal replay: before as first answered', pg_temp.j(v_res, 'outstanding_before'), pg_temp.j(v_rev, 'outstanding_before'));
     PERFORM pg_temp.check('R1-05 reversal replay: after as first answered', pg_temp.j(v_res, 'outstanding_after'), pg_temp.j(v_rev, 'outstanding_after'));
@@ -548,6 +566,7 @@ BEGIN
     -- The waiver: the same key by another actor.
     PERFORM pg_temp.check('R1-04 a waiver', pg_temp.j(pg_temp.waive(7, 2, 222), 'status'), 'waived');
     PERFORM pg_temp.check('R1-04 its key by another actor', pg_temp.waive(9, 2, 222), 'ERR:request_key_reused');
+    UPDATE public.households SET nafaqah_provider_user_id = pg_temp.u(7) WHERE id = pg_temp.h(2);
 END $$;
 
 -- ── R1-08: a deleted payer leaves no id behind ───────────────────────────────────────────────

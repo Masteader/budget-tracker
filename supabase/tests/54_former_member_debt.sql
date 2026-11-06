@@ -13,12 +13,14 @@
 --   2. At the purge: one anonymised record per surviving household where the outstanding
 --      amount is above zero, with that amount, and none where it is zero. Pool balances and
 --      budgets are exactly equal, and nothing of her (id, email, display name) is left.
---   3. Visibility follows the reimbursement ledger's read rule; no client writes the tables.
+--   3. Visibility (review R3-01): the husband reads the record; when he is gone, an admin who is
+--      not a wife. Never a member, a wife or another household. No client writes the tables.
 --   4. Payments: partial then full (settled), overpayment refused, bad input refused, a
 --      replayed request key changes nothing, a closed record takes nothing more. Balances and
 --      budgets do not move, as with an ordinary reimbursement.
 --   5. Waiver (إبراء): closes as waived with no money moving; replay is a no-op.
---   6. Who: the provider, any admin or co-admin; never another member, another household or
+--   6. Who (review R3-01): the husband (the provider, an admin or not); when he is gone, an admin
+--      who is not a wife; never an admin while he is there, another member, another household or
 --      anon. The record must belong to the household named.
 --   7. The husband deleting his own account later: the record stays with a surviving
 --      household and his id leaves it; a household deleted with him takes the record along.
@@ -299,6 +301,7 @@ BEGIN
     PERFORM pg_temp.acct(6, 1, 4, false, 500);   -- C personal (20261105001300: payments leave an account)
     PERFORM pg_temp.acct(7, 2, 5, false, 500);   -- O personal
     PERFORM pg_temp.acct(8, 7, 18, false, 500);  -- the F7 provider's personal account
+    PERFORM pg_temp.acct(9, 3, 8, false, 100);   -- Q personal
 
     INSERT INTO public.budgets (id, household_id, month, category_code, allocated_amount, cycle_key, account_id) VALUES
         ('e54b0000-0000-0000-0000-000000000001', pg_temp.h(1), v_month, 'OPEX-GROCERY', 900, v_cycle, NULL),
@@ -411,7 +414,8 @@ END $$;
 -- 3. Visibility and no client writes ---------------------------------------------------------
 DO $$
 BEGIN
-    PERFORM pg_temp.expect('a member sees the record', pg_temp.call(pg_temp.u(3), NULL, 'SELECT count(*)::text FROM public.former_member_debts'), '1');
+    PERFORM pg_temp.expect('a member does not see the record (R3-01)', pg_temp.call(pg_temp.u(3), NULL, 'SELECT count(*)::text FROM public.former_member_debts'), '0');
+    PERFORM pg_temp.expect('an admin does not while the husband is there (R3-01)', pg_temp.call(pg_temp.u(4), NULL, 'SELECT count(*)::text FROM public.former_member_debts'), '0');
     PERFORM pg_temp.expect('the husband sees it', pg_temp.call(pg_temp.u(1), NULL, 'SELECT count(*)::text FROM public.former_member_debts'), '1');
     PERFORM pg_temp.expect('another household does not', pg_temp.call(pg_temp.u(16), NULL, 'SELECT count(*)::text FROM public.former_member_debts'), '0');
     PERFORM pg_temp.expect('anon reads nothing', pg_temp.call(NULL, NULL, 'SELECT count(*)::text FROM public.former_member_debts', 'anon'), 'ERR:42501');
@@ -427,7 +431,7 @@ BEGIN
                AND relnamespace = 'public'::regnamespace AND NOT relrowsecurity) THEN
         RAISE EXCEPTION 'RLS is off on a former member debt table';
     END IF;
-    RAISE NOTICE 'PASSED: members see the record as they saw her ledger, and no client writes it.';
+    RAISE NOTICE 'PASSED: the husband sees the record, nobody else while he is there, and no client writes it.';
 END $$;
 
 -- 4. Payments ------------------------------------------------------------------------------
@@ -450,9 +454,9 @@ BEGIN
     PERFORM pg_temp.expect('no request key refused',
         pg_temp.call(pg_temp.u(1), NULL, format('SELECT public.record_former_member_debt_payment(%L, %L, 10, %L, NULL, NULL, %L::uuid)::text',
             pg_temp.h(1), pg_temp.debt(1), 'cash', pg_temp.a(3))), 'ERR:request_key_required');
-    PERFORM pg_temp.expect('the amount-only signature refused (20261105001300)',
+    PERFORM pg_temp.expect('the amount-only signature is not a client''s (R3-03)',
         pg_temp.call(pg_temp.u(1), NULL, format('SELECT public.record_former_member_debt_payment(%L, %L, 10, %L, %L)::text',
-            pg_temp.h(1), pg_temp.debt(1), 'cash', pg_temp.k(1))), 'ERR:app_update_required');
+            pg_temp.h(1), pg_temp.debt(1), 'cash', pg_temp.k(1))), 'ERR:42501');
     PERFORM pg_temp.expect('overpayment refused', pg_temp.pay(1, 1, '170.01', 1), 'ERR:overpayment');
     PERFORM pg_temp.expect('nothing recorded by refusals', pg_temp.state(1), '170.00/0.00/open/false');
 
@@ -467,29 +471,32 @@ BEGIN
     PERFORM pg_temp.expect('replay changes nothing', pg_temp.state(1), '170.00/70.00/open/false');
     PERFORM pg_temp.expect('a request key is not reused for a waiver', pg_temp.waive(1, 1, 1), 'ERR:request_key_reused');
 
-    PERFORM pg_temp.expect('more than what remains refused', pg_temp.pay(4, 1, '100.01', 2), 'ERR:overpayment');
-    -- A co-admin pays the rest.
+    PERFORM pg_temp.expect('more than what remains refused', pg_temp.pay(1, 1, '100.01', 2), 'ERR:overpayment');
+    -- An admin does not pay while the husband is there (review R3-01); he pays the rest.
+    PERFORM pg_temp.expect('a co-admin may not pay while the husband is there', pg_temp.pay(4, 1, '100', 9), 'ERR:forbidden');
     PERFORM pg_temp.expect('full payment settles',
-        (pg_temp.pay(4, 1, '100', 3)::jsonb ->> 'status'), 'settled');
+        (pg_temp.pay(1, 1, '100', 3)::jsonb ->> 'status'), 'settled');
     PERFORM pg_temp.expect('state after full', pg_temp.state(1), '170.00/170.00/settled/true');
     PERFORM pg_temp.expect('a settled record takes no payment', pg_temp.pay(1, 1, '1', 4), 'ERR:debt_closed');
     PERFORM pg_temp.expect('a settled record cannot be waived', pg_temp.waive(1, 1, 5), 'ERR:debt_closed');
-    PERFORM pg_temp.expect('a replay after settling still answers', (pg_temp.pay(4, 1, '100', 3)::jsonb ->> 'replayed'), 'true');
+    PERFORM pg_temp.expect('a replay after settling still answers', (pg_temp.pay(1, 1, '100', 3)::jsonb ->> 'replayed'), 'true');
 
     PERFORM pg_temp.expect('history: two payments with method, actor and remaining',
         (SELECT string_agg(e.kind || ':' || e.amount::text || ':' || e.payment_method || ':' || e.remaining_after::text
-                           || ':' || (e.recorded_by = CASE WHEN e.amount = 70 THEN pg_temp.u(1) ELSE pg_temp.u(4) END)::text, ',' ORDER BY e.remaining_after DESC)
+                           || ':' || (e.recorded_by = pg_temp.u(1))::text, ',' ORDER BY e.remaining_after DESC)
          FROM public.former_member_debt_events e WHERE e.debt_id = pg_temp.debt(1)),
         'payment:70.00:bank_transfer:100.00:true,payment:100.00:bank_transfer:0.00:true');
-    PERFORM pg_temp.expect('a member reads the history',
-        pg_temp.call(pg_temp.u(3), NULL, 'SELECT count(*)::text FROM public.former_member_debt_events'), '2');
+    PERFORM pg_temp.expect('the husband reads the history',
+        pg_temp.call(pg_temp.u(1), NULL, 'SELECT count(*)::text FROM public.former_member_debt_events'), '2');
+    PERFORM pg_temp.expect('a member reads none of it (R3-01)',
+        pg_temp.call(pg_temp.u(3), NULL, 'SELECT count(*)::text FROM public.former_member_debt_events'), '0');
     PERFORM pg_temp.expect('another household reads none',
         pg_temp.call(pg_temp.u(16), NULL, 'SELECT count(*)::text FROM public.former_member_debt_events'), '0');
 
     -- As an ordinary reimbursement (20261105001300): each payer's account went down by what he paid,
     -- nothing else moved, and no budget or transaction.
     PERFORM pg_temp.expect('no budget moved by payments', split_part(pg_temp.ledger(ARRAY[pg_temp.h(1)]), ' | ', 2), split_part(v_before, ' | ', 2));
-    PERFORM pg_temp.expect('the payers'' accounts went down by what each paid', pg_temp.bal(3) || '/' || pg_temp.bal(6), '200.00/400.00');
+    PERFORM pg_temp.expect('the payer''s account went down by what he paid', pg_temp.bal(3) || '/' || pg_temp.bal(6), '100.00/500.00');
     PERFORM pg_temp.expect('no other balance moved',
         regexp_replace(regexp_replace(split_part(pg_temp.ledger(ARRAY[pg_temp.h(1)]), ' | ', 1), pg_temp.a(3)::text || '=[0-9.]+', ''), pg_temp.a(6)::text || '=[0-9.]+', ''),
         regexp_replace(regexp_replace(split_part(v_before, ' | ', 1), pg_temp.a(3)::text || '=[0-9.]+', ''), pg_temp.a(6)::text || '=[0-9.]+', ''));
@@ -511,34 +518,43 @@ BEGIN
     PERFORM pg_temp.purge(9);
     PERFORM pg_temp.expect('F3 record', pg_temp.state(3), '40.00/0.00/open/false');
     PERFORM pg_temp.expect('the husband pays part', (pg_temp.pay(7, 3, '10', 10, 'cash')::jsonb ->> 'remaining') || '/' || pg_temp.bal(5), '30.00/190.00');
-    v_before := pg_temp.ledger(ARRAY[pg_temp.h(3)]);
     PERFORM pg_temp.expect('a member may not waive', pg_temp.waive(14, 3, 11), 'ERR:forbidden');
     PERFORM pg_temp.expect('anon cannot waive',
         pg_temp.call(NULL, NULL, format('SELECT public.waive_former_member_debt(%L, %L, %L)::text', pg_temp.h(3), pg_temp.debt(3), pg_temp.k(11)), 'anon'), 'ERR:42501');
     PERFORM pg_temp.expect('another household may not waive', pg_temp.waive(16, 3, 11), 'ERR:forbidden');
-    PERFORM pg_temp.expect('a replayed payment key is not a waiver', pg_temp.waive(8, 3, 10), 'ERR:request_key_reused');
+    PERFORM pg_temp.expect('the primary admin may not while the husband is there (R3-01)', pg_temp.waive(8, 3, 12), 'ERR:forbidden');
+    PERFORM pg_temp.expect('nor read it', pg_temp.call(pg_temp.u(8), NULL, 'SELECT count(*)::text FROM public.former_member_debts'), '0');
 
+    -- P (a co-admin, not primary, the husband) deletes his account: the household survives with
+    -- the record, and he is gone.
+    PERFORM pg_temp.request(7);
+    PERFORM pg_temp.purge(7);
+    PERFORM pg_temp.expect('the record stays with the household', pg_temp.state(3), '40.00/10.00/open/false');
+    PERFORM pg_temp.expect('his payment stays, without him',
+        (SELECT string_agg(e.kind || ':' || (e.recorded_by IS NULL)::text, ',' ORDER BY e.kind) FROM public.former_member_debt_events e WHERE e.debt_id = pg_temp.debt(3)),
+        'payment:true');
+    PERFORM pg_temp.expect('his id anywhere', pg_temp.scan(pg_temp.u(7)::text), '');
+    PERFORM pg_temp.expect('his email anywhere', pg_temp.scan('t54-pasha@test.local'), '');
+    PERFORM pg_temp.expect('his name anywhere', pg_temp.scan('Pasha Uniquehusband'), '');
+
+    -- The husband gone, the primary admin (not a wife) reads and closes it (review R3-01).
+    PERFORM pg_temp.expect('the admin reads it now', pg_temp.call(pg_temp.u(8), NULL, 'SELECT count(*)::text FROM public.former_member_debts'), '1');
+    PERFORM pg_temp.expect('a member still does not', pg_temp.call(pg_temp.u(14), NULL, 'SELECT count(*)::text FROM public.former_member_debts'), '0');
+    v_before := pg_temp.ledger(ARRAY[pg_temp.h(3)]);
+    PERFORM pg_temp.expect('a replayed payment key is not a waiver', pg_temp.waive(8, 3, 10), 'ERR:request_key_reused');
     v_res := pg_temp.waive(8, 3, 12);   -- the primary admin records her release
     PERFORM pg_temp.expect('waived', (v_res::jsonb ->> 'status') || '/' || (v_res::jsonb ->> 'remaining') || '/' || (v_res::jsonb ->> 'waived_amount'), 'waived/0.00/30.00');
     PERFORM pg_temp.expect('state after waiver', pg_temp.state(3), '40.00/10.00/waived/true');
     PERFORM pg_temp.expect('waiver replay', (pg_temp.waive(8, 3, 12)::jsonb ->> 'replayed'), 'true');
-    PERFORM pg_temp.expect('a waived record takes no payment', pg_temp.pay(7, 3, '1', 13), 'ERR:debt_closed');
+    PERFORM pg_temp.expect('a waived record takes no payment', pg_temp.pay(8, 3, '1', 13), 'ERR:debt_closed');
     PERFORM pg_temp.expect('waiver moves no money', pg_temp.ledger(ARRAY[pg_temp.h(3)]), v_before);
     PERFORM pg_temp.expect('history keeps payment and waiver',
         (SELECT string_agg(e.kind || ':' || e.amount::text || ':' || COALESCE(e.payment_method, '-') || ':' || e.remaining_after::text, ',' ORDER BY e.created_at, e.kind)
          FROM public.former_member_debt_events e WHERE e.debt_id = pg_temp.debt(3)),
         'payment:10.00:cash:30.00,waiver:30.00:-:0.00');
-
-    -- P (a co-admin, not primary) deletes his account: the household survives with the record.
-    PERFORM pg_temp.request(7);
-    PERFORM pg_temp.purge(7);
-    PERFORM pg_temp.expect('the record stays with the household', pg_temp.state(3), '40.00/10.00/waived/true');
-    PERFORM pg_temp.expect('his payment stays, without him',
+    PERFORM pg_temp.expect('the waiver is the admin''s',
         (SELECT string_agg(e.kind || ':' || (e.recorded_by IS NULL)::text, ',' ORDER BY e.kind) FROM public.former_member_debt_events e WHERE e.debt_id = pg_temp.debt(3)),
         'payment:true,waiver:false');
-    PERFORM pg_temp.expect('his id anywhere', pg_temp.scan(pg_temp.u(7)::text), '');
-    PERFORM pg_temp.expect('his email anywhere', pg_temp.scan('t54-pasha@test.local'), '');
-    PERFORM pg_temp.expect('his name anywhere', pg_temp.scan('Pasha Uniquehusband'), '');
 
     -- R: his wife goes first, then he does, alone in F4: the household goes, the record with it.
     PERFORM pg_temp.request(11);
@@ -562,7 +578,8 @@ BEGIN
     PERFORM pg_temp.purge(19);
     PERFORM pg_temp.expect('F7 record', pg_temp.state(7), '15.00/0.00/open/false');
     PERFORM pg_temp.expect('the provider pays', (pg_temp.pay(18, 7, '5', 20, 'cash')::jsonb ->> 'remaining'), '10.00');
-    PERFORM pg_temp.expect('an admin waives the rest', (pg_temp.waive(17, 7, 21)::jsonb ->> 'status'), 'waived');
+    PERFORM pg_temp.expect('an admin may not while he is there (R3-01)', pg_temp.waive(17, 7, 22), 'ERR:forbidden');
+    PERFORM pg_temp.expect('the provider waives the rest', (pg_temp.waive(18, 7, 21)::jsonb ->> 'status'), 'waived');
     RAISE NOTICE 'PASSED: the husband closes the record even when he is not an admin.';
 END $$;
 
@@ -616,7 +633,8 @@ BEGIN
         SELECT p.oid::regprocedure::text AS sig FROM pg_proc p
         WHERE p.pronamespace = 'public'::regnamespace
           AND p.proname IN ('account_deletion_snapshot_former_member_debts', 'former_member_debt_creditors',
-                            'former_member_debt_outstanding', 'former_member_debt_require_manager')
+                            'former_member_debt_outstanding', 'former_member_debt_require_manager',
+                            'nafaqah_ledger_husband_id', 'nafaqah_may_manage_ledgers')
     LOOP
         IF has_function_privilege('anon', v_call.sig, 'EXECUTE') OR has_function_privilege('authenticated', v_call.sig, 'EXECUTE') THEN
             RAISE EXCEPTION 'VULNERABILITY: a client role can execute %', v_call.sig;
@@ -624,15 +642,17 @@ BEGIN
     END LOOP;
     IF (SELECT count(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace
         AND proname IN ('account_deletion_snapshot_former_member_debts', 'former_member_debt_creditors',
-                        'former_member_debt_outstanding', 'former_member_debt_require_manager')) <> 4 THEN
+                        'former_member_debt_outstanding', 'former_member_debt_require_manager',
+                        'nafaqah_ledger_husband_id', 'nafaqah_may_manage_ledgers')) <> 6 THEN
         RAISE EXCEPTION 'an internal helper is missing';
     END IF;
     -- Client RPCs: authenticated and the service, never anon; each pins search_path.
     FOR v_call IN
         SELECT * FROM (VALUES
-            ('record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid)'),
+            ('record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid, uuid)'),
             ('waive_former_member_debt(uuid, uuid, uuid, uuid)'),
-            ('get_former_member_debt_deletion_notices(uuid, uuid)')
+            ('get_former_member_debt_deletion_notices(uuid, uuid)'),
+            ('nafaqah_caller_manages_ledgers()')
         ) AS t(sig)
     LOOP
         IF has_function_privilege('anon', 'public.' || v_call.sig, 'EXECUTE') THEN
@@ -647,6 +667,12 @@ BEGIN
                AND (p.proname LIKE '%former_member_debt%' OR p.proname = 'prepare_account_purge' OR p.proname = 'mark_account_deletion_notice_sent')
                AND p.prosecdef AND NOT EXISTS (SELECT 1 FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%')) THEN
         RAISE EXCEPTION 'a SECURITY DEFINER function without a fixed search_path';
+    END IF;
+    -- The amount-only payment: the service role only (reviews R1-11, R3-03).
+    IF has_function_privilege('anon', 'public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid)', 'EXECUTE')
+       OR has_function_privilege('authenticated', 'public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid)', 'EXECUTE')
+       OR NOT has_function_privilege('service_role', 'public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid)', 'EXECUTE') THEN
+        RAISE EXCEPTION 'VULNERABILITY: the amount-only payment is not the service role''s only';
     END IF;
     -- A pending notice name the mark function did not know before still is refused when unknown.
     PERFORM pg_temp.expect('unknown notice refused',

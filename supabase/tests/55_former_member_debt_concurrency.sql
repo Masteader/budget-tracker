@@ -13,8 +13,10 @@
 --   2. Two different payments of the whole remainder at once: one settles, the other is refused,
 --      and the record is never overpaid.
 --   3. A payment and a waiver at once: one closes the record, the other is refused.
---   4. A purge while the husband's ordinary repayment is in flight: the purge waits for it and
---      keeps what is owed after it, with no deadlock.
+--   4. A purge while an ordinary repayment is in flight: the purge waits for it and keeps what is
+--      owed after it, with no deadlock.
+-- The household's husband is gone (review R3-01), so two admins who are not wives may each pay:
+-- the races need two people allowed to act on the same record.
 -- ============================================================================
 \set ON_ERROR_STOP on
 
@@ -144,19 +146,21 @@ $$;
 SELECT pg_temp.cleanup();
 
 -- ── Fixtures (committed) ────────────────────────────────────────────────────
--- H1: husband H(1) primary admin and provider, co-admin C(2), wife W(3) still a member for race 4.
+-- H1: the husband is gone (no provider); admins A(1) and C(2), neither a wife; wife W(3) still a
+--     member for race 4.
 -- Records D1 (100 owed), D2 (100), D3 (100), made as the purge would make them.
 DO $$
 BEGIN
     INSERT INTO auth.users (id, email) SELECT pg_temp.u(n), 't55-' || n || '@test.local' FROM generate_series(1, 3) AS n;
     INSERT INTO public.households (id, name, invite_code, household_type) VALUES (pg_temp.h(1), 'T55 H1', 'T55CODE000000001', 'family');
     INSERT INTO public.household_memberships (household_id, user_id, role, financial_role, is_default) VALUES
-        (pg_temp.h(1), pg_temp.u(1), 'admin', 'provider', true),
+        (pg_temp.h(1), pg_temp.u(1), 'admin', 'family_member', true),
         (pg_temp.h(1), pg_temp.u(2), 'admin', 'family_member', true),
         (pg_temp.h(1), pg_temp.u(3), 'member', 'spouse', true);
     UPDATE public.users SET household_id = pg_temp.h(1) WHERE id IN (pg_temp.u(1), pg_temp.u(2), pg_temp.u(3));
+    -- A provider while her advance is recorded; cleared below (the husband is gone).
     UPDATE public.households SET nafaqah_provider_user_id = pg_temp.u(1) WHERE id = pg_temp.h(1);
-    UPDATE public.users SET role = 'admin', financial_role = 'provider' WHERE id = pg_temp.u(1);
+    UPDATE public.users SET role = 'admin', financial_role = 'family_member' WHERE id = pg_temp.u(1);
     UPDATE public.users SET financial_role = 'spouse' WHERE id = pg_temp.u(3);
     INSERT INTO public.former_member_debts (id, household_id, original_amount)
     SELECT pg_temp.d(n), pg_temp.h(1), 100 FROM generate_series(1, 3) AS n;
@@ -165,6 +169,8 @@ BEGIN
     -- W: 90 advanced, nothing repaid yet; her request is claimed and due.
     INSERT INTO public.transactions (household_id, user_id, amount, merchant, category_code, timestamp, source, spent_by, nafaqah_class, nafaqah_spouse_id)
     VALUES (pg_temp.h(1), pg_temp.u(3), 90, 'T55 Grocer', 'OPEX-GROCERY', now(), 'manual', 'me', 'wife_reimbursable', pg_temp.u(3));
+    -- No husband now (he left, say): the admins who are not wives act (review R3-01).
+    UPDATE public.households SET nafaqah_provider_user_id = NULL WHERE id = pg_temp.h(1);
     INSERT INTO public.account_deletion_requests (id, user_id, status, scheduled_for, attempts, lease_expires_at)
     VALUES (pg_temp.r(3), pg_temp.u(3), 'processing', now() - interval '1 minute', 1, now() + interval '30 minutes');
 END $$;
@@ -218,7 +224,7 @@ BEGIN
     PERFORM pg_temp.as_user('t2', pg_temp.u(2));
     PERFORM pg_temp.hold(pg_temp.d(2));
     PERFORM t55_dblink.dblink_send_query('t1', pg_temp.pay_sql(pg_temp.d(2), 100, pg_temp.k(21)));
-    PERFORM pg_temp.expect('husband waits', pg_temp.wait('t1', v_p1), 'blocked');
+    PERFORM pg_temp.expect('first admin waits', pg_temp.wait('t1', v_p1), 'blocked');
     PERFORM t55_dblink.dblink_send_query('t2', pg_temp.pay_sql(pg_temp.d(2), 100, pg_temp.k(22)));
     PERFORM pg_temp.expect('co-admin waits', pg_temp.wait('t2', v_p2), 'blocked');
     PERFORM t55_dblink.dblink_exec('blk', 'ROLLBACK');
@@ -279,7 +285,7 @@ BEGIN
     v_rp_pid := pg_temp.connect('rp');
     v_pg_pid := pg_temp.connect('pg');
     PERFORM pg_temp.as_user('rp', pg_temp.u(1));
-    -- The husband's repayment of 25, not yet committed.
+    -- An admin's repayment of 25 (the husband is gone), not yet committed.
     PERFORM t55_dblink.dblink_exec('rp', 'BEGIN');
     v_repay := (SELECT r FROM t55_dblink.dblink('rp', format('SELECT public.record_spouse_reimbursement(%L, %L, 25, %L, NULL, NULL, %L::uuid, %L::uuid)::text',
         pg_temp.h(1), pg_temp.u(3), 'cash', pg_temp.pool(), pg_temp.k(41))) AS t(r text));

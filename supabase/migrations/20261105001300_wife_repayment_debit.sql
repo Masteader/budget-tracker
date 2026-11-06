@@ -20,9 +20,9 @@
 --      husband) and what was owed before and after it, which a replay answers again.
 --   3. The wife asks, the husband approves. She no longer records a repayment (wife_must_request).
 --      She marks "I received X": a pending request (spouse_reimbursement_requests) that moves no
---      money and does not lower what is owed. The husband or an admin approves it with an account,
---      which is the normal repayment of exactly the requested amount, re-checked against what is
---      owed at that moment (request_exceeds_outstanding), linked to the request; or declines it with
+--      money and does not lower what is owed. Her husband (when he is gone, an admin who is not a
+--      wife: point 5) approves it with an account, which is the normal repayment of exactly the
+--      requested amount, re-checked against what is owed at that moment (request_exceeds_outstanding), linked to the request; or declines it with
 --      an optional reason; she can cancel her own pending one. New requests never take the pending
 --      total above what is owed (pending_exceeds_outstanding), and whatever lowers what is owed (a
 --      direct repayment, an approval, a smaller or removed advance) closes, in the same
@@ -40,12 +40,24 @@
 --      (reversal_account_unavailable), a record waived after the payment (reversal_after_waiver),
 --      and a second time (already_reversed). Who reverses follows the account it left: a personal
 --      account's owner, while he is a member and not a wife, whatever his role now (he may no
---      longer be an admin or the husband); a shared pool's repayment, any admin who is not a wife.
---   5. Who pays (2026-11-06, review R1-01): only the husband, or a household admin who is not a
---      wife (a spouse member) of the household, records a repayment, approves or declines a
---      request, pays or waives a former member's record. No wife does any of it, for a co-wife or a
---      former member, even as an admin, and a wife never pays from a shared pool (account_forbidden
---      in the account helper itself).
+--      longer be an admin or the husband); a shared pool's repayment, the husband if he is an
+--      admin, or an admin who is not a wife when the husband is gone (review R3-01).
+--   5. Who sees and who acts (owner decisions 2026-11-06, reviews R1-01 and R3-01). Her husband is
+--      the household's Nafaqah provider while he is a current member who is not a wife
+--      (001200's nafaqah_ledger_husband_id); he is gone when there is none (he left, his account
+--      was deleted, or nobody was named). Her ledger (what is owed, repayments, reversals, her
+--      requests, their outcomes, decline reasons and notes) is read by her and by her husband
+--      only; when he is gone, by an admin who is not a wife too. Only her husband (when he is
+--      gone, an admin who is not a wife: 001200's nafaqah_may_manage_ledgers) records a
+--      repayment, approves or declines a request, pays or waives a former member's record. She
+--      only makes and cancels her own requests. No wife sees or does any of it for a co-wife or a
+--      former member, even as an admin; an ordinary member never; and a wife never pays from a
+--      shared pool (account_forbidden in the account helper itself). The account rules stay: a
+--      personal account only by its owner, a pool only by an admin, so the husband pays from a
+--      pool only if he is an admin.
+--   6. A client cannot delete an account a repayment or a reversal used (review R3-05,
+--      account_has_repayments): it is archived instead, so the reversal stays possible and its
+--      history stays in the household's books. The purge (no JWT subject) still deletes it.
 --
 -- What is owed is advances less repayments plus reversals (nafaqah_net_repaid); pending requests
 -- never count. get_spouse_reimbursement_balance, former_member_debt_outstanding (the purge's
@@ -83,11 +95,12 @@
 -- (remove_nafaqah_ledger_on_membership_end, replaced). The ledger invariant is unchanged.
 --
 -- Replaces: record_spouse_reimbursement (both signatures), record_former_member_debt_payment (both),
--- get_spouse_reimbursement_balance (20261020300000), guard_wife_reimbursable_ledger and
--- remove_nafaqah_ledger_on_membership_end (20261020900000), former_member_debt_outstanding and
--- prepare_account_purge (20261105001200). Re-running 001200 after this file puts its own versions
--- back (an amount-only 6-argument payment among them, which 001200 grants to the service role only,
--- so no client can call it): run this file again after it.
+-- get_spouse_reimbursement_balance (20261020300000) and its policy spouse_reimbursements_select_household,
+-- guard_wife_reimbursable_ledger and remove_nafaqah_ledger_on_membership_end (20261020900000),
+-- former_member_debt_outstanding and prepare_account_purge (20261105001200). Re-running 001200 after
+-- this file puts its own versions back (an amount-only 6-argument payment among them, which both
+-- files grant to the service role only, so no client can call it: review R1-11, R3-03): run this
+-- file again after it.
 --
 -- Safe to run again (IF NOT EXISTS, CREATE OR REPLACE, DROP ... IF EXISTS).
 --
@@ -98,6 +111,11 @@
 --           RAISE EXCEPTION 'A reversal exists: without this file it would count as a repayment. Stop.';
 --       END IF;
 --   END $$;
+--   DROP TRIGGER trg_accounts_keep_repayment_history ON public.accounts;
+--   DROP POLICY spouse_reimbursements_select_household ON public.spouse_reimbursements;
+--   CREATE POLICY spouse_reimbursements_select_household ON public.spouse_reimbursements
+--       FOR SELECT TO authenticated
+--       USING (household_id = (SELECT public.get_auth_user_household_id()));
 --   DROP FUNCTION public.request_spouse_reimbursement(uuid, numeric, text, uuid, uuid),
 --     public.cancel_spouse_reimbursement_request(uuid, uuid, uuid),
 --     public.decline_spouse_reimbursement_request(uuid, uuid, text, uuid),
@@ -113,13 +131,13 @@
 --     public.nafaqah_repayment_replay(public.spouse_reimbursements, uuid),
 --     public.nafaqah_request_close(public.spouse_reimbursement_requests, text, text, uuid),
 --     public.nafaqah_close_unfit_requests(uuid, uuid, numeric),
---     public.nafaqah_may_repay(uuid, uuid);
+--     public.nafaqah_may_repay(uuid, uuid),
+--     public.nafaqah_refuse_account_delete();
 --   Then run these CREATE OR REPLACE statements: record_spouse_reimbursement and
 --   get_spouse_reimbursement_balance from 20261020300000; guard_wife_reimbursable_ledger and
 --   remove_nafaqah_ledger_on_membership_end from 20261020900000; record_former_member_debt_payment,
---   former_member_debt_outstanding and prepare_account_purge from 20261105001200, and put back
---   001200's privilege on the payment (the service role only):
---   REVOKE EXECUTE ON FUNCTION public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid) FROM authenticated;
+--   former_member_debt_outstanding and prepare_account_purge from 20261105001200. (The amount-only
+--   payment keeps 001200's privilege, the service role only: this file never grants it to a client.)
 --   DROP FUNCTION public.nafaqah_outstanding(uuid, uuid), public.nafaqah_net_repaid(uuid, uuid);
 --   DROP TABLE public.spouse_reimbursement_request_outcomes, public.spouse_reimbursement_requests;
 --   ALTER TABLE public.former_member_debt_events DROP CONSTRAINT former_member_debt_events_kind_check,
@@ -269,11 +287,22 @@ GRANT SELECT ON public.spouse_reimbursement_request_outcomes TO authenticated;
 GRANT ALL ON public.spouse_reimbursement_requests TO service_role;
 GRANT ALL ON public.spouse_reimbursement_request_outcomes TO service_role;
 
--- The reimbursement ledger's read rule (spouse_reimbursements_select_household).
+-- Her ledger's read rule (review R3-01, owner decision 2026-11-06): she reads her own rows; her
+-- husband reads them, and when he is gone an admin who is not a wife (001200's
+-- nafaqah_caller_manages_ledgers, evaluated once per statement). A co-wife (even an admin), an
+-- ordinary member and an admin while the husband is there read nothing of it. The repayments'
+-- policy of 20261020300000 (any member of the household) is replaced here; the requests and their
+-- outcomes follow the same rule. The policy names are kept.
+DROP POLICY IF EXISTS spouse_reimbursements_select_household ON public.spouse_reimbursements;
+CREATE POLICY spouse_reimbursements_select_household ON public.spouse_reimbursements
+    FOR SELECT TO authenticated
+    USING (household_id = (SELECT public.get_auth_user_household_id())
+           AND (wife_user_id = (SELECT auth.uid()) OR (SELECT public.nafaqah_caller_manages_ledgers())));
 DROP POLICY IF EXISTS spouse_reimbursement_requests_select_household ON public.spouse_reimbursement_requests;
 CREATE POLICY spouse_reimbursement_requests_select_household ON public.spouse_reimbursement_requests
     FOR SELECT TO authenticated
-    USING (household_id = (SELECT public.get_auth_user_household_id()));
+    USING (household_id = (SELECT public.get_auth_user_household_id())
+           AND (wife_user_id = (SELECT auth.uid()) OR (SELECT public.nafaqah_caller_manages_ledgers())));
 DROP POLICY IF EXISTS spouse_reimbursement_request_outcomes_select_household ON public.spouse_reimbursement_request_outcomes;
 CREATE POLICY spouse_reimbursement_request_outcomes_select_household ON public.spouse_reimbursement_request_outcomes
     FOR SELECT TO authenticated
@@ -281,6 +310,7 @@ CREATE POLICY spouse_reimbursement_request_outcomes_select_household ON public.s
         SELECT 1 FROM public.spouse_reimbursement_requests r
         WHERE r.id = spouse_reimbursement_request_outcomes.request_id
           AND r.household_id = (SELECT public.get_auth_user_household_id())
+          AND (r.wife_user_id = (SELECT auth.uid()) OR (SELECT public.nafaqah_caller_manages_ledgers()))
     ));
 
 -- The keys this file's calls already used (a second run of this file): one key, one operation, per
@@ -357,6 +387,12 @@ DECLARE
     v_pending_n integer;
 BEGIN
     PERFORM public.nafaqah_require_member(p_household_id, v_actor);
+    -- Her ledger is read by her, by her husband, and when he is gone by an admin who is not a wife
+    -- (review R3-01): nobody else gets a total, before anything about her is looked at.
+    IF v_actor IS DISTINCT FROM p_wife_user_id AND NOT public.nafaqah_may_manage_ledgers(p_household_id, v_actor) THEN
+        RAISE EXCEPTION 'Forbidden: only she, her husband, or an admin who is not a wife when he is gone, reads this ledger'
+            USING ERRCODE = '42501', HINT = 'forbidden';
+    END IF;
     IF NOT public.nafaqah_is_spouse_member(p_household_id, p_wife_user_id) THEN
         RAISE EXCEPTION 'Reimbursements apply to a spouse member of this household' USING ERRCODE = '22023';
     END IF;
@@ -387,9 +423,10 @@ BEGIN
 END;
 $$;
 
--- Who records, approves or declines a repayment to a wife (review R1-01, owner decision
--- 2026-11-06): a member who is not a wife (spouse member) of the household and is its husband or
--- one of its admins. A wife never does, for a co-wife either, even as an admin.
+-- Who records, approves or declines a repayment to a wife (reviews R1-01 and R3-01, owner decisions
+-- 2026-11-06): her husband; when he is gone, an admin who is not a wife (001200's
+-- nafaqah_may_manage_ledgers, the same rule as who reads her ledger). A wife never does, for a
+-- co-wife either, even as an admin; an admin does not while the husband is there.
 CREATE OR REPLACE FUNCTION public.nafaqah_may_repay(p_household_id uuid, p_actor uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -397,14 +434,7 @@ STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-    SELECT EXISTS (
-        SELECT 1
-        FROM public.household_memberships m
-        WHERE m.household_id = p_household_id
-          AND m.user_id = p_actor
-          AND m.financial_role IS DISTINCT FROM 'spouse'
-          AND (m.role = 'admin' OR p_actor = public.nafaqah_husband_id(p_household_id))
-    );
+    SELECT public.nafaqah_may_manage_ledgers(p_household_id, p_actor);
 $$;
 
 -- Pending total <= what is owed (review R1-03). Called whenever what is owed may have dropped: the
@@ -806,14 +836,15 @@ BEGIN
         RAISE EXCEPTION 'Repayments are paid from an account: update the app'
             USING ERRCODE = '0A000', HINT = 'app_update_required';
     END IF;
-    -- She asks (request_spouse_reimbursement); the husband or an admin records or approves.
+    -- She asks (request_spouse_reimbursement); her husband (when he is gone, an admin who is not a
+    -- wife) records or approves.
     IF v_actor = p_wife_user_id THEN
         RAISE EXCEPTION 'Forbidden: the wife asks for a repayment to be recorded; she does not record it'
             USING ERRCODE = '42501', HINT = 'wife_must_request';
     END IF;
     -- Never a wife, not even a co-wife who is an admin (review R1-01).
     IF NOT public.nafaqah_may_repay(p_household_id, v_actor) THEN
-        RAISE EXCEPTION 'Forbidden: only the husband or a household admin who is not a wife can record a repayment'
+        RAISE EXCEPTION 'Forbidden: only her husband, or an admin who is not a wife when he is gone, records a repayment'
             USING ERRCODE = '42501', HINT = 'forbidden';
     END IF;
     IF p_amount IS NULL OR p_amount <= 0 OR p_amount <> round(p_amount, 2) OR p_amount > 999999999999.99 THEN
@@ -1037,9 +1068,9 @@ BEGIN
     IF v_req.id IS NULL THEN
         RAISE EXCEPTION 'No such request in this household' USING ERRCODE = 'P0002', HINT = 'request_not_found';
     END IF;
-    -- The husband or an admin who is not a wife: never she herself, nor a co-wife (review R1-01).
+    -- Her husband, or an admin who is not a wife when he is gone: never she herself, nor a co-wife (R1-01, R3-01).
     IF v_actor = v_req.wife_user_id OR NOT public.nafaqah_may_repay(p_household_id, v_actor) THEN
-        RAISE EXCEPTION 'Forbidden: only the husband or a household admin who is not a wife declines a request'
+        RAISE EXCEPTION 'Forbidden: only her husband, or an admin who is not a wife when he is gone, declines a request'
             USING ERRCODE = '42501', HINT = 'forbidden';
     END IF;
     -- At most 200 characters, counted as Unicode code points (char_length), as the API (len) and
@@ -1075,9 +1106,9 @@ BEGIN
     IF v_req.id IS NULL THEN
         RAISE EXCEPTION 'No such request in this household' USING ERRCODE = 'P0002', HINT = 'request_not_found';
     END IF;
-    -- The husband or an admin who is not a wife: never she herself, nor a co-wife (review R1-01).
+    -- Her husband, or an admin who is not a wife when he is gone: never she herself, nor a co-wife (R1-01, R3-01).
     IF v_actor = v_req.wife_user_id OR NOT public.nafaqah_may_repay(p_household_id, v_actor) THEN
-        RAISE EXCEPTION 'Forbidden: only the husband or a household admin who is not a wife approves a request'
+        RAISE EXCEPTION 'Forbidden: only her husband, or an admin who is not a wife when he is gone, approves a request'
             USING ERRCODE = '42501', HINT = 'forbidden';
     END IF;
     IF p_account_id IS NULL THEN
@@ -1141,7 +1172,7 @@ BEGIN
     END IF;
     -- Never a wife (review R1-01). Otherwise who reverses follows the account it left (review
     -- R1-07), checked under the locks below: a personal account's owner, while he is a member,
-    -- whatever his role now; a shared pool, any admin.
+    -- whatever his role now; a shared pool, the husband if he is an admin (an admin who is not a wife when he is gone).
     IF public.nafaqah_is_spouse_member(p_household_id, v_actor) THEN
         RAISE EXCEPTION 'Forbidden: a wife does not reverse a repayment'
             USING ERRCODE = '42501', HINT = 'forbidden';
@@ -1175,6 +1206,14 @@ BEGIN
         WHERE a.id = v_account AND a.household_id = p_household_id AND a.is_archived IS NOT TRUE AND a.currency = 'SAR'
     ) THEN
         RAISE EXCEPTION 'The account it was paid from is archived or gone' USING ERRCODE = '22023', HINT = 'reversal_account_unavailable';
+    END IF;
+    -- A pool's repayment: the husband if he is an admin, or an admin who is not a wife when he is
+    -- gone (review R3-01; the helper below checks the admin role under the locks). A personal
+    -- account's: its owner, whatever his role now (review R1-07).
+    IF (SELECT a.is_shared_pool FROM public.accounts a WHERE a.id = v_account) IS TRUE
+       AND NOT public.nafaqah_may_manage_ledgers(p_household_id, v_actor) THEN
+        RAISE EXCEPTION 'Forbidden: a pool''s repayment is reversed by the husband, or by an admin who is not a wife when he is gone'
+            USING ERRCODE = '42501', HINT = 'forbidden';
     END IF;
     BEGIN
         v_account := public.nafaqah_repayment_lock_account(p_household_id, v_actor, v_account);
@@ -1384,7 +1423,7 @@ DECLARE
 BEGIN
     -- Never a wife (review R1-01). Otherwise who reverses follows the account the payment left
     -- (review R1-07), checked under the locks below: a personal account's owner, while he is a
-    -- member, whatever his role now; a shared pool, any admin.
+    -- member, whatever his role now; a shared pool, the husband if he is an admin (an admin who is not a wife when he is gone).
     PERFORM public.nafaqah_require_member(p_household_id, v_actor);
     IF public.nafaqah_is_spouse_member(p_household_id, v_actor) THEN
         RAISE EXCEPTION 'Forbidden: a wife does not reverse a payment of this record'
@@ -1403,7 +1442,7 @@ BEGIN
                 -- Archived or deleted while this call waited for it (review R2-08).
                 RAISE EXCEPTION 'The account it was paid from is archived or gone' USING ERRCODE = '22023', HINT = 'reversal_account_unavailable';
             END;
-            SELECT * INTO v_debt FROM public.former_member_debts WHERE id = p_debt_id FOR UPDATE;
+            SELECT * INTO v_debt FROM public.former_member_debts WHERE id = p_debt_id AND household_id = p_household_id FOR UPDATE;
         ELSE
             SELECT * INTO v_debt FROM public.former_member_debts WHERE id = p_debt_id AND household_id = p_household_id;
         END IF;
@@ -1448,6 +1487,13 @@ BEGIN
             WHERE a.id = v_account AND a.household_id = p_household_id AND a.is_archived IS NOT TRUE AND a.currency = 'SAR'
         ) THEN
             RAISE EXCEPTION 'The account it was paid from is archived or gone' USING ERRCODE = '22023', HINT = 'reversal_account_unavailable';
+        END IF;
+        -- A pool's payment: the husband if he is an admin, or an admin who is not a wife when he is
+        -- gone (review R3-01). A personal account's: its owner, whatever his role now (R1-07).
+        IF (SELECT a.is_shared_pool FROM public.accounts a WHERE a.id = v_account) IS TRUE
+           AND NOT public.nafaqah_may_manage_ledgers(p_household_id, v_actor) THEN
+            RAISE EXCEPTION 'Forbidden: a pool''s payment is reversed by the husband, or by an admin who is not a wife when he is gone'
+                USING ERRCODE = '42501', HINT = 'forbidden';
         END IF;
     END LOOP;
 
@@ -1870,7 +1916,37 @@ BEGIN
 END;
 $$;
 
+-- 10b. An account a repayment used is archived, not deleted (review R3-05) ---------------------
+-- A client deleting the account a repayment left (or a reversal returned to) would leave the
+-- repayment impossible to reverse (reversal_account_unavailable) and take its balance out of the
+-- household's books. A client (a JWT subject) is refused, naming archiving instead; the purge and
+-- the service role run without one and still delete as designed. Other accounts are unaffected.
+CREATE OR REPLACE FUNCTION public.nafaqah_refuse_account_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF auth.uid() IS NOT NULL AND EXISTS (
+        SELECT 1 FROM public.account_transfers t
+        WHERE (t.from_account_id = OLD.id OR t.to_account_id = OLD.id)
+          AND t.purpose IS NOT NULL
+    ) THEN
+        RAISE EXCEPTION 'A repayment was paid from or returned to this account: archive it instead of deleting it'
+            USING ERRCODE = '23503', HINT = 'account_has_repayments';
+    END IF;
+    RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_accounts_keep_repayment_history ON public.accounts;
+CREATE TRIGGER trg_accounts_keep_repayment_history
+BEFORE DELETE ON public.accounts
+FOR EACH ROW EXECUTE FUNCTION public.nafaqah_refuse_account_delete();
+
 -- 11. Privileges ---------------------------------------------------------------------------------
+REVOKE EXECUTE ON FUNCTION public.nafaqah_refuse_account_delete() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.nafaqah_net_repaid(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.nafaqah_outstanding(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.nafaqah_repayment_lock_account(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
@@ -1904,12 +1980,17 @@ BEGIN
         'approve_spouse_reimbursement_request(uuid, uuid, uuid, uuid, uuid)',
         'reverse_spouse_reimbursement(uuid, uuid, uuid, uuid)',
         'record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid, uuid)',
-        'record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid)',
         'reverse_former_member_debt_payment(uuid, uuid, uuid, uuid, uuid)'
     ] LOOP
         EXECUTE format('REVOKE ALL ON FUNCTION public.%s FROM PUBLIC, anon', v_sig);
         EXECUTE format('GRANT EXECUTE ON FUNCTION public.%s TO authenticated, service_role', v_sig);
     END LOOP;
 END $$;
+-- The amount-only payment (the old 6-argument signature) keeps 001200's privilege: the service role
+-- only (review R3-03). It only answers app_update_required; an old app reaches it through the API,
+-- which answers 426 before calling it, so no client needs to execute it, and OWNER_ACTIONS step 15's
+-- check (no client executes it) holds before and after this file.
+REVOKE ALL ON FUNCTION public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid) TO service_role;
 
 COMMIT;

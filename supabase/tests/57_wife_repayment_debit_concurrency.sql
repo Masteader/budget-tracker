@@ -16,13 +16,15 @@
 --      repayment waits without holding the household. A former member payment waits for the
 --      household without holding the record.
 --   4. A double tap of a former member payment with an account: one debit.
---   5. A double approval of one request (the husband and a co-admin): one approves and debits once,
---      the other is refused as no longer pending.
+--   5. A double approval of one request (two admins): one approves and debits once, the other is
+--      refused as no longer pending.
 --   6. Approve against cancel: exactly one outcome, and money moves only if it was approved.
 --   7. Reverse against reverse: one reversal, one credit; the other is refused as already reversed.
 --   8. The wife's purge while an approval from the pool is in flight, with a reversal in history and
 --      another request pending: the purge waits for it, with no deadlock, its ledger invariant holds,
 --      and the record keeps what remained after the approval.
+-- The household's husband is gone (review R3-01), so two admins who are not wives may each act:
+-- the races need two people allowed to settle the same ledger.
 -- ============================================================================
 \set ON_ERROR_STOP on
 
@@ -211,19 +213,20 @@ $$;
 SELECT pg_temp.cleanup();
 
 -- ── Fixtures (committed) ────────────────────────────────────────────────────
--- H1: husband H(1) primary admin and provider, co-admin C(2), wife W(3) with a bank account.
+-- H1: the husband is gone (no provider); admins A(1) and C(2), neither a wife; wife W(3) with a
+--     bank account.
 -- Accounts: pool A1 1000 (H), H bank A2 500, W bank A3 0. W advanced 300. Record D1 (100 owed).
 DO $$
 BEGIN
     INSERT INTO auth.users (id, email) SELECT pg_temp.u(n), 't57-' || n || '@test.local' FROM generate_series(1, 3) AS n;
     INSERT INTO public.households (id, name, invite_code, household_type) VALUES (pg_temp.h(1), 'T57 H1', 'T57CODE000000001', 'family');
     INSERT INTO public.household_memberships (household_id, user_id, role, financial_role, is_default) VALUES
-        (pg_temp.h(1), pg_temp.u(1), 'admin', 'provider', true),
+        (pg_temp.h(1), pg_temp.u(1), 'admin', 'family_member', true),
         (pg_temp.h(1), pg_temp.u(2), 'admin', 'family_member', true),
         (pg_temp.h(1), pg_temp.u(3), 'member', 'spouse', true);
     UPDATE public.users SET household_id = pg_temp.h(1) WHERE id IN (pg_temp.u(1), pg_temp.u(2), pg_temp.u(3));
     UPDATE public.households SET nafaqah_provider_user_id = pg_temp.u(1) WHERE id = pg_temp.h(1);
-    UPDATE public.users SET role = 'admin', financial_role = 'provider' WHERE id = pg_temp.u(1);
+    UPDATE public.users SET role = 'admin', financial_role = 'family_member' WHERE id = pg_temp.u(1);
     UPDATE public.users SET role = 'admin' WHERE id = pg_temp.u(2);
     UPDATE public.users SET financial_role = 'spouse' WHERE id = pg_temp.u(3);
     INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, is_shared_pool) VALUES
@@ -232,6 +235,8 @@ BEGIN
         (pg_temp.a(3), pg_temp.h(1), pg_temp.u(3), 'T57 her bank', 'bank', 0, false);
     INSERT INTO public.transactions (household_id, user_id, amount, merchant, category_code, timestamp, source, spent_by, nafaqah_class, nafaqah_spouse_id)
     VALUES (pg_temp.h(1), pg_temp.u(3), 300, 'T57 Grocer', 'OPEX-GROCERY', now(), 'manual', 'me', 'wife_reimbursable', pg_temp.u(3));
+    -- No husband now (he left, say): the admins who are not wives act (review R3-01).
+    UPDATE public.households SET nafaqah_provider_user_id = NULL WHERE id = pg_temp.h(1);
     INSERT INTO public.former_member_debts (id, household_id, original_amount) VALUES (pg_temp.d(1), pg_temp.h(1), 100);
     INSERT INTO public.account_deletion_requests (id, user_id, status, scheduled_for, attempts, lease_expires_at)
     VALUES (pg_temp.r(3), pg_temp.u(3), 'processing', now() - interval '1 minute', 1, now() + interval '30 minutes');
@@ -304,9 +309,12 @@ BEGIN
     RAISE NOTICE 'PASSED: two repayments of the remainder at once move it once.';
 END $$;
 
--- A new advance for what follows: 200 owed. A pending request of 5 for the lock-order check.
+-- A new advance for what follows: 200 owed (classified while a provider is named, as before he
+-- left). A pending request of 5 for the lock-order check.
+UPDATE public.households SET nafaqah_provider_user_id = pg_temp.u(1) WHERE id = pg_temp.h(1);
 INSERT INTO public.transactions (household_id, user_id, amount, merchant, category_code, timestamp, source, spent_by, nafaqah_class, nafaqah_spouse_id)
 VALUES (pg_temp.h(1), pg_temp.u(3), 200, 'T57 Grocer', 'OPEX-GROCERY', now(), 'manual', 'me', 'wife_reimbursable', pg_temp.u(3));
+UPDATE public.households SET nafaqah_provider_user_id = NULL WHERE id = pg_temp.h(1);
 CREATE TABLE pg_temp.ids (label text PRIMARY KEY, id uuid);
 INSERT INTO pg_temp.ids VALUES ('r0', pg_temp.ask(5, pg_temp.k(30)));
 

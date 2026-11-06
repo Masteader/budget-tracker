@@ -81,6 +81,23 @@ BEGIN
     END IF;
 END $$;
 """,
+    # 001300 again: the amount-only payment stays the service role's (review R3-03), and the
+    # ledger's read rule is the owner's (review R3-01), not the household-wide one it replaces.
+    "20261105001300": """
+DO $$
+BEGIN
+    IF has_function_privilege('authenticated', 'public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid)', 'EXECUTE')
+       OR has_function_privilege('anon', 'public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid)', 'EXECUTE') THEN
+        RAISE EXCEPTION 'R3-03: a client can call the amount-only former member payment';
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public'
+               AND tablename IN ('spouse_reimbursements', 'spouse_reimbursement_requests', 'spouse_reimbursement_request_outcomes',
+                                 'former_member_debts', 'former_member_debt_events')
+               AND qual NOT LIKE '%nafaqah_caller_manages_ledgers%') THEN
+        RAISE EXCEPTION 'R3-01: a ledger policy reads household-wide';
+    END IF;
+END $$;
+""",
 }
 # Run by hand on live (2026-11-05). Live has no cost_control_templates table.
 ROLLOUT_ALREADY_ON_LIVE = """

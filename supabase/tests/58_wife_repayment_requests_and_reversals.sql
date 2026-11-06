@@ -6,9 +6,9 @@
 --
 -- Owner decisions 2026-11-06:
 --   * The wife no longer records a repayment. She marks "I received X": a pending request that
---     moves no money and does not reduce what is owed. The husband or an admin approves it with
---     an account (the normal repayment: debit, idempotent, overpayment refused, linked to the
---     request) or declines it with an optional reason. She can cancel her own pending request.
+--     moves no money and does not reduce what is owed. The husband (when he is gone, an admin who
+--     is not a wife: test 62) approves it with an account (the normal repayment: debit,
+--     idempotent, overpayment refused, linked to the request) or declines it with an optional reason. She can cancel her own pending request.
 --     Approval uses the requested amount exactly and re-checks what is owed at that moment.
 --     Pending requests together never exceed what is owed (review R1-03: those that no longer fit close).
 --   * Nothing is deleted, edited or voided. A tracked repayment is corrected by a reversal: one
@@ -20,7 +20,8 @@
 --   1. Requests: pending, nothing moves, nothing owed changes; replay; only the wife asks; the
 --      pending total is capped by what is owed.
 --   2. Cancel: only by her, only while pending, replayed.
---   3. Decline: only the husband or an admin, with an optional reason; nothing moves.
+--   3. Decline: only the husband (an admin who is not a wife when he is gone, review R3-01), with an
+--      optional reason; nothing moves.
 --   4. Approve: the debit of exactly the requested amount, linked to the request; replay; refusals
 --      (the wife herself, a member, another member's account, insufficient funds, no account)
 --      leave the request pending; a second approval or a cancel afterwards is refused.
@@ -381,12 +382,13 @@ BEGIN
     PERFORM pg_temp.expect('with the reason', pg_temp.outcome(pg_temp.id('r3')), 'declined/Not received yet');
     PERFORM pg_temp.expect('decline again is a replay', pg_temp.decline(1, 1, pg_temp.id('r3'), NULL)::jsonb ->> 'replayed', 'true');
     PERFORM pg_temp.expect('a declined request cannot be cancelled', pg_temp.cancel(2, 1, pg_temp.id('r3')), 'ERR:request_not_pending');
-    PERFORM pg_temp.expect('a cancelled request cannot be declined', pg_temp.decline(4, 1, pg_temp.id('r2'), NULL), 'ERR:request_not_pending');
-    PERFORM pg_temp.expect('a long reason', pg_temp.decline(4, 1, pg_temp.id('r1'), repeat('x', 201)), 'ERR:invalid_reason');
+    PERFORM pg_temp.expect('a co-admin cannot decline while the husband is there (R3-01)', pg_temp.decline(4, 1, pg_temp.id('r1'), NULL), 'ERR:forbidden');
+    PERFORM pg_temp.expect('a cancelled request cannot be declined', pg_temp.decline(1, 1, pg_temp.id('r2'), NULL), 'ERR:request_not_pending');
+    PERFORM pg_temp.expect('a long reason', pg_temp.decline(1, 1, pg_temp.id('r1'), repeat('x', 201)), 'ERR:invalid_reason');
     PERFORM pg_temp.expect('nothing moved', pg_temp.balances(), v_bal);
     PERFORM pg_temp.expect('what is owed is unchanged', pg_temp.owed(1, 2), '400.00');
     PERFORM pg_temp.expect('no budget moved (cancel, decline)', pg_temp.budgets(), pg_temp.kept('budgets'));
-    RAISE NOTICE 'PASSED: she cancels her own pending request; the husband or an admin declines; nothing moves.';
+    RAISE NOTICE 'PASSED: she cancels her own pending request; the husband declines; nothing moves.';
 END $$;
 
 -- 4. Approve ------------------------------------------------------------------------------------
@@ -399,7 +401,8 @@ DECLARE
 BEGIN
     PERFORM pg_temp.expect('she cannot approve her own', pg_temp.approve(2, 1, pg_temp.id('r1'), 2, 10), 'ERR:forbidden');
     PERFORM pg_temp.expect('a member cannot approve', pg_temp.approve(3, 1, pg_temp.id('r1'), 1, 10), 'ERR:forbidden');
-    PERFORM pg_temp.expect('a co-admin with the husband''s account', pg_temp.approve(4, 1, pg_temp.id('r1'), 3, 10), 'ERR:account_forbidden');
+    PERFORM pg_temp.expect('a co-admin, while the husband is there (R3-01)', pg_temp.approve(4, 1, pg_temp.id('r1'), 5, 10), 'ERR:forbidden');
+    PERFORM pg_temp.expect('the husband with a co-admin''s account', pg_temp.approve(1, 1, pg_temp.id('r1'), 5, 10), 'ERR:account_forbidden');
     PERFORM pg_temp.expect('insufficient funds', pg_temp.approve(1, 1, pg_temp.id('r1'), 12, 10), 'ERR:insufficient_funds');
     PERFORM pg_temp.expect('an account is required', pg_temp.approve(1, 1, pg_temp.id('r1'), 0, 10), 'ERR:account_required');
     PERFORM pg_temp.expect('another household''s account', pg_temp.approve(1, 1, pg_temp.id('r1'), 7, 10), 'ERR:account_unavailable');
@@ -432,7 +435,7 @@ BEGIN
         'true/' || pg_temp.kept('p_r1') || '/' || pg_temp.a(3)::text);
     -- From another account it is not the same tap (review R1-04).
     PERFORM pg_temp.expect('the same key from another account', pg_temp.approve(1, 1, pg_temp.id('r1'), 4, 10), 'ERR:request_key_reused');
-    PERFORM pg_temp.expect('a second approval', pg_temp.approve(4, 1, pg_temp.id('r1'), 1, 11), 'ERR:request_not_pending');
+    PERFORM pg_temp.expect('a second approval', pg_temp.approve(1, 1, pg_temp.id('r1'), 1, 11), 'ERR:request_not_pending');
     PERFORM pg_temp.expect('a cancel after approval', pg_temp.cancel(2, 1, pg_temp.id('r1')), 'ERR:request_not_pending');
     PERFORM pg_temp.expect('a decline after approval', pg_temp.decline(1, 1, pg_temp.id('r1'), NULL), 'ERR:request_not_pending');
     PERFORM pg_temp.expect('approving a cancelled request', pg_temp.approve(1, 1, pg_temp.id('r2'), 3, 12), 'ERR:request_not_pending');
@@ -524,9 +527,12 @@ BEGIN
     v_res := pg_temp.repay(1, 1, 2, '120', 3, 24)::jsonb;
     PERFORM pg_temp.expect('corrected', (v_res ->> 'outstanding_after') || '/' || pg_temp.bal(3), '180.00/780.00');
 
-    -- A pool payment by a co-admin, reversed by the husband (an admin): back into the pool.
-    v_res := pg_temp.repay(4, 1, 2, '30', 1, 25)::jsonb;
+    -- A pool payment by the husband (an admin), reversed by him: back into the pool. A co-admin does
+    -- not reverse it while he is there (review R3-01).
+    v_res := pg_temp.repay(1, 1, 2, '30', 1, 25)::jsonb;
     PERFORM pg_temp.expect('pool paid', pg_temp.bal(1), '970.00');
+    PERFORM pg_temp.expect('a co-admin does not reverse the pool''s repayment while the husband is there',
+        pg_temp.rev(4, 1, (v_res ->> 'reimbursement_id')::uuid, 39), 'ERR:forbidden');
     v_res := pg_temp.rev(1, 1, (v_res ->> 'reimbursement_id')::uuid, 26)::jsonb;
     PERFORM pg_temp.expect('pool credited back', (v_res ->> 'outstanding_after') || '/' || pg_temp.bal(1), '180.00/1000.00');
 
@@ -536,8 +542,10 @@ BEGIN
     UPDATE public.accounts SET is_archived = true WHERE id = pg_temp.a(4);
     v_res := pg_temp.repay(1, 1, 2, '10', 13, 28)::jsonb;
     PERFORM pg_temp.keep('p_wallet', v_res ->> 'reimbursement_id');
-    PERFORM pg_temp.expect('he deletes that wallet',
-        pg_temp.call(pg_temp.u(1), NULL, format('DELETE FROM public.accounts WHERE id = %L RETURNING id::text', pg_temp.a(13))), pg_temp.a(13)::text);
+    -- He cannot delete it (review R3-05: archive instead); the service path still can, as the purge does.
+    PERFORM pg_temp.expect('he cannot delete that wallet',
+        pg_temp.call(pg_temp.u(1), NULL, format('DELETE FROM public.accounts WHERE id = %L RETURNING id::text', pg_temp.a(13))), 'ERR:account_has_repayments');
+    DELETE FROM public.accounts WHERE id = pg_temp.a(13);
     -- A repayment from before this release: amount only, no transfer.
     INSERT INTO public.spouse_reimbursements (household_id, wife_user_id, paid_by_user_id, amount, payment_method, recorded_by)
     VALUES (pg_temp.h(1), pg_temp.u(2), pg_temp.u(1), 5, 'cash', pg_temp.u(1)) RETURNING id INTO v_legacy;
@@ -730,8 +738,9 @@ BEGIN
                AND (NOT p.prosecdef OR NOT EXISTS (SELECT 1 FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%'))) THEN
         RAISE EXCEPTION 'a request or reversal function without SECURITY DEFINER and a fixed search_path';
     END IF;
-    -- Members read their own household's requests only.
-    PERFORM pg_temp.expect('her husband''s household reads its requests',
+    -- Her husband gone (purged in section 8), an admin who is not a wife reads the household's
+    -- requests (review R3-01); another household reads none.
+    PERFORM pg_temp.expect('the admin reads them, her husband gone',
         pg_temp.call(pg_temp.u(5), NULL, 'SELECT count(*)::text FROM public.spouse_reimbursement_requests'),
         (SELECT count(*)::text FROM public.spouse_reimbursement_requests WHERE household_id = pg_temp.h(2)));
     PERFORM pg_temp.expect('and their outcomes',

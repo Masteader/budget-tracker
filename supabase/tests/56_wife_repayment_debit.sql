@@ -21,9 +21,11 @@
 --   4. Refused, with nothing moved: overpayment, an account of another household, archived or not
 --      in SAR, another member's personal account, a shared pool for a non-admin, the wife herself
 --      (with her account or the pool), a member, insufficient funds, no request key.
---   5. A shared pool by an admin; a provider who is not an admin pays from his own account; the
---      API path (service role, p_actor_user_id).
---   6. Append-only: no client deletes or edits the ledger, the transfers, the requests or outcomes.
+--   5. A shared pool by the husband when he is an admin; a provider who is not an admin pays from
+--      his own account; an admin does not while the husband is there (review R3-01); the API path
+--      (service role, p_actor_user_id).
+--   6. Append-only: no client deletes or edits the ledger, the transfers, the requests or outcomes,
+--      nor deletes the account a repayment left (review R3-05: archived instead).
 --   7. The purge of the wife with repayments in her history: the ledger invariant holds, the
 --      record holds what remained.
 --   8. A former member's record: a payment debits his account (only his side), a replay once, the
@@ -422,8 +424,9 @@ BEGIN
     PERFORM pg_temp.expect('an account that does not exist',
         pg_temp.call(pg_temp.u(1), NULL, format('SELECT public.record_spouse_reimbursement(%L, %L, 10, %L, NULL, NULL, gen_random_uuid(), %L::uuid)::text',
             pg_temp.h(1), pg_temp.u(2), 'cash', pg_temp.k(14))), 'ERR:account_unavailable');
-    PERFORM pg_temp.expect('a co-admin with the husband''s account', pg_temp.repay(4, 1, 2, '10', 3, 15), 'ERR:account_forbidden');
-    PERFORM pg_temp.expect('a co-admin with a member''s account', pg_temp.repay(4, 1, 2, '10', 7, 16), 'ERR:account_forbidden');
+    PERFORM pg_temp.expect('the husband with a co-admin''s account', pg_temp.repay(1, 1, 2, '10', 8, 15), 'ERR:account_forbidden');
+    PERFORM pg_temp.expect('the husband with a member''s account', pg_temp.repay(1, 1, 2, '10', 7, 16), 'ERR:account_forbidden');
+    PERFORM pg_temp.expect('a co-admin, while the husband is there (R3-01)', pg_temp.repay(4, 1, 2, '10', 8, 15), 'ERR:forbidden');
     PERFORM pg_temp.expect('the wife with her own account', pg_temp.repay(2, 1, 2, '10', 2, 17), 'ERR:wife_must_request');
     PERFORM pg_temp.expect('the wife with the pool', pg_temp.repay(2, 1, 2, '10', 1, 18), 'ERR:wife_must_request');
     PERFORM pg_temp.expect('a member records nothing', pg_temp.repay(3, 1, 2, '10', 7, 19), 'ERR:forbidden');
@@ -444,8 +447,8 @@ DO $$
 DECLARE
     v_res jsonb;
 BEGIN
-    -- A co-admin pays from the pool.
-    v_res := pg_temp.repay(4, 1, 2, '50', 1, 30, 'stc_pay')::jsonb;
+    -- The husband, an admin, pays from the pool.
+    v_res := pg_temp.repay(1, 1, 2, '50', 1, 30, 'stc_pay')::jsonb;
     PERFORM pg_temp.expect('pool repayment', v_res ->> 'outstanding_after', '200.00');
     PERFORM pg_temp.expect('pool down', pg_temp.bal(1), '950.00');
     PERFORM pg_temp.expect('none of hers moved (pool)', pg_temp.hers(), pg_temp.kept('hers'));
@@ -457,8 +460,7 @@ BEGIN
     PERFORM pg_temp.expect('the transfer goes to no account',
         (SELECT (to_account_id IS NULL)::text || ':' || from_account_id::text FROM public.account_transfers WHERE id = (v_res ->> 'transfer_id')::uuid),
         'true:' || pg_temp.a(12)::text);
-    v_res := pg_temp.repay(7, 3, 9, '50', 11, 33)::jsonb;
-    PERFORM pg_temp.expect('an admin who is not the husband, from the pool', (v_res ->> 'outstanding_after') || '/' || pg_temp.bal(11), '50.00/550.00');
+    PERFORM pg_temp.expect('an admin who is not the husband, while he is there (R3-01)', pg_temp.repay(7, 3, 9, '50', 11, 33) || '/' || pg_temp.bal(11), 'ERR:forbidden/600.00');
 
     -- The API: service role, the verified caller in p_actor_user_id.
     v_res := pg_temp.svc(format('SELECT public.record_spouse_reimbursement(%L, %L, 10, %L, NULL, %L, %L::uuid, %L::uuid)::text',
@@ -467,12 +469,12 @@ BEGIN
         '190.00/190.00/' || pg_temp.kept('hers'));
     PERFORM pg_temp.expect('API path checks the verified caller',
         pg_temp.svc(format('SELECT public.record_spouse_reimbursement(%L, %L, 10, %L, NULL, %L, %L::uuid, %L::uuid)::text',
-            pg_temp.h(1), pg_temp.u(2), 'cash', pg_temp.u(4), pg_temp.a(3), pg_temp.k(35))), 'ERR:account_forbidden');
+            pg_temp.h(1), pg_temp.u(2), 'cash', pg_temp.u(4), pg_temp.a(3), pg_temp.k(35))), 'ERR:forbidden');
     PERFORM pg_temp.expect('no repayment transfer has a destination',
         (SELECT count(*)::text FROM public.account_transfers t JOIN public.spouse_reimbursements r ON r.transfer_id = t.id
          WHERE r.kind = 'payment' AND t.to_account_id IS NOT NULL), '0');
     PERFORM pg_temp.expect('no budget moved (pools)', pg_temp.budgets(), pg_temp.kept('budgets'));
-    RAISE NOTICE 'PASSED: shared pools by admins only, his own account otherwise; her side never moves.';
+    RAISE NOTICE 'PASSED: shared pools by the husband when an admin, his own account otherwise; her side never moves.';
 END $$;
 
 -- 6. Append-only ----------------------------------------------------------------------------------
@@ -491,11 +493,14 @@ BEGIN
     END LOOP;
     PERFORM pg_temp.expect('nothing moved', pg_temp.balances(), v_bal);
     PERFORM pg_temp.expect('nothing removed', pg_temp.counts(), v_counts);
-    -- The husband may still delete his own account: the history stays, nothing is credited back.
-    PERFORM pg_temp.expect('he deletes his cash account',
-        pg_temp.call(pg_temp.u(1), NULL, format('DELETE FROM public.accounts WHERE id = %L RETURNING id::text', pg_temp.a(5))), pg_temp.a(5)::text);
-    PERFORM pg_temp.expect('the transfers stay, without his account',
-        (SELECT count(*)::text FROM public.account_transfers WHERE household_id = pg_temp.h(1) AND from_account_id IS NULL AND amount IN (30, 20)), '2');
+    -- The account a repayment left is archived, not deleted (review R3-05): the history stays,
+    -- nothing is credited back.
+    PERFORM pg_temp.expect('he cannot delete his cash account',
+        pg_temp.call(pg_temp.u(1), NULL, format('DELETE FROM public.accounts WHERE id = %L RETURNING id::text', pg_temp.a(5))), 'ERR:account_has_repayments');
+    PERFORM pg_temp.expect('he archives it',
+        pg_temp.call(pg_temp.u(1), NULL, format('UPDATE public.accounts SET is_archived = true WHERE id = %L RETURNING id::text', pg_temp.a(5))), pg_temp.a(5)::text);
+    PERFORM pg_temp.expect('the transfers stay, from his archived account',
+        (SELECT count(*)::text FROM public.account_transfers WHERE household_id = pg_temp.h(1) AND from_account_id = pg_temp.a(5) AND amount IN (30, 20)), '2');
     PERFORM pg_temp.expect('owed unchanged', pg_temp.outstanding(1, 2), '190.00');
     RAISE NOTICE 'PASSED: repayments, transfers, requests and outcomes are append-only for clients.';
 END $$;
@@ -556,17 +561,17 @@ BEGIN
     PERFORM pg_temp.expect('a member', pg_temp.fpay(3, 1, '10', 7, 46), 'ERR:forbidden');
     PERFORM pg_temp.expect('no request key', pg_temp.fpay(1, 1, '10', 3, 0), 'ERR:request_key_required');
     PERFORM pg_temp.expect('no account (7 arguments)', pg_temp.fpay(1, 1, '10', 0, 47), 'ERR:app_update_required');
-    PERFORM pg_temp.expect('the old signature',
+    PERFORM pg_temp.expect('the old signature is not a client''s (R3-03)',
         pg_temp.call(pg_temp.u(1), NULL, format('SELECT public.record_former_member_debt_payment(%L, %L, 10, %L, %L)::text',
-            pg_temp.h(1), pg_temp.debt(1), 'cash', pg_temp.k(48))), 'ERR:app_update_required');
+            pg_temp.h(1), pg_temp.debt(1), 'cash', pg_temp.k(48))), 'ERR:42501');
     PERFORM pg_temp.expect('the old signature, as the old API',
         pg_temp.svc(format('SELECT public.record_former_member_debt_payment(%L, %L, 10, %L, %L, %L)::text',
             pg_temp.h(1), pg_temp.debt(1), 'cash', pg_temp.k(48), pg_temp.u(1))), 'ERR:app_update_required');
     PERFORM pg_temp.expect('replays and refusals move nothing', pg_temp.balances(), v_bal);
     PERFORM pg_temp.expect('replays and refusals write nothing', pg_temp.counts(), v_counts);
 
-    -- A co-admin from the pool.
-    v_res := pg_temp.fpay(4, 1, '50', 1, 49)::jsonb;
+    -- The husband (an admin) from the pool.
+    v_res := pg_temp.fpay(1, 1, '50', 1, 49)::jsonb;
     PERFORM pg_temp.expect('pool payment', (v_res ->> 'remaining') || '/' || pg_temp.bal(1), '100.00/900.00');
     PERFORM pg_temp.expect('every payment event has a transfer',
         (SELECT count(*)::text FROM public.former_member_debt_events WHERE debt_id = pg_temp.debt(1) AND transfer_id IS NULL), '0');
@@ -583,9 +588,10 @@ BEGIN
     -- F3: Z goes; the provider (not an admin) pays from his own account, not from the pool.
     PERFORM pg_temp.request(9);
     PERFORM pg_temp.purge(9);
-    PERFORM pg_temp.expect('F3 record', pg_temp.state(3), '50.00/0.00/open');
+    PERFORM pg_temp.expect('F3 record', pg_temp.state(3), '100.00/0.00/open');
     PERFORM pg_temp.expect('a non-admin provider and the pool', pg_temp.fpay(8, 3, '10', 11, 52), 'ERR:account_forbidden');
-    PERFORM pg_temp.expect('the provider from his own account', (pg_temp.fpay(8, 3, '10', 12, 53)::jsonb ->> 'remaining') || '/' || pg_temp.bal(12), '40.00/140.00');
+    PERFORM pg_temp.expect('an admin, while the husband is there (R3-01)', pg_temp.fpay(7, 3, '10', 11, 54), 'ERR:forbidden');
+    PERFORM pg_temp.expect('the provider from his own account', (pg_temp.fpay(8, 3, '10', 12, 53)::jsonb ->> 'remaining') || '/' || pg_temp.bal(12), '90.00/140.00');
     PERFORM pg_temp.expect('no budget moved (former member)', pg_temp.budgets(), pg_temp.kept('budgets'));
     RAISE NOTICE 'PASSED: a former member payment debits his account only; replays once; no account is refused; the waiver moves nothing.';
 END $$;
@@ -598,8 +604,7 @@ BEGIN
     FOREACH v_sig IN ARRAY ARRAY[
         'record_spouse_reimbursement(uuid, uuid, numeric, text, text, uuid, uuid, uuid)',
         'record_spouse_reimbursement(uuid, uuid, numeric, text, text, uuid)',
-        'record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid, uuid)',
-        'record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid)'
+        'record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid, uuid)'
     ] LOOP
         IF has_function_privilege('anon', 'public.' || v_sig, 'EXECUTE') THEN
             RAISE EXCEPTION 'VULNERABILITY: anon can execute %', v_sig;
@@ -609,6 +614,12 @@ BEGIN
             RAISE EXCEPTION 'REGRESSION: % not executable by its callers', v_sig;
         END IF;
     END LOOP;
+    -- The amount-only payment stays the service role's (reviews R1-11, R3-03).
+    IF has_function_privilege('anon', 'public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid)', 'EXECUTE')
+       OR has_function_privilege('authenticated', 'public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid)', 'EXECUTE')
+       OR NOT has_function_privilege('service_role', 'public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid)', 'EXECUTE') THEN
+        RAISE EXCEPTION 'VULNERABILITY: the amount-only former member payment is not the service role''s only';
+    END IF;
     IF EXISTS (SELECT 1 FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
                AND p.proname IN ('record_spouse_reimbursement', 'record_former_member_debt_payment', 'get_spouse_reimbursement_balance',
                                  'former_member_debt_outstanding', 'guard_wife_reimbursable_ledger', 'remove_nafaqah_ledger_on_membership_end')

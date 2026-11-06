@@ -10,14 +10,14 @@
 --   1. While her request is scheduled, the creditor is told the amount: by email through the
 --      deletion notice path (list_former_member_debt_notices_due, notice 'creditor_owed', marked
 --      with mark_account_deletion_notice_sent, both email switches as for every other notice), and
---      in the app (get_former_member_debt_deletion_notices). The creditor is the household's Nafaqah
---      provider (nafaqah_husband_id), or its admins when there is none.
+--      in the app (get_former_member_debt_deletion_notices). The creditor is her husband, or, when
+--      he is gone, the household's admins who are not wives (see "Her husband" below).
 --   2. At the purge, before her membership ends, each surviving household where the outstanding
 --      amount (her wife_reimbursable advances there less the repayments) is above zero keeps ONE
 --      record: former_member_debts. No name, id, email or free text of hers.
---   3. The provider or any admin (co-admins included) who is not a wife (a spouse member) of the
---      household closes it (review R1-01, owner decision 2026-11-06: no wife acts on a former
---      member's record, even as an admin): record_former_member_debt_payment
+--   3. Her husband closes it; when he is gone, an admin who is not a wife (review R3-01, owner
+--      decision 2026-11-06: no wife acts on a former member's record, even as an admin):
+--      record_former_member_debt_payment
 --      (amount up to what remains, plus a payment method, exactly as record_spouse_reimbursement
 --      takes them) or waive_former_member_debt (her release, إبراء). Like an ordinary reimbursement,
 --      neither touches an account, a budget or a transaction: only these two tables change.
@@ -26,8 +26,17 @@
 --      The payment is executable by the service role only (the API, which checks the caller): no
 --      client calls it directly, so the window before 20261105001300 (which replaces it with one
 --      that takes the account it is paid from) has no amount-only path for a client (review R1-11).
---   4. Members read both tables under the reimbursement ledger's rule (their active household). No
---      client writes them.
+--   4. Who reads both tables (review R3-01, owner decision 2026-11-06): her husband; when he is
+--      gone, an admin of the household who is not a wife. Never a wife (a co-wife, even an admin)
+--      nor an ordinary member. No client writes them.
+--
+--   Her husband (one definition, nafaqah_ledger_husband_id; the API mirrors it): the household's
+--   Nafaqah provider (households.nafaqah_provider_user_id) while he is a current member of the
+--   household who is not a wife. "The husband is gone" when there is no such member: he left, his
+--   account was deleted (both clear the provider: clear_nafaqah_provider_on_membership_end), or
+--   nobody was named. nafaqah_may_manage_ledgers(household, user) is who sees and settles every
+--   wife's ledger and these records: her husband; when he is gone, an admin who is not a wife.
+--   20261105001300 applies the same rule to the wife's ledger, where she also reads her own.
 --   5. One request key, one operation, per household (review R2-01): nafaqah_request_keys holds every
 --      key a Nafaqah call that takes one has used in the household (its primary key is the
 --      household and the key), written in the same transaction as the operation. Each call first
@@ -61,10 +70,13 @@
 -- they must never wait for the household while holding the record, which a purge deleting the
 -- household locks after the household.
 --
--- Rollback (one transaction), after rolling back the app and the API:
+-- Rollback (one transaction), after rolling back 20261105001300 (its policies use this file's
+-- nafaqah_caller_manages_ledgers), the app and the API:
 --   1. Run prepare_account_purge's CREATE OR REPLACE statement from 000300,
 --      mark_account_deletion_notice_sent's from 000400 and set_household_type's from 20261020900000.
---   2. DROP FUNCTION public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid),
+--   2. DROP TABLE public.former_member_debt_events, public.former_member_debts, public.nafaqah_request_keys;
+--      (their policies go with them), then
+--      DROP FUNCTION public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid),
 --        public.waive_former_member_debt(uuid, uuid, uuid, uuid),
 --        public.get_former_member_debt_deletion_notices(uuid, uuid),
 --        public.list_former_member_debt_notices_due(),
@@ -72,8 +84,10 @@
 --        public.former_member_debt_require_manager(uuid, uuid),
 --        public.former_member_debt_creditors(uuid, uuid),
 --        public.former_member_debt_outstanding(uuid, uuid),
---        public.nafaqah_claim_request_key(uuid, uuid);
---      DROP TABLE public.former_member_debt_events, public.former_member_debts, public.nafaqah_request_keys;
+--        public.nafaqah_claim_request_key(uuid, uuid),
+--        public.nafaqah_caller_manages_ledgers(),
+--        public.nafaqah_may_manage_ledgers(uuid, uuid),
+--        public.nafaqah_ledger_husband_id(uuid);
 --   Data lost: every kept record and its history, and the household's used request keys.
 -- ============================================================================
 
@@ -135,16 +149,73 @@ GRANT SELECT ON public.former_member_debt_events TO authenticated;
 GRANT ALL ON public.former_member_debts TO service_role;
 GRANT ALL ON public.former_member_debt_events TO service_role;
 
--- The reimbursement ledger's read rule (spouse_reimbursements_select_household).
+-- Her husband, and who sees and settles a wife's ledger and these records (review R3-01, owner
+-- decision 2026-11-06; see the header). One definition for this file, 20261105001300 and the API.
+
+-- Her husband: the household's provider while he is a current member who is not a wife. NULL: the
+-- husband is gone (he left or was deleted, which clears the provider, or none was named).
+CREATE OR REPLACE FUNCTION public.nafaqah_ledger_husband_id(p_household_id uuid)
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    SELECT h.nafaqah_provider_user_id
+    FROM public.households h
+    JOIN public.household_memberships m
+      ON m.household_id = h.id AND m.user_id = h.nafaqah_provider_user_id
+    WHERE h.id = p_household_id
+      AND m.financial_role IS DISTINCT FROM 'spouse';
+$$;
+
+-- Who sees and settles every wife's ledger and the former member records of the household: her
+-- husband; when he is gone, an admin of the household who is not a wife. Never a wife (a co-wife,
+-- even an admin), never an ordinary member.
+CREATE OR REPLACE FUNCTION public.nafaqah_may_manage_ledgers(p_household_id uuid, p_actor uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.household_memberships m
+        WHERE m.household_id = p_household_id
+          AND m.user_id = p_actor
+          AND m.financial_role IS DISTINCT FROM 'spouse'
+          AND CASE
+                  WHEN public.nafaqah_ledger_husband_id(p_household_id) IS NULL THEN m.role = 'admin'
+                  ELSE p_actor = public.nafaqah_ledger_husband_id(p_household_id)
+              END
+    );
+$$;
+
+-- The read rule's half that depends on the caller only (their active household), evaluated once
+-- per statement in the policies below and in 20261105001300's.
+CREATE OR REPLACE FUNCTION public.nafaqah_caller_manages_ledgers()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    SELECT COALESCE(public.nafaqah_may_manage_ledgers(public.get_auth_user_household_id(), auth.uid()), false);
+$$;
+
+-- Read by her husband, or by an admin who is not a wife when he is gone (review R3-01): never by a
+-- wife or an ordinary member. The policy names are kept from the first draft.
 DROP POLICY IF EXISTS former_member_debts_select_household ON public.former_member_debts;
 CREATE POLICY former_member_debts_select_household ON public.former_member_debts
     FOR SELECT TO authenticated
-    USING (household_id = (SELECT public.get_auth_user_household_id()));
+    USING (household_id = (SELECT public.get_auth_user_household_id())
+           AND (SELECT public.nafaqah_caller_manages_ledgers()));
 
 DROP POLICY IF EXISTS former_member_debt_events_select_household ON public.former_member_debt_events;
 CREATE POLICY former_member_debt_events_select_household ON public.former_member_debt_events
     FOR SELECT TO authenticated
-    USING (EXISTS (
+    USING ((SELECT public.nafaqah_caller_manages_ledgers()) AND EXISTS (
         SELECT 1 FROM public.former_member_debts d
         WHERE d.id = former_member_debt_events.debt_id
           AND d.household_id = (SELECT public.get_auth_user_household_id())
@@ -216,8 +287,8 @@ AS $$
         0)::numeric(14, 2);
 $$;
 
--- Who is told what a leaving wife is owed: the husband, or the admins when the household has none.
--- Never the wife herself.
+-- Who is told what a leaving wife is owed, and whose record it becomes: her husband; when he is gone,
+-- the admins of the household who are not wives (review R3-01). Never the wife herself or a co-wife.
 CREATE OR REPLACE FUNCTION public.former_member_debt_creditors(p_household_id uuid, p_wife_user_id uuid)
 RETURNS SETOF uuid
 LANGUAGE plpgsql
@@ -226,21 +297,24 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_husband uuid := public.nafaqah_husband_id(p_household_id);
+    v_husband uuid := public.nafaqah_ledger_husband_id(p_household_id);
 BEGIN
-    IF v_husband IS NOT NULL AND v_husband IS DISTINCT FROM p_wife_user_id THEN
-        RETURN NEXT v_husband;
+    IF v_husband IS NOT NULL THEN
+        IF v_husband IS DISTINCT FROM p_wife_user_id THEN
+            RETURN NEXT v_husband;
+        END IF;
         RETURN;
     END IF;
     RETURN QUERY
     SELECT m.user_id FROM public.household_memberships m
     WHERE m.household_id = p_household_id AND m.role = 'admin' AND m.user_id <> p_wife_user_id
+      AND m.financial_role IS DISTINCT FROM 'spouse'
     ORDER BY m.user_id;
 END;
 $$;
 
--- The husband (the household's provider) or an admin of the household, never a wife (a spouse
--- member), even an admin; anyone else is refused.
+-- Her husband; when he is gone, an admin of the household who is not a wife (review R3-01). Never a
+-- wife (a spouse member), even an admin; anyone else is refused.
 CREATE OR REPLACE FUNCTION public.former_member_debt_require_manager(p_household_id uuid, p_actor uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -249,16 +323,8 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM public.household_memberships m
-        JOIN public.households h ON h.id = m.household_id
-        WHERE m.household_id = p_household_id
-          AND m.user_id = p_actor
-          AND m.financial_role IS DISTINCT FROM 'spouse'
-          AND (m.role = 'admin' OR h.nafaqah_provider_user_id = p_actor)
-    ) THEN
-        RAISE EXCEPTION 'Forbidden: only the husband or a household admin who is not a wife can close this record'
+    IF NOT public.nafaqah_may_manage_ledgers(p_household_id, p_actor) THEN
+        RAISE EXCEPTION 'Forbidden: only the husband, or an admin who is not a wife when he is gone, can close this record'
             USING ERRCODE = '42501', HINT = 'forbidden';
     END IF;
 END;
@@ -1022,6 +1088,11 @@ END;
 $$;
 
 -- 7. Privileges --------------------------------------------------------------------
+REVOKE ALL ON FUNCTION public.nafaqah_ledger_husband_id(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.nafaqah_may_manage_ledgers(uuid, uuid) FROM PUBLIC, anon, authenticated;
+-- Used by the read policies, so the clients execute it: it answers for the caller only.
+REVOKE ALL ON FUNCTION public.nafaqah_caller_manages_ledgers() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.nafaqah_caller_manages_ledgers() TO authenticated, service_role;
 REVOKE ALL ON FUNCTION public.former_member_debt_outstanding(uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.former_member_debt_creditors(uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.former_member_debt_require_manager(uuid, uuid) FROM PUBLIC, anon, authenticated;

@@ -13,7 +13,8 @@
 --          household may use the same key.
 --   R2-04  A family does not become roommates while a former member's record is open
 --          (type_change_blocked, DETAIL former_member_debt); once it is paid or waived, it may.
---   R2-06  A replay after the account it was paid from is deleted answers the stored answer; the
+--   R2-06  A replay after the account it was paid from is deleted (by the service path, as the
+--          purge does; a client archives it instead, review R3-05) answers the stored answer; the
 --          same key with another account is still request_key_reused.
 -- The races (R2-05, R2-07, R2-08, and R2-01 under concurrency) are in test 61.
 -- ============================================================================
@@ -414,7 +415,7 @@ BEGIN
     PERFORM pg_temp.check('R2-01 its key on the other record', pg_temp.fpayd(1, 1, v_d2, '50', 2, 2), 'ERR:request_key_reused');
     PERFORM pg_temp.check('R2-01 its key to waive the other record', pg_temp.waived(1, 1, v_d2, 2), 'ERR:request_key_reused');
     PERFORM pg_temp.check('R2-01 its key for a repayment', pg_temp.repay(1, 1, 2, '50', 2, 2), 'ERR:request_key_reused');
-    PERFORM pg_temp.check('R2-01 its key, another admin, the other record, the pool', pg_temp.fpayd(4, 1, v_d2, '50', 1, 2), 'ERR:request_key_reused');
+    PERFORM pg_temp.check('R2-01 its key, the other record, the pool', pg_temp.fpayd(1, 1, v_d2, '50', 1, 2), 'ERR:request_key_reused');
     PERFORM pg_temp.check('R2-01 nothing moved under it', pg_temp.moves(), v_moves);
     PERFORM pg_temp.check('R2-01 the other record is untouched', pg_temp.dstate(v_d2), '0.00/open');
     PERFORM pg_temp.check('R2-01 his account moved once more', pg_temp.bal(2), '850.00');
@@ -497,8 +498,11 @@ BEGIN
     v_req := pg_temp.uid(pg_temp.j(pg_temp.req(3, 1, '15', 602), 'request_id'));
     PERFORM pg_temp.keep('r6app', pg_temp.approve(1, 1, v_req, 9, 603));
     PERFORM pg_temp.check('R2-06 three payments from the spare account', pg_temp.bal(9), '445.00');
-    PERFORM pg_temp.check('R2-06 the owner deletes it',
-        pg_temp.call(pg_temp.u(1), NULL, format($q$DELETE FROM public.accounts WHERE id = %L RETURNING 'deleted'$q$, pg_temp.a(9))), 'deleted');
+    -- A client no longer deletes it (review R3-05: archive instead); the service path, as the
+    -- purge does, still does.
+    PERFORM pg_temp.check('R3-05 the owner cannot delete it',
+        pg_temp.call(pg_temp.u(1), NULL, format($q$DELETE FROM public.accounts WHERE id = %L RETURNING 'deleted'$q$, pg_temp.a(9))), 'ERR:account_has_repayments');
+    DELETE FROM public.accounts WHERE id = pg_temp.a(9);
 
     v_res := pg_temp.repay(1, 1, 2, '20', 9, 600);
     PERFORM pg_temp.check('R2-06 the repayment replays', pg_temp.j(v_res, 'replayed'), 'true');

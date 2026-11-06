@@ -248,6 +248,11 @@ BEGIN
     RAISE NOTICE 'PASSED: R2-05 her request racing her purge is refused, and no pending request of a non-member is left.';
 END $$;
 
+-- The husband is gone for this race (the provider cleared, committed: the other sessions read it),
+-- so C, an admin who is not a wife, may pay her (review R3-01). He reverses his own account's
+-- repayment as its owner, whatever the husband (review R1-07). The provider is back after it.
+UPDATE public.households SET nafaqah_provider_user_id = NULL WHERE id = pg_temp.h(1);
+
 -- ── R2-08: a reversal while the payer's purge holds the household ─────────────────────────────
 DO $$
 DECLARE
@@ -289,6 +294,8 @@ BEGIN
     PERFORM pg_temp.expect('R2-08 what is owed did not move', public.nafaqah_outstanding(pg_temp.h(1), pg_temp.u(2))::text, v_owed::text);
     RAISE NOTICE 'PASSED: R2-08 a reversal racing its payer''s purge is refused as reversal_account_unavailable.';
 END $$;
+
+UPDATE public.households SET nafaqah_provider_user_id = pg_temp.u(1) WHERE id = pg_temp.h(1);
 
 -- ── R2-07: the same key for two co-wives at once ──────────────────────────────────────────────
 DO $$
