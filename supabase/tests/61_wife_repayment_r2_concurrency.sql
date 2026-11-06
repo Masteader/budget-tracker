@@ -148,17 +148,20 @@ BEGIN
 END;
 $$;
 
+-- Her wife account (20261105001300, section 12): a(100 + her user number).
+CREATE FUNCTION pg_temp.wa(p_wife int) RETURNS uuid LANGUAGE sql AS $$ SELECT pg_temp.a(100 + p_wife) $$;
 CREATE FUNCTION pg_temp.repay_sql(p_hh int, p_wife int, p_amount numeric, p_account int, p_key int) RETURNS text LANGUAGE sql AS $$
-    SELECT format('SELECT public.record_spouse_reimbursement(%L, %L, %s, %L, NULL, NULL, %L::uuid, %L::uuid)::text',
-                  pg_temp.h(p_hh), pg_temp.u(p_wife), p_amount, 'cash', pg_temp.a(p_account), pg_temp.k(p_key));
+    SELECT format('SELECT public.record_spouse_reimbursement(%L, %L, %s, %L, NULL, NULL, %L::uuid, %L::uuid, %L::uuid)::text',
+                  pg_temp.h(p_hh), pg_temp.u(p_wife), p_amount, 'cash', pg_temp.a(p_account), pg_temp.k(p_key), pg_temp.wa(p_wife));
 $$;
 CREATE FUNCTION pg_temp.fpay_sql(p_amount numeric, p_account int, p_key int) RETURNS text LANGUAGE sql AS $$
     SELECT format('SELECT public.record_former_member_debt_payment(%L, %L, %s, %L, %L::uuid, NULL, %L::uuid)::text',
                   pg_temp.h(1), pg_temp.d(1), p_amount, 'cash', pg_temp.k(p_key), pg_temp.a(p_account));
 $$;
+-- Her request (W in H1, Q in H3), into her wife account.
 CREATE FUNCTION pg_temp.req_sql(p_hh int, p_amount numeric, p_key int) RETURNS text LANGUAGE sql AS $$
-    SELECT format('SELECT public.request_spouse_reimbursement(%L, %s, %L, %L::uuid, NULL)::text',
-                  pg_temp.h(p_hh), p_amount, 'cash', pg_temp.k(p_key));
+    SELECT format('SELECT public.request_spouse_reimbursement(%L, %s, %L, %L::uuid, NULL, %L::uuid)::text',
+                  pg_temp.h(p_hh), p_amount, 'cash', pg_temp.k(p_key), pg_temp.wa(CASE WHEN p_hh = 3 THEN 13 ELSE 2 END));
 $$;
 CREATE FUNCTION pg_temp.bal(p_n int) RETURNS text LANGUAGE sql
 AS $$ SELECT balance::text FROM public.accounts WHERE id = pg_temp.a(p_n) $$;
@@ -200,6 +203,11 @@ BEGIN
         (pg_temp.a(1), pg_temp.h(1), pg_temp.u(1), 'T61 pool', 'shared_pool', 5000, true),
         (pg_temp.a(2), pg_temp.h(1), pg_temp.u(1), 'T61 his bank', 'bank', 1000, false),
         (pg_temp.a(5), pg_temp.h(1), pg_temp.u(4), 'T61 C bank', 'bank', 1000, false);
+    -- Their wife accounts (20261105001300, section 12), owned by the husband.
+    INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, is_shared_pool, assigned_wife_id) VALUES
+        (pg_temp.wa(2), pg_temp.h(1), pg_temp.u(1), 'T61 W account', 'wife', 0, false, pg_temp.u(2)),
+        (pg_temp.wa(3), pg_temp.h(1), pg_temp.u(1), 'T61 W2 account', 'wife', 0, false, pg_temp.u(3)),
+        (pg_temp.wa(13), pg_temp.h(3), pg_temp.u(12), 'T61 Q account', 'wife', 0, false, pg_temp.u(13));
     INSERT INTO public.transactions (household_id, user_id, amount, merchant, category_code, timestamp, source, spent_by, nafaqah_class, nafaqah_spouse_id)
     VALUES (pg_temp.h(1), pg_temp.u(2), 600, 'T61 Grocer', 'OPEX-GROCERY', now(), 'manual', 'me', 'wife_reimbursable', pg_temp.u(2)),
            (pg_temp.h(1), pg_temp.u(3), 100, 'T61 Grocer', 'OPEX-GROCERY', now(), 'manual', 'me', 'wife_reimbursable', pg_temp.u(3)),

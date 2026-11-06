@@ -5,15 +5,17 @@
 -- Rule: .agents/rules/02-saudi-fintech-and-islamic-compliance.md, family mode rule 2
 --
 -- Owner decisions 2026-11-06: every repayment is tracked. It leaves an account he picks (a cash
--- payment leaves his Cash account) as one account_transfers row to no account: her account is
--- never credited. No budget moves: her expense counted when she recorded it. There is no
+-- payment leaves his Cash account) as one account_transfers row into the wife account he picks
+-- (section 12; superseding "her account is never credited"): her own accounts are never credited.
+-- No budget moves: her expense counted when she recorded it. There is no
 -- "not tracked" path any more, and a call without an account (the old signatures, or the new one
 -- with none) is refused with app_update_required. The same holds for the payment of a former
 -- member's record; her waiver moves nothing.
 --
 -- Verifies:
---   1. A repayment from his account: his balance goes down by exactly the amount, none of hers
---      moves, one account_transfers row to no account linked from the ledger row; no budget, no
+--   1. A repayment from his account: his balance goes down by exactly the amount, her wife
+--      account up by exactly the amount, none of her own accounts moves, one account_transfers row
+--      from his account to her wife account linked from the ledger row; no budget, no
 --      transaction, and her allowance untouched. Cash comes out of his Cash account.
 --   2. A double tap (same request key) records once; a key used for another wife is refused.
 --   3. No untracked path: the old signatures and a missing account are refused with
@@ -124,14 +126,17 @@ BEGIN
 END;
 $$;
 
--- A repayment through the 8-argument signature, as user p_actor (authenticated). p_account 0 = none.
+-- Her wife account (20261105001300, section 12): a(100 + her user number).
+CREATE FUNCTION pg_temp.wa(p_wife int) RETURNS uuid LANGUAGE sql AS $$ SELECT pg_temp.a(100 + p_wife) $$;
+-- A repayment through the 9-argument signature, as user p_actor (authenticated), into her wife
+-- account. p_account 0 = none.
 CREATE FUNCTION pg_temp.repay(p_actor int, p_hh int, p_wife int, p_amount text, p_account int, p_key int, p_method text DEFAULT 'bank_transfer')
 RETURNS text LANGUAGE sql AS $$
     SELECT pg_temp.call(pg_temp.u(p_actor), NULL,
-        format('SELECT public.record_spouse_reimbursement(%L, %L, %s, %L, NULL, NULL, %L::uuid, %L::uuid)::text',
+        format('SELECT public.record_spouse_reimbursement(%L, %L, %s, %L, NULL, NULL, %L::uuid, %L::uuid, %L::uuid)::text',
                pg_temp.h(p_hh), pg_temp.u(p_wife), p_amount, p_method,
                CASE WHEN p_account = 0 THEN NULL ELSE pg_temp.a(p_account) END,
-               CASE WHEN p_key = 0 THEN NULL ELSE pg_temp.k(p_key) END));
+               CASE WHEN p_key = 0 THEN NULL ELSE pg_temp.k(p_key) END, pg_temp.wa(p_wife)));
 $$;
 
 CREATE FUNCTION pg_temp.bal(p_n int) RETURNS text LANGUAGE sql
@@ -281,6 +286,12 @@ BEGIN
     PERFORM pg_temp.acct(13, 1, 2, false, 70, 'e_wallet');            -- W wallet
     PERFORM pg_temp.acct(14, 2, 6, false, 30);                        -- Q bank (F2)
     PERFORM pg_temp.acct(15, 1, 1, false, 5, 'e_wallet');             -- H wallet, nearly empty
+    -- Their wife accounts, owned by the husband: W a(102), V a(110), Z a(109), Q a(106).
+    INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, is_shared_pool, assigned_wife_id) VALUES
+        (pg_temp.wa(2), pg_temp.h(1), pg_temp.u(1), 'T56 her account', 'wife', 0, false, pg_temp.u(2)),
+        (pg_temp.wa(10), pg_temp.h(1), pg_temp.u(1), 'T56 V account', 'wife', 0, false, pg_temp.u(10)),
+        (pg_temp.wa(9), pg_temp.h(3), pg_temp.u(8), 'T56 Z account', 'wife', 0, false, pg_temp.u(9)),
+        (pg_temp.wa(6), pg_temp.h(2), pg_temp.u(5), 'T56 Q account', 'wife', 0, false, pg_temp.u(6));
 
     INSERT INTO public.budgets (id, household_id, month, category_code, allocated_amount, cycle_key, account_id) VALUES
         ('e56b0000-0000-0000-0000-000000000001', pg_temp.h(1), v_month, 'OPEX-GROCERY', 900, v_cycle, NULL),
@@ -306,7 +317,7 @@ CREATE FUNCTION pg_temp.hers() RETURNS text LANGUAGE sql
 AS $$ SELECT pg_temp.bal(2) || '/' || pg_temp.bal(6) || '/' || pg_temp.bal(13) $$;
 SELECT pg_temp.keep('hers', pg_temp.hers());
 
--- 1. Out of his account, into none ------------------------------------------------------------
+-- 1. Out of his account, into her wife account -------------------------------------------------
 DO $$
 DECLARE
     v_tx bigint := (SELECT count(*) FROM public.transactions);
@@ -321,18 +332,19 @@ BEGIN
     v_res := pg_temp.repay(1, 1, 2, '100', 3, 1)::jsonb;
     PERFORM pg_temp.expect('recorded', (v_res ->> 'replayed') || '/' || (v_res ->> 'outstanding_after') || '/' || (v_res ->> 'account_id'),
         'false/300.00/' || pg_temp.a(3)::text);
-    PERFORM pg_temp.expect('the answer says nothing of her account', COALESCE(v_res ->> 'wife_account_credited', 'absent'), 'absent');
+    PERFORM pg_temp.expect('the answer names her wife account', v_res ->> 'wife_account_id', pg_temp.wa(2)::text);
     PERFORM pg_temp.expect('his bank down by exactly 100', pg_temp.bal(3), '200.00');
-    PERFORM pg_temp.expect('none of her accounts moved', pg_temp.hers(), pg_temp.kept('hers'));
+    PERFORM pg_temp.expect('her wife account up by exactly 100', pg_temp.bal(102), '100.00');
+    PERFORM pg_temp.expect('none of her own accounts moved', pg_temp.hers(), pg_temp.kept('hers'));
     PERFORM pg_temp.expect('owed after', pg_temp.outstanding(1, 2), '300.00');
 
     SELECT t.* INTO v_transfer FROM public.account_transfers t
     JOIN public.spouse_reimbursements r ON r.transfer_id = t.id
     WHERE r.id = (v_res ->> 'reimbursement_id')::uuid;
-    PERFORM pg_temp.expect('one linked transfer, to no account',
+    PERFORM pg_temp.expect('one linked transfer, his account to her wife account',
         v_transfer.from_account_id::text || '>' || COALESCE(v_transfer.to_account_id::text, 'none') || ':' || v_transfer.amount::text || ':' || v_transfer.fee::text
         || ':' || (v_transfer.user_id = pg_temp.u(1))::text || ':' || (v_transfer.household_id = pg_temp.h(1))::text,
-        pg_temp.a(3)::text || '>none:100.00:0.00:true:true');
+        pg_temp.a(3)::text || '>' || pg_temp.wa(2)::text || ':100.00:0.00:true:true');
     PERFORM pg_temp.expect('the request key is kept',
         (SELECT request_key::text || '/' || kind FROM public.spouse_reimbursements WHERE id = (v_res ->> 'reimbursement_id')::uuid), pg_temp.k(1)::text || '/payment');
     PERFORM pg_temp.expect('no transaction written', (SELECT count(*) FROM public.transactions)::text, v_tx::text);
@@ -342,11 +354,12 @@ BEGIN
     v_res := pg_temp.repay(1, 1, 2, '30', 5, 2, 'cash')::jsonb;
     PERFORM pg_temp.expect('cash repayment', (v_res ->> 'outstanding_after') || '/' || (v_res ->> 'payment_method'), '270.00/cash');
     PERFORM pg_temp.expect('his cash down', pg_temp.bal(5), '20.00');
-    PERFORM pg_temp.expect('none of hers moved (cash)', pg_temp.hers(), pg_temp.kept('hers'));
+    PERFORM pg_temp.expect('her wife account up (cash)', pg_temp.bal(102), '130.00');
+    PERFORM pg_temp.expect('none of her own moved (cash)', pg_temp.hers(), pg_temp.kept('hers'));
     PERFORM pg_temp.expect('no budget moved (cash)', pg_temp.budgets(), pg_temp.kept('budgets'));
     PERFORM pg_temp.expect('her allowance is untouched',
         pg_temp.svc(format('SELECT (public.get_member_allowance_status(%L, %L, NULL, %L)->>''spent'')', pg_temp.h(1), pg_temp.u(2), pg_temp.u(1))), '15.00');
-    RAISE NOTICE 'PASSED: his account goes down by exactly the amount, to no account; hers never moves; no budget moves.';
+    RAISE NOTICE 'PASSED: his account goes down and her wife account up by exactly the amount; her own never moves; no budget moves.';
 END $$;
 
 -- 2. A double tap ------------------------------------------------------------------------------
@@ -402,7 +415,7 @@ BEGIN
         'record_former_member_debt_payment,reverse_former_member_debt_payment,waive_former_member_debt');
     PERFORM pg_temp.expect('every repayment written has a transfer',
         (SELECT count(*)::text FROM public.spouse_reimbursements WHERE household_id = pg_temp.h(1) AND transfer_id IS NULL), '0');
-    PERFORM pg_temp.expect('no function picks her account any more',
+    PERFORM pg_temp.expect('no function picks an account for anyone',
         (SELECT count(*)::text FROM pg_proc WHERE pronamespace = 'public'::regnamespace
          AND proname IN ('nafaqah_repayment_lock_account', 'nafaqah_repayment_debit') AND prosrc ~* '(wife|v_pref|account_type)'), '0');
     PERFORM pg_temp.expect('the debit names no destination',
@@ -422,8 +435,8 @@ BEGIN
     PERFORM pg_temp.expect('an archived account', pg_temp.repay(1, 1, 2, '10', 9, 12), 'ERR:account_unavailable');
     PERFORM pg_temp.expect('an account not in SAR', pg_temp.repay(1, 1, 2, '10', 10, 13), 'ERR:account_unavailable');
     PERFORM pg_temp.expect('an account that does not exist',
-        pg_temp.call(pg_temp.u(1), NULL, format('SELECT public.record_spouse_reimbursement(%L, %L, 10, %L, NULL, NULL, gen_random_uuid(), %L::uuid)::text',
-            pg_temp.h(1), pg_temp.u(2), 'cash', pg_temp.k(14))), 'ERR:account_unavailable');
+        pg_temp.call(pg_temp.u(1), NULL, format('SELECT public.record_spouse_reimbursement(%L, %L, 10, %L, NULL, NULL, gen_random_uuid(), %L::uuid, %L::uuid)::text',
+            pg_temp.h(1), pg_temp.u(2), 'cash', pg_temp.k(14), pg_temp.wa(2))), 'ERR:account_unavailable');
     PERFORM pg_temp.expect('the husband with a co-admin''s account', pg_temp.repay(1, 1, 2, '10', 8, 15), 'ERR:account_forbidden');
     PERFORM pg_temp.expect('the husband with a member''s account', pg_temp.repay(1, 1, 2, '10', 7, 16), 'ERR:account_forbidden');
     PERFORM pg_temp.expect('a co-admin, while the husband is there (R3-01)', pg_temp.repay(4, 1, 2, '10', 8, 15), 'ERR:forbidden');
@@ -451,30 +464,34 @@ BEGIN
     v_res := pg_temp.repay(1, 1, 2, '50', 1, 30, 'stc_pay')::jsonb;
     PERFORM pg_temp.expect('pool repayment', v_res ->> 'outstanding_after', '200.00');
     PERFORM pg_temp.expect('pool down', pg_temp.bal(1), '950.00');
-    PERFORM pg_temp.expect('none of hers moved (pool)', pg_temp.hers(), pg_temp.kept('hers'));
+    PERFORM pg_temp.expect('her wife account up (pool)', pg_temp.bal(102), '200.00');
+    PERFORM pg_temp.expect('none of her own moved (pool)', pg_temp.hers(), pg_temp.kept('hers'));
 
-    -- F3: the provider is a plain member; Z has no account.
+    -- F3: the provider is a plain member; Z has no account of her own, only her wife account.
     PERFORM pg_temp.expect('a non-admin provider and the pool', pg_temp.repay(8, 3, 9, '10', 11, 31), 'ERR:account_forbidden');
     v_res := pg_temp.repay(8, 3, 9, '100', 12, 32)::jsonb;
     PERFORM pg_temp.expect('the provider from his own account', (v_res ->> 'outstanding_after') || '/' || pg_temp.bal(12), '100.00/150.00');
-    PERFORM pg_temp.expect('the transfer goes to no account',
-        (SELECT (to_account_id IS NULL)::text || ':' || from_account_id::text FROM public.account_transfers WHERE id = (v_res ->> 'transfer_id')::uuid),
-        'true:' || pg_temp.a(12)::text);
+    PERFORM pg_temp.expect('the transfer goes into her wife account',
+        (SELECT to_account_id::text || ':' || from_account_id::text FROM public.account_transfers WHERE id = (v_res ->> 'transfer_id')::uuid),
+        pg_temp.wa(9)::text || ':' || pg_temp.a(12)::text);
+    PERFORM pg_temp.expect('Z''s wife account holds it', pg_temp.bal(109), '100.00');
     PERFORM pg_temp.expect('an admin who is not the husband, while he is there (R3-01)', pg_temp.repay(7, 3, 9, '50', 11, 33) || '/' || pg_temp.bal(11), 'ERR:forbidden/600.00');
 
     -- The API: service role, the verified caller in p_actor_user_id.
-    v_res := pg_temp.svc(format('SELECT public.record_spouse_reimbursement(%L, %L, 10, %L, NULL, %L, %L::uuid, %L::uuid)::text',
-        pg_temp.h(1), pg_temp.u(2), 'bank_transfer', pg_temp.u(1), pg_temp.a(3), pg_temp.k(34)))::jsonb;
+    v_res := pg_temp.svc(format('SELECT public.record_spouse_reimbursement(%L, %L, 10, %L, NULL, %L, %L::uuid, %L::uuid, %L::uuid)::text',
+        pg_temp.h(1), pg_temp.u(2), 'bank_transfer', pg_temp.u(1), pg_temp.a(3), pg_temp.k(34), pg_temp.wa(2)))::jsonb;
     PERFORM pg_temp.expect('API path', (v_res ->> 'outstanding_after') || '/' || pg_temp.bal(3) || '/' || pg_temp.hers(),
         '190.00/190.00/' || pg_temp.kept('hers'));
     PERFORM pg_temp.expect('API path checks the verified caller',
-        pg_temp.svc(format('SELECT public.record_spouse_reimbursement(%L, %L, 10, %L, NULL, %L, %L::uuid, %L::uuid)::text',
-            pg_temp.h(1), pg_temp.u(2), 'cash', pg_temp.u(4), pg_temp.a(3), pg_temp.k(35))), 'ERR:forbidden');
-    PERFORM pg_temp.expect('no repayment transfer has a destination',
+        pg_temp.svc(format('SELECT public.record_spouse_reimbursement(%L, %L, 10, %L, NULL, %L, %L::uuid, %L::uuid, %L::uuid)::text',
+            pg_temp.h(1), pg_temp.u(2), 'cash', pg_temp.u(4), pg_temp.a(3), pg_temp.k(35), pg_temp.wa(2))), 'ERR:forbidden');
+    PERFORM pg_temp.expect('every repayment transfer goes into the wife account of the wife it repays',
         (SELECT count(*)::text FROM public.account_transfers t JOIN public.spouse_reimbursements r ON r.transfer_id = t.id
-         WHERE r.kind = 'payment' AND t.to_account_id IS NOT NULL), '0');
+         LEFT JOIN public.accounts a ON a.id = t.to_account_id
+         WHERE r.kind = 'payment' AND (a.account_type IS DISTINCT FROM 'wife' OR a.assigned_wife_id IS DISTINCT FROM r.wife_user_id)), '0');
+    PERFORM pg_temp.expect('her wife account holds every repayment to her', pg_temp.bal(102), '210.00');
     PERFORM pg_temp.expect('no budget moved (pools)', pg_temp.budgets(), pg_temp.kept('budgets'));
-    RAISE NOTICE 'PASSED: shared pools by the husband when an admin, his own account otherwise; her side never moves.';
+    RAISE NOTICE 'PASSED: shared pools by the husband when an admin, his own account otherwise; her own accounts never move.';
 END $$;
 
 -- 6. Append-only ----------------------------------------------------------------------------------
@@ -516,12 +533,16 @@ BEGIN
     PERFORM pg_temp.request(2);
     v_res := pg_temp.purge(2);
     PERFORM pg_temp.expect('the purge completes (its ledger invariant holds)', v_res ->> 'prepared', 'true');
-    PERFORM pg_temp.expect('her accounts went with her, every other balance is equal',
+    PERFORM pg_temp.expect('her own accounts went with her, every other balance is equal (her wife account too)',
         rtrim(pg_temp.balances(), ','), rtrim(v_keep, ','));
+    PERFORM pg_temp.expect('her wife account stays his, archived, naming nobody',
+        (SELECT owner_user_id::text || ':' || is_archived || ':' || COALESCE(assigned_wife_id::text, '-') || ':' || balance
+         FROM public.accounts WHERE id = pg_temp.wa(2)), pg_temp.u(1)::text || ':true:-:210.00');
     PERFORM pg_temp.expect('no budget moved (purge)', pg_temp.budgets(), pg_temp.kept('budgets'));
     PERFORM pg_temp.expect('the record keeps what remained', pg_temp.state(1), '190.00/0.00/open');
     PERFORM pg_temp.expect('the repayment transfers stay',
-        (SELECT count(*)::text FROM public.account_transfers WHERE household_id = pg_temp.h(1) AND to_account_id IS NULL AND amount IN (100, 30, 20, 50, 10)), '5');
+        (SELECT count(*)::text FROM public.account_transfers WHERE household_id = pg_temp.h(1) AND to_account_id = pg_temp.wa(2)
+         AND purpose = 'wife_repayment' AND amount IN (100, 30, 20, 50, 10)), '5');
     PERFORM pg_temp.expect('her id anywhere', pg_temp.scan(pg_temp.u(2)::text), '');
     PERFORM pg_temp.expect('her email anywhere', pg_temp.scan('t56-warda@test.local'), '');
     PERFORM pg_temp.expect('her name anywhere', pg_temp.scan('Warda Uniquewife56'), '');
@@ -602,7 +623,7 @@ DECLARE
     v_sig text;
 BEGIN
     FOREACH v_sig IN ARRAY ARRAY[
-        'record_spouse_reimbursement(uuid, uuid, numeric, text, text, uuid, uuid, uuid)',
+        'record_spouse_reimbursement(uuid, uuid, numeric, text, text, uuid, uuid, uuid, uuid)',
         'record_spouse_reimbursement(uuid, uuid, numeric, text, text, uuid)',
         'record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid, uuid)'
     ] LOOP

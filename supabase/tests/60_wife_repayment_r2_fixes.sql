@@ -138,11 +138,18 @@ AS $$ SELECT CASE WHEN p_val ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}
 GRANT EXECUTE ON FUNCTION pg_temp.uid(text) TO PUBLIC;
 CREATE FUNCTION pg_temp.id(p_label text) RETURNS uuid LANGUAGE sql AS $$ SELECT pg_temp.uid(val) FROM pg_temp.snap WHERE label = p_label $$;
 
+-- Her wife account in household p_hh (20261105001300, section 12): every repayment to her credits
+-- one, and her request names one. Made for every wife of the fixtures, owned by the husband.
+CREATE FUNCTION pg_temp.wa(p_hh int, p_wife int) RETURNS uuid LANGUAGE sql AS $$
+    SELECT id FROM public.accounts
+    WHERE household_id = pg_temp.h(p_hh) AND account_type = 'wife' AND assigned_wife_id = pg_temp.u(p_wife)
+    ORDER BY is_archived, created_at, id LIMIT 1
+$$;
 -- The calls, as user p_actor (authenticated). Account 0 = none.
 CREATE FUNCTION pg_temp.req(p_actor int, p_hh int, p_amount text, p_key int) RETURNS text LANGUAGE sql AS $$
     SELECT pg_temp.call(pg_temp.u(p_actor), NULL,
-        format('SELECT public.request_spouse_reimbursement(%L, %s, %L, %L::uuid, NULL)::text',
-               pg_temp.h(p_hh), p_amount, 'cash', pg_temp.k(p_key)));
+        format('SELECT public.request_spouse_reimbursement(%L, %s, %L, %L::uuid, NULL, %L::uuid)::text',
+               pg_temp.h(p_hh), p_amount, 'cash', pg_temp.k(p_key), pg_temp.wa(p_hh, p_actor)));
 $$;
 CREATE FUNCTION pg_temp.cancel(p_actor int, p_hh int, p_request uuid) RETURNS text LANGUAGE sql AS $$
     SELECT pg_temp.call(pg_temp.u(p_actor), NULL,
@@ -160,9 +167,9 @@ CREATE FUNCTION pg_temp.approve(p_actor int, p_hh int, p_request uuid, p_account
 $$;
 CREATE FUNCTION pg_temp.repay(p_actor int, p_hh int, p_wife int, p_amount text, p_account int, p_key int) RETURNS text LANGUAGE sql AS $$
     SELECT pg_temp.call(pg_temp.u(p_actor), NULL,
-        format('SELECT public.record_spouse_reimbursement(%L, %L, %s, %L, NULL, NULL, %L::uuid, %L::uuid)::text',
+        format('SELECT public.record_spouse_reimbursement(%L, %L, %s, %L, NULL, NULL, %L::uuid, %L::uuid, %L::uuid)::text',
                pg_temp.h(p_hh), pg_temp.u(p_wife), p_amount, 'bank_transfer',
-               CASE WHEN p_account = 0 THEN NULL ELSE pg_temp.a(p_account) END, pg_temp.k(p_key)));
+               CASE WHEN p_account = 0 THEN NULL ELSE pg_temp.a(p_account) END, pg_temp.k(p_key), pg_temp.wa(p_hh, p_wife)));
 $$;
 CREATE FUNCTION pg_temp.rev(p_actor int, p_hh int, p_row uuid, p_key int) RETURNS text LANGUAGE sql AS $$
     SELECT pg_temp.call(pg_temp.u(p_actor), NULL,
@@ -384,6 +391,19 @@ BEGIN
     INSERT INTO public.former_member_debts (household_id, original_amount) VALUES
         (pg_temp.h(1), 300), (pg_temp.h(1), 200), (pg_temp.h(3), 50), (pg_temp.h(4), 40);
 END $$;
+
+-- A wife account for every wife of the fixtures (20261105001300, section 12), owned by her husband
+-- (the provider; else the primary admin), empty.
+INSERT INTO public.accounts (household_id, owner_user_id, name, account_type, balance, is_shared_pool, assigned_wife_id)
+SELECT m.household_id,
+       COALESCE((SELECT p.user_id FROM public.household_memberships p
+                 WHERE p.household_id = m.household_id AND p.user_id = h.nafaqah_provider_user_id),
+                h.owner_user_id, m.user_id),
+       'Her account', 'wife', 0, false, m.user_id
+FROM public.household_memberships m
+JOIN public.households h ON h.id = m.household_id
+WHERE m.financial_role = 'spouse' AND h.id::text LIKE 'e60a%'
+  AND NOT EXISTS (SELECT 1 FROM public.accounts a WHERE a.assigned_wife_id = m.user_id AND a.household_id = m.household_id);
 
 -- ── R2-01: one key, one operation, whatever the path ─────────────────────────────────────────
 DO $$

@@ -202,8 +202,10 @@ $$;
 -- The calls, as user p_actor (authenticated).
 CREATE FUNCTION pg_temp.repay(p_actor int, p_wife int, p_amount text, p_account int, p_key int) RETURNS text LANGUAGE sql AS $$
     SELECT pg_temp.call(pg_temp.u(p_actor),
-        format('SELECT public.record_spouse_reimbursement(%L, %L, %s, %L, NULL, NULL, %L::uuid, %L::uuid)::text',
-               pg_temp.h(1), pg_temp.u(p_wife), p_amount, 'bank_transfer', pg_temp.a(p_account), pg_temp.k(p_key)));
+        format('SELECT public.record_spouse_reimbursement(%L, %L, %s, %L, NULL, NULL, %L::uuid, %L::uuid, %L::uuid)::text',
+               pg_temp.h(1), pg_temp.u(p_wife), p_amount, 'bank_transfer', pg_temp.a(p_account), pg_temp.k(p_key),
+               (SELECT a.id FROM public.accounts a WHERE a.household_id = pg_temp.h(1) AND a.account_type = 'wife'
+                AND a.assigned_wife_id = pg_temp.u(p_wife))));
 $$;
 CREATE FUNCTION pg_temp.rev(p_actor int, p_row uuid, p_key int) RETURNS text LANGUAGE sql AS $$
     SELECT pg_temp.call(pg_temp.u(p_actor),
@@ -284,6 +286,9 @@ BEGIN
         (pg_temp.a(4), pg_temp.h(1), pg_temp.u(1), 'T67 H bank', 'bank', 3000, false, false, 'SAR'),
         (pg_temp.a(5), pg_temp.h(1), pg_temp.u(3), 'T67 W2 bank', 'bank', 1000, false, false, 'SAR'),
         (pg_temp.a(6), pg_temp.h(1), pg_temp.u(5), 'T67 C bank', 'bank', 2000, false, false, 'SAR');
+    -- W's wife account (20261105001300, section 12), owned by H: her repayments credit it.
+    INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, is_shared_pool, assigned_wife_id)
+    VALUES (pg_temp.a(20), pg_temp.h(1), pg_temp.u(1), 'T67 W account', 'wife', 0, false, pg_temp.u(2));
     INSERT INTO public.budgets (household_id, category_code, cycle_key, month, allocated_amount, spent_amount, is_active) VALUES
         (pg_temp.h(1), 'OPEX-SHOPPING', '2026-11', '2026-11-01', 2000, 0, true),
         (pg_temp.h(1), 'OPEX-GROCERY', '2026-11', '2026-11-01', 2000, 0, true);
@@ -582,11 +587,12 @@ BEGIN
     PERFORM pg_temp.check('present: the pool''s balance for a member',
         pg_temp.call(pg_temp.u(4), format('SELECT balance::text FROM public.accounts WHERE id = %L', pg_temp.a(1))), '4920.00');
 
-    -- Replaced by K: the new husband and she; H keeps his own bank's row, and nothing of her ledger.
+    -- Replaced by K: the new husband and she; H keeps the rows of his own accounts (his bank, and
+    -- the wife account he owns, which each of these credited or debited), and nothing of her ledger.
     PERFORM pg_temp.provider(4);
     PERFORM pg_temp.check('replaced: the repayment from his bank', pg_temp.readers('account_transfers', pg_temp.xfer('rA')), 'H,W,K');
-    PERFORM pg_temp.check('replaced: the repayment from the pool', pg_temp.readers('account_transfers', pg_temp.xfer('rB')), 'W,K');
-    PERFORM pg_temp.check('replaced: the pool''s reversal', pg_temp.readers('account_transfers', pg_temp.xfer('rC')), 'W,K');
+    PERFORM pg_temp.check('replaced: the repayment from the pool', pg_temp.readers('account_transfers', pg_temp.xfer('rB')), 'H,W,K');
+    PERFORM pg_temp.check('replaced: the pool''s reversal', pg_temp.readers('account_transfers', pg_temp.xfer('rC')), 'H,W,K');
     PERFORM pg_temp.check('replaced: H reads none of her ledger',
         pg_temp.call(pg_temp.u(1), 'SELECT count(*)::text FROM public.spouse_reimbursements'), '0');
     -- Husband gone: the admins who are not wives.

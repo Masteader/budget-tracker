@@ -127,17 +127,35 @@ $$;
 CREATE FUNCTION pg_temp.wallet(p_hh int, p_owner int) RETURNS uuid LANGUAGE sql AS $$
     SELECT COALESCE((SELECT a.id FROM public.accounts a
                      WHERE a.household_id = pg_temp.h(p_hh) AND a.owner_user_id = pg_temp.u(p_owner) AND NOT a.is_shared_pool
+                       AND a.account_type <> 'wife'
                      ORDER BY a.id LIMIT 1), gen_random_uuid());
 $$;
 GRANT EXECUTE ON FUNCTION pg_temp.wallet(int, int) TO PUBLIC;
+-- Her wife account in the household (20261105001300, section 12), made for her by the payer when
+-- she has none: every repayment credits one.
+CREATE FUNCTION pg_temp.wife_account(p_hh int, p_wife int, p_owner int) RETURNS uuid LANGUAGE plpgsql AS $$
+DECLARE
+    v_id uuid;
+BEGIN
+    SELECT id INTO v_id FROM public.accounts
+    WHERE household_id = pg_temp.h(p_hh) AND account_type = 'wife' AND assigned_wife_id = pg_temp.u(p_wife) AND NOT is_archived;
+    IF v_id IS NULL THEN
+        INSERT INTO public.accounts (household_id, owner_user_id, name, account_type, balance, is_shared_pool, assigned_wife_id)
+        VALUES (pg_temp.h(p_hh), pg_temp.u(p_owner), 'Her account', 'wife', 0, false, pg_temp.u(p_wife))
+        RETURNING id INTO v_id;
+    END IF;
+    RETURN v_id;
+END;
+$$;
 CREATE FUNCTION pg_temp.bal(p_n int) RETURNS text LANGUAGE sql
 AS $$ SELECT balance::text FROM public.accounts WHERE id = pg_temp.a(p_n) $$;
 
 -- An ordinary repayment, through today's RPC, from the actor's account.
 CREATE FUNCTION pg_temp.repay(p_hh int, p_wife int, p_amount numeric, p_actor int) RETURNS void LANGUAGE plpgsql AS $$
 DECLARE
-    v_res text := pg_temp.svc(format('SELECT public.record_spouse_reimbursement(%L, %L, %s, %L, NULL, %L, %L::uuid, gen_random_uuid())::text',
-                                     pg_temp.h(p_hh), pg_temp.u(p_wife), p_amount, 'cash', pg_temp.u(p_actor), pg_temp.wallet(p_hh, p_actor)));
+    v_res text := pg_temp.svc(format('SELECT public.record_spouse_reimbursement(%L, %L, %s, %L, NULL, %L, %L::uuid, gen_random_uuid(), %L::uuid)::text',
+                                     pg_temp.h(p_hh), pg_temp.u(p_wife), p_amount, 'cash', pg_temp.u(p_actor), pg_temp.wallet(p_hh, p_actor),
+                                     pg_temp.wife_account(p_hh, p_wife, p_actor)));
 BEGIN
     IF v_res LIKE 'ERR:%' THEN RAISE EXCEPTION 'repayment refused: %', v_res; END IF;
 END;

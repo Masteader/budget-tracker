@@ -166,6 +166,9 @@ BEGIN
     SELECT pg_temp.d(n), pg_temp.h(1), 100 FROM generate_series(1, 3) AS n;
     INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, is_shared_pool)
     VALUES (pg_temp.pool(), pg_temp.h(1), pg_temp.u(1), 'T55 pool', 'shared_pool', 10000, true);
+    -- Her wife account (20261105001300, section 12): the repayment below credits it.
+    INSERT INTO public.accounts (household_id, owner_user_id, name, account_type, balance, is_shared_pool, assigned_wife_id)
+    VALUES (pg_temp.h(1), pg_temp.u(1), 'T55 her account', 'wife', 0, false, pg_temp.u(3));
     -- W: 90 advanced, nothing repaid yet; her request is claimed and due.
     INSERT INTO public.transactions (household_id, user_id, amount, merchant, category_code, timestamp, source, spent_by, nafaqah_class, nafaqah_spouse_id)
     VALUES (pg_temp.h(1), pg_temp.u(3), 90, 'T55 Grocer', 'OPEX-GROCERY', now(), 'manual', 'me', 'wife_reimbursable', pg_temp.u(3));
@@ -287,8 +290,9 @@ BEGIN
     PERFORM pg_temp.as_user('rp', pg_temp.u(1));
     -- An admin's repayment of 25 (the husband is gone), not yet committed.
     PERFORM t55_dblink.dblink_exec('rp', 'BEGIN');
-    v_repay := (SELECT r FROM t55_dblink.dblink('rp', format('SELECT public.record_spouse_reimbursement(%L, %L, 25, %L, NULL, NULL, %L::uuid, %L::uuid)::text',
-        pg_temp.h(1), pg_temp.u(3), 'cash', pg_temp.pool(), pg_temp.k(41))) AS t(r text));
+    v_repay := (SELECT r FROM t55_dblink.dblink('rp', format('SELECT public.record_spouse_reimbursement(%L, %L, 25, %L, NULL, NULL, %L::uuid, %L::uuid, %L::uuid)::text',
+        pg_temp.h(1), pg_temp.u(3), 'cash', pg_temp.pool(), pg_temp.k(41),
+        (SELECT id FROM public.accounts WHERE household_id = pg_temp.h(1) AND account_type = 'wife' AND assigned_wife_id = pg_temp.u(3)))) AS t(r text));
     PERFORM t55_dblink.dblink_send_query('pg', format('SELECT public.prepare_account_purge(%L)::text', pg_temp.r(3)));
     PERFORM pg_temp.expect('the purge waits for the repayment', pg_temp.wait('pg', v_pg_pid), 'blocked');
     PERFORM t55_dblink.dblink_exec('rp', 'COMMIT');

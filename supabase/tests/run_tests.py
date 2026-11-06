@@ -148,6 +148,20 @@ BEGIN
        OR position('nafaqah_may_manage_ledgers' IN pg_get_functiondef('public.reverse_spouse_reimbursement(uuid, uuid, uuid, uuid)'::regprocedure)) = 0 THEN
         RAISE EXCEPTION 'R3B: a write path or a repayment transfer reads household-wide';
     END IF;
+    -- The wife account (owner decisions 2026-11-06): read by her, its owner and her ledger's
+    -- managers; a repayment credits it and a reversal takes it back; no client makes one.
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'accounts' AND cmd = 'SELECT'
+                   AND qual LIKE '%assigned_wife_id%' AND qual LIKE '%nafaqah_caller_manages_ledgers%')
+       OR NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'account_transfers'
+                      AND qual LIKE '%touches_wife_account%')
+       OR (SELECT count(*) FROM pg_trigger WHERE tgenabled = 'O'
+           AND tgname IN ('trg_accounts_wife_account_guard', 'trg_wife_account_spending')) <> 2
+       OR position('nafaqah_repayment_transfer(p_household_id, p_actor, v_from, p_wife_account_id' IN
+                   pg_get_functiondef('public.nafaqah_repay_from_account(uuid, uuid, uuid, numeric, text, text, uuid, uuid, uuid, uuid)'::regprocedure)) = 0
+       OR to_regprocedure('public.record_spouse_reimbursement(uuid, uuid, numeric, text, text, uuid, uuid, uuid)') IS NOT NULL
+       OR has_column_privilege('authenticated', 'public.accounts', 'assigned_wife_id', 'UPDATE') THEN
+        RAISE EXCEPTION 'wife account: a read, a credit or a guard is missing';
+    END IF;
 END $$;
 """,
 }
@@ -160,7 +174,7 @@ REVOKE TRUNCATE ON public.inquiries FROM anon, authenticated;
 DRIFT_MISSING = ("20261026120000",)
 # Tests that do not need what the drifted database lacks (42 and 43 test that migration's objects).
 DRIFT_TESTS = ("36_", "37_", "38_", "39_", "40_", "41_", "44_", "45_", "46_", "47_", "49_", "50_", "51_", "52_", "53_",
-               "54_", "55_", "56_", "57_", "63_", "64_", "65_", "66_", "67_")
+               "54_", "55_", "56_", "57_", "63_", "64_", "65_", "66_", "67_", "68_", "69_")
 
 # Live as measured read-only on 2026-11-05: exactly these two older files never ran, 000500 and
 # REVOKE TRUNCATE on inquiries did, and cost_control_sub_categories holds 50 rows with no

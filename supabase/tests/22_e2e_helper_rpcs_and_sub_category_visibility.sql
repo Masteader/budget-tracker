@@ -202,10 +202,14 @@ BEGIN
     INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, is_shared_pool)
     VALUES ('f22c0000-0000-0000-0000-000000000001', 'f22a0000-0000-0000-0000-000000000001', 'f2200000-0000-0000-0000-0000000000a1',
             'T22 his cash', 'cash', 100, false);
+    INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, is_shared_pool, assigned_wife_id)
+    VALUES ('f22c0000-0000-0000-0000-000000000002', 'f22a0000-0000-0000-0000-000000000001', 'f2200000-0000-0000-0000-0000000000a1',
+            'T22 her account', 'wife', 0, false, 'f2200000-0000-0000-0000-0000000000a2');
     PERFORM pg_temp.expect('husband records a repayment',
         pg_temp.as_user('f2200000-0000-0000-0000-0000000000a1',
             $q$SELECT public.record_spouse_reimbursement('f22a0000-0000-0000-0000-000000000001', 'f2200000-0000-0000-0000-0000000000a2', 20.50, 'cash', NULL,
-                NULL, 'f22c0000-0000-0000-0000-000000000001', 'f22e0000-0000-0000-0000-000000000001')$q$),
+                NULL, 'f22c0000-0000-0000-0000-000000000001', 'f22e0000-0000-0000-0000-000000000001',
+                'f22c0000-0000-0000-0000-000000000002')$q$),
         '00000');
     -- The outsider is still refused by the RPCs' own checks, not by a missing helper.
     IF pg_temp.as_user('f2200000-0000-0000-0000-0000000000b1',

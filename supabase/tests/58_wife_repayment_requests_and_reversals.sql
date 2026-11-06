@@ -157,11 +157,18 @@ AS $$ INSERT INTO pg_temp.snap VALUES (p_label, p_val) ON CONFLICT (label) DO UP
 CREATE FUNCTION pg_temp.kept(p_label text) RETURNS text LANGUAGE sql AS $$ SELECT val FROM pg_temp.snap WHERE label = p_label $$;
 CREATE FUNCTION pg_temp.id(p_label text) RETURNS uuid LANGUAGE sql AS $$ SELECT val::uuid FROM pg_temp.snap WHERE label = p_label $$;
 
+-- Her wife account in household p_hh (20261105001300, section 12): every repayment to her credits
+-- one, and her request names one. Made for every wife of the fixtures, owned by the husband.
+CREATE FUNCTION pg_temp.wa(p_hh int, p_wife int) RETURNS uuid LANGUAGE sql AS $$
+    SELECT id FROM public.accounts
+    WHERE household_id = pg_temp.h(p_hh) AND account_type = 'wife' AND assigned_wife_id = pg_temp.u(p_wife)
+    ORDER BY is_archived, created_at, id LIMIT 1
+$$;
 -- The calls, as user p_actor (authenticated). Account 0 = none.
 CREATE FUNCTION pg_temp.req(p_actor int, p_hh int, p_amount text, p_key int) RETURNS text LANGUAGE sql AS $$
     SELECT pg_temp.call(pg_temp.u(p_actor), NULL,
-        format('SELECT public.request_spouse_reimbursement(%L, %s, %L, %L::uuid, NULL)::text',
-               pg_temp.h(p_hh), p_amount, 'cash', pg_temp.k(p_key)));
+        format('SELECT public.request_spouse_reimbursement(%L, %s, %L, %L::uuid, NULL, %L::uuid)::text',
+               pg_temp.h(p_hh), p_amount, 'cash', pg_temp.k(p_key), pg_temp.wa(p_hh, p_actor)));
 $$;
 CREATE FUNCTION pg_temp.cancel(p_actor int, p_hh int, p_request uuid) RETURNS text LANGUAGE sql AS $$
     SELECT pg_temp.call(pg_temp.u(p_actor), NULL,
@@ -179,9 +186,9 @@ CREATE FUNCTION pg_temp.approve(p_actor int, p_hh int, p_request uuid, p_account
 $$;
 CREATE FUNCTION pg_temp.repay(p_actor int, p_hh int, p_wife int, p_amount text, p_account int, p_key int) RETURNS text LANGUAGE sql AS $$
     SELECT pg_temp.call(pg_temp.u(p_actor), NULL,
-        format('SELECT public.record_spouse_reimbursement(%L, %L, %s, %L, NULL, NULL, %L::uuid, %L::uuid)::text',
+        format('SELECT public.record_spouse_reimbursement(%L, %L, %s, %L, NULL, NULL, %L::uuid, %L::uuid, %L::uuid)::text',
                pg_temp.h(p_hh), pg_temp.u(p_wife), p_amount, 'bank_transfer',
-               CASE WHEN p_account = 0 THEN NULL ELSE pg_temp.a(p_account) END, pg_temp.k(p_key)));
+               CASE WHEN p_account = 0 THEN NULL ELSE pg_temp.a(p_account) END, pg_temp.k(p_key), pg_temp.wa(p_hh, p_wife)));
 $$;
 CREATE FUNCTION pg_temp.rev(p_actor int, p_hh int, p_row uuid, p_key int) RETURNS text LANGUAGE sql AS $$
     SELECT pg_temp.call(pg_temp.u(p_actor), NULL,
@@ -310,6 +317,19 @@ BEGIN
     PERFORM pg_temp.advance(3, 9, 500);
 END $$;
 
+-- A wife account for every wife of the fixtures (20261105001300, section 12), owned by her husband
+-- (the provider; else the primary admin), empty.
+INSERT INTO public.accounts (household_id, owner_user_id, name, account_type, balance, is_shared_pool, assigned_wife_id)
+SELECT m.household_id,
+       COALESCE((SELECT p.user_id FROM public.household_memberships p
+                 WHERE p.household_id = m.household_id AND p.user_id = h.nafaqah_provider_user_id),
+                h.owner_user_id, m.user_id),
+       'Her account', 'wife', 0, false, m.user_id
+FROM public.household_memberships m
+JOIN public.households h ON h.id = m.household_id
+WHERE m.financial_role = 'spouse' AND h.id::text LIKE 'e58a%'
+  AND NOT EXISTS (SELECT 1 FROM public.accounts a WHERE a.assigned_wife_id = m.user_id AND a.household_id = m.household_id);
+
 SELECT pg_temp.keep('budgets', pg_temp.budgets());
 
 -- 1. Requests ---------------------------------------------------------------------------------
@@ -415,17 +435,17 @@ BEGIN
     PERFORM pg_temp.expect('approved', (v_res ->> 'replayed') || '/' || (v_res ->> 'amount') || '/' || (v_res ->> 'outstanding_after'),
         'false/100.00/300.00');
     PERFORM pg_temp.expect('his bank down by exactly the requested amount', pg_temp.bal(3), '900.00');
-    PERFORM pg_temp.expect('her account is never credited', pg_temp.bal(2), '500.00');
+    PERFORM pg_temp.expect('her own account is never credited', pg_temp.bal(2), '500.00');
     PERFORM pg_temp.expect('approved, linked to the repayment',
         (SELECT o.outcome || '/' || (o.reimbursement_id = pg_temp.id('p_r1'))::text || '/' || (o.decided_by = pg_temp.u(1))::text
          FROM public.spouse_reimbursement_request_outcomes o WHERE o.request_id = pg_temp.id('r1')), 'approved/true/true');
     SELECT r.amount, r.payment_method, r.kind, t.from_account_id, t.to_account_id, t.amount AS t_amount INTO v_row
     FROM public.spouse_reimbursements r JOIN public.account_transfers t ON t.id = r.transfer_id
     WHERE r.id = pg_temp.id('p_r1');
-    PERFORM pg_temp.expect('one transfer out of his account, into nothing',
+    PERFORM pg_temp.expect('one transfer out of his account, into the wife account she named',
         v_row.amount::text || '/' || v_row.payment_method || '/' || v_row.kind || '/' || (v_row.from_account_id = pg_temp.a(3))::text
         || '/' || COALESCE(v_row.to_account_id::text, 'none') || '/' || v_row.t_amount::text,
-        '100.00/cash/payment/true/none/100.00');
+        '100.00/cash/payment/true/' || pg_temp.wa(1, 2)::text || '/100.00');
     PERFORM pg_temp.expect('pending after approval', pg_temp.balance_of(1, 2, 'pending_requested'), '0.00');
 
     v_bal := pg_temp.balances();
@@ -493,17 +513,17 @@ BEGIN
     PERFORM pg_temp.expect('reversed', (v_res ->> 'replayed') || '/' || (v_res ->> 'amount') || '/' || (v_res ->> 'outstanding_after'),
         'false/150.00/300.00');
     PERFORM pg_temp.expect('his bank credited back in full', pg_temp.bal(3), '900.00');
-    PERFORM pg_temp.expect('her account untouched', pg_temp.bal(2), '500.00');
+    PERFORM pg_temp.expect('her own account untouched', pg_temp.bal(2), '500.00');
     PERFORM pg_temp.expect('what is owed is restored', pg_temp.owed(1, 2), '300.00');
     PERFORM pg_temp.expect('the original stays', (SELECT kind || '/' || amount::text FROM public.spouse_reimbursements WHERE id = pg_temp.id('p_150')),
         'payment/150.00');
     SELECT r.kind, r.reverses_id, r.amount, t.from_account_id, t.to_account_id, t.amount AS t_amount INTO v_row
     FROM public.spouse_reimbursements r JOIN public.account_transfers t ON t.id = r.transfer_id
     WHERE r.id = pg_temp.id('rev_150');
-    PERFORM pg_temp.expect('a reversal entry with a transfer back into his account',
+    PERFORM pg_temp.expect('a reversal entry with a transfer from her wife account back into his account',
         v_row.kind || '/' || (v_row.reverses_id = pg_temp.id('p_150'))::text || '/' || v_row.amount::text || '/'
         || COALESCE(v_row.from_account_id::text, 'none') || '/' || (v_row.to_account_id = pg_temp.a(3))::text || '/' || v_row.t_amount::text,
-        'reversal/true/150.00/none/true/150.00');
+        'reversal/true/150.00/' || pg_temp.wa(1, 2)::text || '/true/150.00');
     PERFORM pg_temp.expect('reimbursed is net of the reversal', pg_temp.balance_of(1, 2, 'reimbursed'), '100.00');
 
     v_bal := pg_temp.balances();
@@ -689,10 +709,10 @@ DECLARE
     v_tbl text;
 BEGIN
     FOREACH v_sig IN ARRAY ARRAY[
-        'request_spouse_reimbursement(uuid, numeric, text, uuid, uuid)',
+        'request_spouse_reimbursement(uuid, numeric, text, uuid, uuid, uuid)',
         'cancel_spouse_reimbursement_request(uuid, uuid, uuid)',
         'decline_spouse_reimbursement_request(uuid, uuid, text, uuid)',
-        'approve_spouse_reimbursement_request(uuid, uuid, uuid, uuid, uuid)',
+        'approve_spouse_reimbursement_request(uuid, uuid, uuid, uuid, uuid, uuid)',
         'reverse_spouse_reimbursement(uuid, uuid, uuid, uuid)',
         'reverse_former_member_debt_payment(uuid, uuid, uuid, uuid, uuid)'
     ] LOOP
@@ -708,7 +728,7 @@ BEGIN
         'nafaqah_repayment_lock_account(uuid, uuid, uuid)',
         'nafaqah_repayment_debit(uuid, uuid, uuid, numeric, text)',
         'nafaqah_repayment_credit(uuid, uuid, uuid, numeric, text)',
-        'nafaqah_repay_from_account(uuid, uuid, uuid, numeric, text, text, uuid, uuid, uuid)',
+        'nafaqah_repay_from_account(uuid, uuid, uuid, numeric, text, text, uuid, uuid, uuid, uuid)',
         'nafaqah_net_repaid(uuid, uuid)',
         'nafaqah_outstanding(uuid, uuid)'
     ] LOOP

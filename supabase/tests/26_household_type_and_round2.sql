@@ -35,6 +35,21 @@ BEGIN
     RETURN v_id;
 END;
 $$;
+-- Her wife account (20261105001300, section 12), owned by the husband: every repayment credits one.
+CREATE FUNCTION pg_temp.wife_account(p_household uuid, p_wife uuid, p_owner uuid) RETURNS uuid LANGUAGE plpgsql AS $$
+DECLARE
+    v_id uuid;
+BEGIN
+    SELECT id INTO v_id FROM public.accounts
+    WHERE household_id = p_household AND account_type = 'wife' AND assigned_wife_id = p_wife AND NOT is_archived;
+    IF v_id IS NULL THEN
+        INSERT INTO public.accounts (household_id, owner_user_id, name, account_type, balance, is_shared_pool, assigned_wife_id)
+        VALUES (p_household, p_owner, 'Her account', 'wife', 0, false, p_wife)
+        RETURNING id INTO v_id;
+    END IF;
+    RETURN v_id;
+END;
+$$;
 
 -- Helpers ----------------------------------------------------------------------
 -- SQLSTATE:HINT of a statement run as an authenticated user ('00000:' on success).
@@ -458,7 +473,7 @@ BEGIN
         ('26f00000-0000-0000-0000-000000000002', '26aa0000-0000-0000-0000-000000000001', '26000000-0000-0000-0000-0000000000a2',
          100, 'Abaya', 'OPEX-SHOPPING', '2026-11-10 12:00+03', 'manual', 'wife_personal', '26000000-0000-0000-0000-0000000000a2');
     PERFORM public.record_spouse_reimbursement('26aa0000-0000-0000-0000-000000000001', '26000000-0000-0000-0000-0000000000a2',
-        200, 'cash', NULL, '26000000-0000-0000-0000-0000000000a1', pg_temp.repay_account('26aa0000-0000-0000-0000-000000000001', '26000000-0000-0000-0000-0000000000a1'), gen_random_uuid());
+        200, 'cash', NULL, '26000000-0000-0000-0000-0000000000a1', pg_temp.repay_account('26aa0000-0000-0000-0000-000000000001', '26000000-0000-0000-0000-0000000000a1'), gen_random_uuid(), pg_temp.wife_account('26aa0000-0000-0000-0000-000000000001', '26000000-0000-0000-0000-0000000000a2', '26000000-0000-0000-0000-0000000000a1'));
     PERFORM public.set_member_allowance('26aa0000-0000-0000-0000-000000000001', '26000000-0000-0000-0000-0000000000a2',
         500, '2026-11', '26000000-0000-0000-0000-0000000000a1');
     SELECT spent_amount INTO v_spent FROM public.budgets
@@ -496,6 +511,11 @@ BEGIN
         WHERE household_id = '26aa0000-0000-0000-0000-000000000001'), '0');
     PERFORM pg_temp.expect('her F allowance is gone', (SELECT count(*)::text FROM public.member_allowances
         WHERE household_id = '26aa0000-0000-0000-0000-000000000001'), '0');
+    -- Her wife account there stays his, with what it holds, archived and naming nobody (20261105001300).
+    PERFORM pg_temp.expect('her F wife account stays his, archived, naming nobody', (SELECT string_agg(owner_user_id || ':' || is_archived || ':'
+        || COALESCE(assigned_wife_id::text, '-') || ':' || balance, ',') FROM public.accounts
+        WHERE household_id = '26aa0000-0000-0000-0000-000000000001' AND account_type = 'wife'),
+        '26000000-0000-0000-0000-0000000000a1:true:-:200.00');
     PERFORM pg_temp.expect('her G ledger is untouched', (SELECT count(*)::text FROM public.member_allowances
         WHERE household_id = '26aa0000-0000-0000-0000-000000000002' AND member_user_id = '26000000-0000-0000-0000-0000000000a2'), '1');
     SELECT spent_amount INTO v_spent FROM public.budgets
@@ -512,7 +532,7 @@ BEGIN
     VALUES ('26f00000-0000-0000-0000-000000000011', '26aa0000-0000-0000-0000-000000000002', '26000000-0000-0000-0000-0000000000d2',
             80, 'Nahdi', 'OPEX-HEALTH', '2026-11-10 12:00+03', 'manual', 'wife_reimbursable', '26000000-0000-0000-0000-0000000000d2');
     PERFORM public.record_spouse_reimbursement('26aa0000-0000-0000-0000-000000000002', '26000000-0000-0000-0000-0000000000d2',
-        80, 'cash', NULL, '26000000-0000-0000-0000-0000000000d1', pg_temp.repay_account('26aa0000-0000-0000-0000-000000000002', '26000000-0000-0000-0000-0000000000d1'), gen_random_uuid());
+        80, 'cash', NULL, '26000000-0000-0000-0000-0000000000d1', pg_temp.repay_account('26aa0000-0000-0000-0000-000000000002', '26000000-0000-0000-0000-0000000000d1'), gen_random_uuid(), pg_temp.wife_account('26aa0000-0000-0000-0000-000000000002', '26000000-0000-0000-0000-0000000000d2', '26000000-0000-0000-0000-0000000000d1'));
     PERFORM pg_temp.expect('GH removes GW', pg_temp.as_user('26000000-0000-0000-0000-0000000000d1',
         $q$SELECT public.remove_member('26000000-0000-0000-0000-0000000000d2')$q$), '00000:');
     PERFORM pg_temp.expect('GW advance declassified', (SELECT COALESCE(nafaqah_class, 'none') FROM public.transactions
@@ -525,7 +545,7 @@ BEGIN
     VALUES ('26f00000-0000-0000-0000-000000000021', '26aa0000-0000-0000-0000-000000000003', '26000000-0000-0000-0000-0000000000e2',
             50, 'Tamimi', 'OPEX-GROCERY', '2026-11-10 12:00+03', 'manual', 'wife_reimbursable', '26000000-0000-0000-0000-0000000000e2');
     PERFORM public.record_spouse_reimbursement('26aa0000-0000-0000-0000-000000000003', '26000000-0000-0000-0000-0000000000e2',
-        20, 'cash', NULL, '26000000-0000-0000-0000-0000000000e1', pg_temp.repay_account('26aa0000-0000-0000-0000-000000000003', '26000000-0000-0000-0000-0000000000e1'), gen_random_uuid());
+        20, 'cash', NULL, '26000000-0000-0000-0000-0000000000e1', pg_temp.repay_account('26aa0000-0000-0000-0000-000000000003', '26000000-0000-0000-0000-0000000000e1'), gen_random_uuid(), pg_temp.wife_account('26aa0000-0000-0000-0000-000000000003', '26000000-0000-0000-0000-0000000000e2', '26000000-0000-0000-0000-0000000000e1'));
     DELETE FROM auth.users WHERE id = '26000000-0000-0000-0000-0000000000e2';
     PERFORM pg_temp.expect('JW advance declassified after account deletion', (SELECT COALESCE(nafaqah_class, 'none') FROM public.transactions
         WHERE id = '26f00000-0000-0000-0000-000000000021'), 'none');

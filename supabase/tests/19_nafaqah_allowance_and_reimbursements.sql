@@ -56,6 +56,9 @@ BEGIN
     -- 20261105001300: every repayment leaves an account; the husband's bank pays them here.
     INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, is_shared_pool)
     VALUES ('e1ac0000-0000-0000-0000-000000000001', 'e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000a', 'Husband bank', 'bank', 10000, false);
+    -- Her wife account (20261105001300): every repayment to her credits it.
+    INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, is_shared_pool, assigned_wife_id)
+    VALUES ('e1ae0000-0000-0000-0000-000000000001', 'e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000a', 'Her account', 'wife', 0, false, 'e1000000-0000-0000-0000-00000000000b');
 END $$;
 
 -- 1. Catalog: new objects exist, RLS on, no direct client writes, anon locked out
@@ -308,12 +311,12 @@ BEGIN
 
     -- husband pays back 200 (partial)
     v_state := pg_temp.as_user('e1000000-0000-0000-0000-00000000000a',
-        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 200, 'stc_pay', 'partial', NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid())$q$);
+        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 200, 'stc_pay', 'partial', NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid(), 'e1ae0000-0000-0000-0000-000000000001')$q$);
     IF v_state <> '00000' THEN RAISE EXCEPTION 'Partial reimbursement failed (%)', v_state; END IF;
 
     -- overpayment is rejected and changes nothing
     v_state := pg_temp.as_user('e1000000-0000-0000-0000-00000000000a',
-        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 400, 'cash', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid())$q$);
+        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 400, 'cash', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid(), 'e1ae0000-0000-0000-0000-000000000001')$q$);
     IF v_state <> '22023' THEN RAISE EXCEPTION 'Overpayment not rejected with 22023 (got %)', v_state; END IF;
 
     -- ai_service maps the refusal by SQLSTATE 22023 + HINT 'overpayment' (PostgREST JSON code/hint)
@@ -323,7 +326,7 @@ BEGIN
     BEGIN
         PERFORM set_config('request.jwt.claims', json_build_object('sub', 'e1000000-0000-0000-0000-00000000000a', 'role', 'authenticated')::text, true);
         SET LOCAL ROLE authenticated;
-        PERFORM public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 400, 'cash', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid());
+        PERFORM public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 400, 'cash', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid(), 'e1ae0000-0000-0000-0000-000000000001');
         RAISE EXCEPTION 'BUG: overpayment accepted';
     EXCEPTION WHEN OTHERS THEN
         GET STACKED DIAGNOSTICS v_code = RETURNED_SQLSTATE, v_hint = PG_EXCEPTION_HINT;
@@ -335,25 +338,25 @@ BEGIN
 
     -- zero / negative / sub-halala / unknown method rejected
     v_state := pg_temp.as_user('e1000000-0000-0000-0000-00000000000a',
-        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 0, 'cash', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid())$q$);
+        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 0, 'cash', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid(), 'e1ae0000-0000-0000-0000-000000000001')$q$);
     IF v_state = '00000' THEN RAISE EXCEPTION 'BUG: zero reimbursement accepted'; END IF;
     v_state := pg_temp.as_user('e1000000-0000-0000-0000-00000000000a',
-        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 0.005, 'cash', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid())$q$);
+        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 0.005, 'cash', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid(), 'e1ae0000-0000-0000-0000-000000000001')$q$);
     IF v_state = '00000' THEN RAISE EXCEPTION 'BUG: sub-halala reimbursement accepted'; END IF;
     v_state := pg_temp.as_user('e1000000-0000-0000-0000-00000000000a',
-        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 1, 'bitcoin', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid())$q$);
+        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 1, 'bitcoin', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid(), 'e1ae0000-0000-0000-0000-000000000001')$q$);
     IF v_state = '00000' THEN RAISE EXCEPTION 'BUG: unknown payment method accepted'; END IF;
 
     -- an ordinary member and a foreign admin cannot record repayments
     v_state := pg_temp.as_user('e1000000-0000-0000-0000-00000000000c',
-        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 1, 'cash', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid())$q$);
+        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 1, 'cash', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid(), 'e1ae0000-0000-0000-0000-000000000001')$q$);
     IF v_state = '00000' THEN RAISE EXCEPTION 'VULNERABILITY: ordinary member recorded a reimbursement'; END IF;
     v_state := pg_temp.as_user('e1000000-0000-0000-0000-00000000000d',
-        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 1, 'cash', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid())$q$);
+        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 1, 'cash', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid(), 'e1ae0000-0000-0000-0000-000000000001')$q$);
     IF v_state = '00000' THEN RAISE EXCEPTION 'VULNERABILITY: foreign admin recorded a reimbursement'; END IF;
     -- a roommate is never a Nafaqah creditor
     v_state := pg_temp.as_user('e1000000-0000-0000-0000-0000000000e1',
-        $q$SELECT public.record_spouse_reimbursement('e1cc0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-0000000000e2', 1, 'cash', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid())$q$);
+        $q$SELECT public.record_spouse_reimbursement('e1cc0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-0000000000e2', 1, 'cash', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid(), 'e1ae0000-0000-0000-0000-000000000001')$q$);
     IF v_state = '00000' THEN RAISE EXCEPTION 'BUG: roommate reimbursement recorded in Nafaqah ledger'; END IF;
     -- a foreign user cannot read the balance either
     v_state := pg_temp.as_user('e1000000-0000-0000-0000-00000000000d',
@@ -365,11 +368,11 @@ BEGIN
 
     -- the wife no longer records a repayment herself (20261105001300) ...
     v_state := pg_temp.as_user('e1000000-0000-0000-0000-00000000000b',
-        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 300.50, 'bank_transfer', 'rest', NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid())$q$);
+        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 300.50, 'bank_transfer', 'rest', NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid(), 'e1ae0000-0000-0000-0000-000000000001')$q$);
     IF v_state <> '42501' THEN RAISE EXCEPTION 'The wife recorded a repayment herself (got %)', v_state; END IF;
     -- ... she asks for the remaining 300.50, and the husband approves it from his account (full settlement)
     v_state := pg_temp.as_user('e1000000-0000-0000-0000-00000000000b',
-        $q$SELECT public.request_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 300.50, 'bank_transfer', 'e1ad0000-0000-0000-0000-000000000001', NULL)$q$);
+        $q$SELECT public.request_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 300.50, 'bank_transfer', 'e1ad0000-0000-0000-0000-000000000001', NULL, 'e1ae0000-0000-0000-0000-000000000001')$q$);
     IF v_state <> '00000' THEN RAISE EXCEPTION 'Her request failed (%)', v_state; END IF;
     v_state := pg_temp.as_user('e1000000-0000-0000-0000-00000000000a',
         $q$SELECT public.approve_spouse_reimbursement_request('e1aa0000-0000-0000-0000-000000000001',
@@ -386,14 +389,15 @@ BEGIN
     END IF;
 
     v_state := pg_temp.as_user('e1000000-0000-0000-0000-00000000000a',
-        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 0.01, 'cash', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid())$q$);
+        $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 0.01, 'cash', NULL, NULL, 'e1ac0000-0000-0000-0000-000000000001', gen_random_uuid(), 'e1ae0000-0000-0000-0000-000000000001')$q$);
     IF v_state <> '22023' THEN RAISE EXCEPTION 'Reimbursement after full settlement not rejected (got %)', v_state; END IF;
 
     IF (SELECT r.paid_by_user_id FROM public.spouse_reimbursements r JOIN public.spouse_reimbursement_request_outcomes o ON o.reimbursement_id = r.id)
            IS DISTINCT FROM 'e1000000-0000-0000-0000-00000000000a'::uuid
        OR (SELECT r.recorded_by FROM public.spouse_reimbursements r JOIN public.spouse_reimbursement_request_outcomes o ON o.reimbursement_id = r.id)
            IS DISTINCT FROM 'e1000000-0000-0000-0000-00000000000a'::uuid
-       OR (SELECT balance FROM public.accounts WHERE id = 'e1ac0000-0000-0000-0000-000000000001') <> 10000 - 500.50 THEN
+       OR (SELECT balance FROM public.accounts WHERE id = 'e1ac0000-0000-0000-0000-000000000001') <> 10000 - 500.50
+       OR (SELECT balance FROM public.accounts WHERE id = 'e1ae0000-0000-0000-0000-000000000001') <> 500.50 THEN
         RAISE EXCEPTION 'Reimbursement payer/recorder not attributed correctly';
     END IF;
     RAISE NOTICE 'PASSED: wife reimbursement debt: partial and full repayments, overpayment rejected, household-scoped.';

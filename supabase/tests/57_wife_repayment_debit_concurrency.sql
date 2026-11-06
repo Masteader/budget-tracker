@@ -169,8 +169,8 @@ END;
 $$;
 
 CREATE FUNCTION pg_temp.repay_sql(p_amount numeric, p_account uuid, p_key uuid) RETURNS text LANGUAGE sql AS $$
-    SELECT format('SELECT public.record_spouse_reimbursement(%L, %L, %s, %L, NULL, NULL, %L::uuid, %L::uuid)::text',
-                  pg_temp.h(1), pg_temp.u(3), p_amount, 'bank_transfer', p_account, p_key);
+    SELECT format('SELECT public.record_spouse_reimbursement(%L, %L, %s, %L, NULL, NULL, %L::uuid, %L::uuid, %L::uuid)::text',
+                  pg_temp.h(1), pg_temp.u(3), p_amount, 'bank_transfer', p_account, p_key, pg_temp.a(4));
 $$;
 CREATE FUNCTION pg_temp.fpay_sql(p_amount numeric, p_account uuid, p_key uuid) RETURNS text LANGUAGE sql AS $$
     SELECT format('SELECT public.record_former_member_debt_payment(%L, %L, %s, %L, %L::uuid, NULL, %L::uuid)::text',
@@ -189,7 +189,7 @@ $$;
 
 -- A pending request of hers, committed (as the wife, through the API's path).
 CREATE FUNCTION pg_temp.ask(p_amount numeric, p_key uuid) RETURNS uuid LANGUAGE sql AS $$
-    SELECT (public.request_spouse_reimbursement(pg_temp.h(1), p_amount, 'cash', p_key, pg_temp.u(3)) ->> 'request_id')::uuid;
+    SELECT (public.request_spouse_reimbursement(pg_temp.h(1), p_amount, 'cash', p_key, pg_temp.u(3), pg_temp.a(4)) ->> 'request_id')::uuid;
 $$;
 
 CREATE FUNCTION pg_temp.bal(p_n int) RETURNS text LANGUAGE sql
@@ -233,6 +233,9 @@ BEGIN
         (pg_temp.a(1), pg_temp.h(1), pg_temp.u(1), 'T57 pool', 'shared_pool', 1000, true),
         (pg_temp.a(2), pg_temp.h(1), pg_temp.u(1), 'T57 his bank', 'bank', 500, false),
         (pg_temp.a(3), pg_temp.h(1), pg_temp.u(3), 'T57 her bank', 'bank', 0, false);
+    -- Her wife account (20261105001300, section 12): every repayment to her credits it.
+    INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, is_shared_pool, assigned_wife_id)
+    VALUES (pg_temp.a(4), pg_temp.h(1), pg_temp.u(1), 'T57 her account', 'wife', 0, false, pg_temp.u(3));
     INSERT INTO public.transactions (household_id, user_id, amount, merchant, category_code, timestamp, source, spent_by, nafaqah_class, nafaqah_spouse_id)
     VALUES (pg_temp.h(1), pg_temp.u(3), 300, 'T57 Grocer', 'OPEX-GROCERY', now(), 'manual', 'me', 'wife_reimbursable', pg_temp.u(3));
     -- No husband now (he left, say): the admins who are not wives act (review R3-01).
@@ -500,7 +503,7 @@ END $$;
 
 -- A tracked repayment to reverse, committed (the API's path: the verified caller in p_actor_user_id).
 INSERT INTO pg_temp.ids VALUES ('p7', (public.record_spouse_reimbursement(pg_temp.h(1), pg_temp.u(3), 10, 'cash', NULL, pg_temp.u(1),
-    pg_temp.a(2), pg_temp.k(70)) ->> 'reimbursement_id')::uuid);
+    pg_temp.a(2), pg_temp.k(70), pg_temp.a(4)) ->> 'reimbursement_id')::uuid);
 
 -- 7. Reverse against reverse ------------------------------------------------------------------
 DO $$

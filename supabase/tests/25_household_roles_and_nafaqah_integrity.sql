@@ -36,6 +36,21 @@ BEGIN
     RETURN v_id;
 END;
 $$;
+-- Her wife account (20261105001300, section 12), owned by the husband: every repayment credits one.
+CREATE FUNCTION pg_temp.wife_account(p_household uuid, p_wife uuid, p_owner uuid) RETURNS uuid LANGUAGE plpgsql AS $$
+DECLARE
+    v_id uuid;
+BEGIN
+    SELECT id INTO v_id FROM public.accounts
+    WHERE household_id = p_household AND account_type = 'wife' AND assigned_wife_id = p_wife AND NOT is_archived;
+    IF v_id IS NULL THEN
+        INSERT INTO public.accounts (household_id, owner_user_id, name, account_type, balance, is_shared_pool, assigned_wife_id)
+        VALUES (p_household, p_owner, 'Her account', 'wife', 0, false, p_wife)
+        RETURNING id INTO v_id;
+    END IF;
+    RETURN v_id;
+END;
+$$;
 
 -- Helpers ----------------------------------------------------------------------
 CREATE FUNCTION pg_temp.as_user(p_sub text, p_sql text)
@@ -429,7 +444,7 @@ BEGIN
     VALUES ('25f00000-0000-0000-0000-000000000001', '25aa0000-0000-0000-0000-000000000001', '25000000-0000-0000-0000-0000000000a2',
             300.00, 'Panda', 'OPEX-GROCERY', '2026-11-10 12:00+03', 'manual', 'wife_reimbursable', '25000000-0000-0000-0000-0000000000a2');
     PERFORM public.record_spouse_reimbursement('25aa0000-0000-0000-0000-000000000001', '25000000-0000-0000-0000-0000000000a2',
-        200, 'cash', NULL, '25000000-0000-0000-0000-0000000000a1', pg_temp.repay_account('25aa0000-0000-0000-0000-000000000001', '25000000-0000-0000-0000-0000000000a1'), gen_random_uuid());
+        200, 'cash', NULL, '25000000-0000-0000-0000-0000000000a1', pg_temp.repay_account('25aa0000-0000-0000-0000-000000000001', '25000000-0000-0000-0000-0000000000a1'), gen_random_uuid(), pg_temp.wife_account('25aa0000-0000-0000-0000-000000000001', '25000000-0000-0000-0000-0000000000a2', '25000000-0000-0000-0000-0000000000a1'));
 
     PERFORM pg_temp.expect('edit 300 -> 100 refused', pg_temp.state_hint($q$
         UPDATE public.transactions SET amount = 100 WHERE id = '25f00000-0000-0000-0000-000000000001'$q$),
