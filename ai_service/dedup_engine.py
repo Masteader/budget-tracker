@@ -7,7 +7,7 @@ Supports auto-enrichment of an existing transaction with receipt line items.
 import hashlib
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, Any, List
+from typing import Any, Callable, Dict, List, Optional
 from supabase_client import get_client
 
 logger = logging.getLogger(__name__)
@@ -27,20 +27,42 @@ def compute_zatca_fingerprint(
     raw = f"zatca:{clean_vat}:{clean_ts}:{clean_total}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
+def _caller_reads(household_id: str, caller_id: Optional[str]) -> Callable[[List[Dict[str, Any]]], List[Dict[str, Any]]]:
+    """The rows of a list of the household's transactions that ``caller_id`` reads (a wife's
+    personal purchase only for her, her husband and an admin who is not a wife; owner decision
+    2026-11-06). None: the server's own read, every row."""
+    if caller_id is None:
+        return lambda rows: list(rows)
+    from nafaqah_service import load_family_context, visible_transactions
+
+    ctx = load_family_context(household_id)
+    return lambda rows: visible_transactions(ctx, caller_id, rows)
+
+
 def find_duplicate_candidate(
     household_id: str,
     amount: float,
     merchant: Optional[str] = None,
     window_minutes: int = 1440,
     zatca_fingerprint: Optional[str] = None,
+    caller_id: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Search for an existing duplicate transaction:
     1. If zatca_fingerprint is provided: exact match on dedup_fingerprint across all time.
     2. Fuzzy match: Search recent transactions for the household with the same amount (±0.05)
        within the last `window_minutes` (default 24 hours), matching merchant keyword overlap.
+
+    ``caller_id`` is the member recording the expense: a candidate is only ever a transaction they
+    read, since the warning names its merchant, amount and date (a co-wife's personal purchase is
+    never one). Without knowing who reads what there is no warning.
     """
     client = get_client()
+    try:
+        readable = _caller_reads(household_id, caller_id)
+    except Exception as exc:
+        logger.warning("Duplicate check skipped: could not tell which transactions the caller reads (%s)", exc)
+        return None
 
     # Priority 1: Exact ZATCA fingerprint match
     if zatca_fingerprint:
@@ -50,11 +72,12 @@ def find_duplicate_candidate(
                 .select("*")
                 .eq("household_id", household_id)
                 .eq("dedup_fingerprint", zatca_fingerprint)
-                .limit(1)
+                .limit(10)
                 .execute()
             )
-            if response.data:
-                candidate = response.data[0]
+            matches = readable(response.data or [])
+            if matches:
+                candidate = matches[0]
                 logger.info("Found exact ZATCA duplicate candidate: tx_id=%s", candidate["id"])
                 return candidate
         except Exception as exc:
@@ -70,7 +93,7 @@ def find_duplicate_candidate(
             .limit(50)
             .execute()
         )
-        rows = response.data or []
+        rows = readable(response.data or [])
     except Exception as exc:
         logger.error("Failed to query recent transactions for dedup: %s", exc)
         return None

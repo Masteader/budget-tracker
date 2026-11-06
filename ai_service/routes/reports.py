@@ -7,9 +7,9 @@ import logging
 import re
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from auth import verify_household_access
+from auth import get_current_user_id, verify_household_access
 from utils import safe_error_response, validate_uuid
 from pdf_statement_generator import generate_monthly_pdf_statement
 
@@ -25,6 +25,7 @@ router = APIRouter()
 )
 async def export_statement_pdf(
     household_id: str,
+    request: Request,
     cycle_key: Optional[str] = None,
     _auth: str = Depends(verify_household_access),
 ):
@@ -35,9 +36,13 @@ async def export_statement_pdf(
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
+    # It lists and sums only the transactions the caller reads (a wife's personal purchase only for
+    # her, her husband and an admin who is not a wife).
+    caller = get_current_user_id(request)
 
     try:
-        pdf_bytes = await asyncio.to_thread(generate_monthly_pdf_statement, household_id, cycle_key=cycle_key)
+        pdf_bytes = await asyncio.to_thread(generate_monthly_pdf_statement, household_id, cycle_key=cycle_key,
+                                            caller_id=caller)
         safe_cycle = re.sub(r"[^a-zA-Z0-9_\-]", "", cycle_key or "current")
         safe_hid = re.sub(r"[^a-zA-Z0-9_\-]", "", household_id)[:8] or "unknown"
         filename = f"statement_{safe_cycle}_{safe_hid}.pdf"

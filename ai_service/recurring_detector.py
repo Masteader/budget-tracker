@@ -450,11 +450,17 @@ def detect_recurring_bills(
 def fetch_household_recurring_bills(
     household_id: str,
     as_of_date: Optional[date] = None,
+    caller_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Fetches transactions, active budget sub-allocations, and category taxonomies
     for a household to compute complete recurring bills and cycle reserves.
+
+    ``caller_id`` is the member asking: bills are detected from the transactions they read only (a
+    wife's personal purchase only for her, her husband and an admin who is not a wife; owner
+    decision 2026-11-06). None is the server's own read.
     """
+    from nafaqah_service import transactions_visible_to
     from supabase_client import get_client, get_household_payday
     client = get_client()
     cutoff = (datetime.now(timezone.utc) - timedelta(days=180)).isoformat()
@@ -464,7 +470,7 @@ def fetch_household_recurring_bills(
     try:
         resp = (
             client.table("transactions")
-            .select("id, merchant, amount, category_code, sub_category, timestamp, created_at")
+            .select("id, merchant, amount, category_code, sub_category, timestamp, created_at, nafaqah_class, nafaqah_spouse_id")
             .eq("household_id", household_id)
             .gte("timestamp", cutoff)
             .order("timestamp", desc=False)
@@ -474,12 +480,13 @@ def fetch_household_recurring_bills(
     except Exception:
         resp = (
             client.table("transactions")
-            .select("id, merchant, amount, category_code, sub_category, timestamp, created_at")
+            .select("id, merchant, amount, category_code, sub_category, timestamp, created_at, nafaqah_class, nafaqah_spouse_id")
             .eq("household_id", household_id)
             .limit(300)
             .execute()
         )
         txs = resp.data or []
+    txs = transactions_visible_to(household_id, caller_id, txs)
 
     # 2. Budgets
     try:

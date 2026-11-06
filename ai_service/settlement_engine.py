@@ -19,6 +19,7 @@ from nafaqah_service import (
     can_view_wife_ledger,
     get_reimbursement_ledger,
     load_family_context,
+    visible_transactions,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,7 +56,7 @@ def _cycle_dates(household_id: str) -> Dict[str, Any]:
 # Settlement rows carry the payer in their server-authored head "Settlement | PaidBy: <id> |".
 _PARTNER_TX_COLUMNS = (
     "id, user_id, amount, merchant, category_code, spent_by, timestamp, notes, source, "
-    "beneficiary_type, beneficiary_id, is_settlement, settlement_target_id, nafaqah_class"
+    "beneficiary_type, beneficiary_id, is_settlement, settlement_target_id, nafaqah_class, nafaqah_spouse_id"
 )
 _PARTNER_TX_COLUMNS_PRE_NAFAQAH = (
     "id, user_id, amount, merchant, category_code, spent_by, timestamp, notes, source, "
@@ -392,7 +393,13 @@ def calculate_partner_settlement(
         # Databases without the Nafaqah migration lack nafaqah_class; any other failure propagates
         # (an empty list would report every balance as settled).
         logger.warning("Settlement query with nafaqah_class failed (%s), retrying without it.", exc)
-        txs = _cycle_transactions(client, household_id, start_iso, _PARTNER_TX_COLUMNS_PRE_NAFAQAH)
+        # Without the column there is no classification: every row is an ordinary one.
+        txs = [{**tx, "nafaqah_class": None}
+               for tx in _cycle_transactions(client, household_id, start_iso, _PARTNER_TX_COLUMNS_PRE_NAFAQAH)]
+    if caller_user_id is not None:
+        # Only the rows the caller reads (owner decision 2026-11-06): a wife's personal purchase
+        # counts in a personal total only for her, her husband and an admin who is not a wife.
+        txs = visible_transactions(ctx, caller_user_id, txs)
 
     me_personal_total = 0.0
     partner_personal_total = 0.0
@@ -822,8 +829,14 @@ def calculate_settlement_v2(
     has_spouse = ctx.is_family
 
     # No fallback on failure: an empty list would report every balance as settled.
+    rows = _cycle_transactions(client, household_id, start_iso, _V2_TX_COLUMNS)
+    if caller_user_id is not None:
+        # Only the rows the caller reads (owner decision 2026-11-06): a wife's personal purchase is
+        # in spent_on_wife only for her, her husband and an admin who is not a wife. (A roommates
+        # household holds no classified row: set_household_type refuses the switch while one exists.)
+        rows = visible_transactions(ctx, caller_user_id, rows)
     txs = []
-    for tx in _cycle_transactions(client, household_id, start_iso, _V2_TX_COLUMNS):
+    for tx in rows:
         creator = str(tx.get("user_id") or "").lower()
         if tx.get("is_settlement"):
             payer = resolve_member_ref(settlement_payer_ref(tx), creator, ctx)

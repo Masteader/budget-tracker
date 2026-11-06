@@ -94,14 +94,18 @@ async def salary_cycle_forecast(
 )
 async def list_salary_cycles(
     household_id: str,
+    request: Request,
     payday_day: Optional[int] = None,
     _auth: str = Depends(verify_household_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
+    # Cycles come from the transactions the caller reads (a wife's personal purchase only for her,
+    # her husband and an admin who is not a wife).
+    caller = get_current_user_id(request)
     try:
-        return await asyncio.to_thread(get_available_cycles_for_household, household_id, payday_day)
+        return await asyncio.to_thread(get_available_cycles_for_household, household_id, payday_day, caller_id=caller)
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to list salary cycles.")
 
@@ -113,6 +117,7 @@ async def list_salary_cycles(
 )
 async def get_recurring_bills(
     household_id: str,
+    request: Request,
     as_of_date: Optional[str] = None,
     _auth: str = Depends(verify_household_access),
 ):
@@ -131,8 +136,11 @@ async def get_recurring_bills(
         except ValueError:
             raise HTTPException(status_code=400, detail="as_of_date must be in YYYY-MM-DD format.")
 
+    # Bills come from the transactions the caller reads (a wife's personal purchase only for her, her
+    # husband and an admin who is not a wife).
+    caller = get_current_user_id(request)
     try:
-        return await asyncio.to_thread(fetch_household_recurring_bills, household_id, target_date)
+        return await asyncio.to_thread(fetch_household_recurring_bills, household_id, target_date, caller_id=caller)
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to fetch recurring bills.")
 

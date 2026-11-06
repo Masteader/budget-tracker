@@ -390,9 +390,15 @@ def get_cycle_info_for_key(cycle_key: str, payday_day: int = 27) -> Dict[str, An
     }
 
 
-def get_available_cycles_for_household(household_id: str, payday_day: Optional[int] = None) -> Dict[str, Any]:
+def get_available_cycles_for_household(
+    household_id: str, payday_day: Optional[int] = None, caller_id: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Returns the active salary cycle and all historical available cycles for a household.
+
+    ``caller_id`` is the member asking: a cycle comes from the transactions they read only, so a
+    cycle holding nothing but a co-wife's personal purchases is not listed for her (owner decision
+    2026-11-06). None is the server's own read.
     """
     from supabase_client import get_client, ensure_household_cycle_budgets, get_household_payday
 
@@ -419,8 +425,15 @@ def get_available_cycles_for_household(household_id: str, payday_day: Optional[i
 
     # 2. Distinct cycle keys from transactions (so past transaction cycles are always navigable)
     try:
-        tx_res = client.table("transactions").select("cycle_key").eq("household_id", household_id).execute()
-        for row in tx_res.data or []:
+        from nafaqah_service import transactions_visible_to
+
+        tx_res = (
+            client.table("transactions")
+            .select("cycle_key, nafaqah_class, nafaqah_spouse_id")
+            .eq("household_id", household_id)
+            .execute()
+        )
+        for row in transactions_visible_to(household_id, caller_id, tx_res.data or []):
             ck = row.get("cycle_key")
             if ck and len(ck) == 7:
                 keys.add(ck)

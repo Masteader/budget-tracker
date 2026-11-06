@@ -1141,7 +1141,8 @@ def process_chat_transaction(
 
     # Duplicate check
     if not allow_duplicate:
-        candidate = find_duplicate_candidate(household_id, parsed.total_amount, parsed.merchant)
+        # Only a transaction the caller reads (never a co-wife's personal purchase).
+        candidate = find_duplicate_candidate(household_id, parsed.total_amount, parsed.merchant, caller_id=user_id)
         if candidate:
             logger.info("Duplicate candidate found for chat transaction: %s", candidate["id"])
             return {

@@ -902,6 +902,8 @@ def process_receipt_scan(
             amount=total_amount,
             merchant=merchant,
             zatca_fingerprint=zatca_fp,
+            # Only a transaction the caller reads (never a co-wife's personal purchase).
+            caller_id=user_id,
         )
 
     if candidate:

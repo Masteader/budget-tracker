@@ -8,7 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from auth import verify_household_access
+from auth import get_current_user_id, verify_household_access
 from utils import safe_error_response, validate_uuid
 from models import ShoppingBasketOptimizeRequest
 from price_tracker import get_grocery_price_history, optimize_shopping_basket
@@ -25,6 +25,7 @@ router = APIRouter()
 )
 async def grocery_price_history(
     household_id: str,
+    request: Request,
     item_filter: Optional[str] = None,
     _auth: str = Depends(verify_household_access),
 ):
@@ -35,8 +36,11 @@ async def grocery_price_history(
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
+    # Only the purchases the caller reads (a wife's personal purchase only for her, her husband and
+    # an admin who is not a wife).
+    caller = get_current_user_id(request)
     try:
-        items = await asyncio.to_thread(get_grocery_price_history, household_id, item_filter=item_filter)
+        items = await asyncio.to_thread(get_grocery_price_history, household_id, item_filter=item_filter, caller_id=caller)
         return {"items": items, "count": len(items)}
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to fetch grocery price history.")
@@ -59,7 +63,8 @@ async def shopping_basket_optimize(
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(req.household_id)
     await verify_household_access(request, req.household_id)
+    caller = get_current_user_id(request)
     try:
-        return await asyncio.to_thread(optimize_shopping_basket, req.household_id, req.items)
+        return await asyncio.to_thread(optimize_shopping_basket, req.household_id, req.items, caller_id=caller)
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to optimize shopping basket.")

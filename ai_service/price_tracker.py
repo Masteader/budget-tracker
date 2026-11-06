@@ -37,17 +37,25 @@ def _normalize_item_name(raw_name: str) -> str:
     return re.sub(r'[^a-zA-Z0-9\u0600-\u06FF\s]', '', raw_name).strip().capitalize()
 
 
-def get_grocery_price_history(household_id: str, item_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_grocery_price_history(
+    household_id: str, item_filter: Optional[str] = None, caller_id: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """
     Returns historical price entries for items purchased by the household,
     including store prices and inflation percentages.
+
+    ``caller_id`` is the member asking: only the purchases they read count (a wife's personal
+    purchase only for her, her husband and an admin who is not a wife; owner decision 2026-11-06).
+    None is the server's own read.
     """
+    from nafaqah_service import transactions_visible_to
+
     client = get_client()
 
     try:
         response = (
             client.table("transactions")
-            .select("id, merchant, category_code, timestamp, items")
+            .select("id, merchant, category_code, timestamp, items, nafaqah_class, nafaqah_spouse_id")
             .eq("household_id", household_id)
             .not_.is_("items", "null")
             .order("timestamp", desc=False)
@@ -57,6 +65,7 @@ def get_grocery_price_history(household_id: str, item_filter: Optional[str] = No
     except Exception as exc:
         logger.error("Failed to query transactions for price history: %s", exc)
         txs = []
+    txs = transactions_visible_to(household_id, caller_id, txs)
 
     history_by_item: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
 
@@ -148,7 +157,7 @@ BENCHMARK_STORE_PRICES: Dict[str, Dict[str, float]] = {
 }
 
 
-def optimize_shopping_basket(household_id: str, items: List[str]) -> Dict[str, Any]:
+def optimize_shopping_basket(household_id: str, items: List[str], caller_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Given a list of grocery items for a shopping trip, calculates:
     1. Total basket price at each store (Panda, Danube, Tamimi, Othaim, Lulu).
@@ -167,7 +176,8 @@ def optimize_shopping_basket(household_id: str, items: List[str]) -> Dict[str, A
         }
 
     # Fetch recorded household grocery prices to override benchmark
-    history = get_grocery_price_history(household_id)
+    # Only the purchases the caller reads (see get_grocery_price_history).
+    history = get_grocery_price_history(household_id, caller_id=caller_id)
     recorded_item_stores: Dict[str, Dict[str, float]] = {}
     for h in history:
         norm_name = h.get("item_name", "").capitalize()

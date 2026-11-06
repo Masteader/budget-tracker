@@ -4,7 +4,7 @@ In-memory fake of the supabase-py client used by the hermetic test suite.
 The real client talks to the network; tests must never do that (they previously
 reached whatever SUPABASE_URL a developer's .env pointed at, i.e. production).
 The fake implements just the PostgREST query-builder surface the service uses:
-select / eq / neq / in_ / gt / gte / lt / lte / is_ / contains / order / limit / range /
+select / eq / neq / in_ / gt / gte / lt / lte / is_ / not_.is_ / contains / order / limit / range /
 single / maybe_single / insert / update / upsert / delete / execute, plus rpc()
 and storage.from_(bucket).upload(). Set ``client.max_rows`` to cap every select the way
 PostgREST's max-rows setting does (1000 on Supabase): silently, after range and limit.
@@ -119,6 +119,11 @@ class FakeQuery:
         self._filters.append(lambda r: r.get(col) is target)
         return self
 
+    @property
+    def not_(self) -> "_FakeNot":
+        """PostgREST's ``not.`` prefix (``.not_.is_(col, "null")``)."""
+        return _FakeNot(self)
+
     def contains(self, col: str, vals: Any) -> "FakeQuery":
         self._filters_columns.append(col)
         self._filters.append(lambda r: all(v in (r.get(col) or []) for v in vals))
@@ -228,6 +233,20 @@ class FakeQuery:
                 raise RuntimeError(f"maybe_single() matched {len(result)} rows from {self._table}")
             return FakeResponse(result[0])
         return FakeResponse(result)
+
+
+class _FakeNot:
+    """The negated filters the service uses."""
+
+    def __init__(self, query: "FakeQuery"):
+        self._query = query
+
+    def is_(self, col: str, val: Any) -> "FakeQuery":
+        q = self._query
+        q._filters_columns.append(col)
+        target = None if val in (None, "null") else val
+        q._filters.append(lambda r: r.get(col) is not target)
+        return q
 
 
 class FakeRpc:

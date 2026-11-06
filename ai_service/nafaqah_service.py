@@ -716,6 +716,39 @@ def require_allowance_reader(ctx: FamilyContext, actor_id: Optional[str]) -> Non
         raise NafaqahForbidden("Only she, her husband, or an admin who is not a wife, reads her allowance.")
 
 
+# ─── Her personal purchases: who reads them (owner decision 2026-11-06) ─────────
+
+def can_view_personal_purchase(ctx: FamilyContext, actor_id: Optional[str], row: Dict[str, Any]) -> bool:
+    """Whether ``actor_id`` reads transaction ``row`` (mirrors the read policy of
+    ``public.transactions``, migration 20261105001300 section 10d). A wife's personal purchase
+    (``nafaqah_class`` 'wife_personal') is read by the same people as her allowance: she herself,
+    her husband and a household admin who is not a wife. Every other transaction is read by every
+    member (the routes check membership first). Every read this filters selects ``nafaqah_class``
+    and ``nafaqah_spouse_id`` (test_wife_personal_privacy reads them from a strict table)."""
+    if str(row.get("nafaqah_class") or "").strip().lower() != WIFE_PERSONAL:
+        return True
+    return can_view_allowance(ctx, actor_id, row.get("nafaqah_spouse_id"))
+
+
+def visible_transactions(
+    ctx: FamilyContext, actor_id: Optional[str], rows: Iterable[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """The rows of ``rows`` (transactions of ``ctx``'s household, read with the service role) that
+    ``actor_id`` reads, in their order: what an answer to that member may show, list or sum."""
+    return [row for row in rows if can_view_personal_purchase(ctx, actor_id, row)]
+
+
+def transactions_visible_to(
+    household_id: str, actor_id: Optional[str], rows: Iterable[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """``visible_transactions`` for a caller of ``household_id``. ``actor_id`` None is the server's
+    own read (no member asks): every row."""
+    rows = list(rows)
+    if actor_id is None:
+        return rows
+    return visible_transactions(load_family_context(household_id), actor_id, rows)
+
+
 def can_manage_wife_ledgers(ctx: FamilyContext, actor_id: Optional[str]) -> bool:
     """Who sees and settles every wife's repayment ledger and the former member records (review
     R3-01, owner decision 2026-11-06; mirrors ``public.nafaqah_may_manage_ledgers``): her husband;

@@ -31,10 +31,17 @@ logger = logging.getLogger(__name__)
 def generate_monthly_pdf_statement(
     household_id: str,
     cycle_key: Optional[str] = None,
+    caller_id: Optional[str] = None,
 ) -> bytes:
     """
     Builds a complete monthly financial statement PDF in memory and returns raw bytes.
+
+    ``caller_id`` is the member it is for: it lists and sums only the transactions they read (a
+    wife's personal purchase only for her, her husband and an admin who is not a wife; owner
+    decision 2026-11-06). None is the server's own read.
     """
+    from nafaqah_service import transactions_visible_to
+
     client = get_client()
 
     # 1. Resolve Cycle Info: the requested (or current) cycle of this household's payday. The
@@ -72,7 +79,7 @@ def generate_monthly_pdf_statement(
     try:
         t_query = (
             client.table("transactions")
-            .select("id, amount, merchant, category_code, timestamp, spent_by, items")
+            .select("id, amount, merchant, category_code, timestamp, spent_by, items, nafaqah_class, nafaqah_spouse_id")
             .eq("household_id", household_id)
             .order("timestamp", desc=True)
         )
@@ -84,6 +91,7 @@ def generate_monthly_pdf_statement(
     except Exception as exc:
         logger.warning("Could not fetch transactions for PDF statement: %s", exc)
         txs = []
+    txs = transactions_visible_to(household_id, caller_id, txs)
 
     total_spent = sum(float(t.get("amount") or 0.0) for t in txs)
     total_remaining = total_allocated - total_spent
