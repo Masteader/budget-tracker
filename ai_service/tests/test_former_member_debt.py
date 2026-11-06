@@ -237,25 +237,38 @@ def test_another_household_is_refused_before_anything(household):
     assert _calls(household, "record_former_member_debt_payment") == []
 
 
-def test_a_record_of_another_household_is_not_found(household):
+# Review R1-02: the API does not judge the record before the database. A retry of a payment that
+# went through finds it settled or with less remaining, and the database answers it as the first
+# time; only the database, after its replay lookup, refuses an unknown, closed or overpaid record.
+
+def _refuse_payment(household, hint, code="22023", details=None):
+    def refuse(_params):
+        raise APIError({"code": code, "hint": hint, "details": details, "message": "refused"})
+
+    household.rpc_handlers["record_former_member_debt_payment"] = refuse
+
+
+def test_a_record_of_another_household_is_the_databases_not_found(household):
+    _refuse_payment(household, "debt_not_found", code="P0002")
     resp = _pay(HUSBAND, debt=DEBT_OTHER)
     assert resp.status_code == 404
     assert resp.json()["detail"]["code"] == "debt_not_found"
-    assert _calls(household, "record_former_member_debt_payment") == []
+    assert [p["p_debt_id"] for p in _calls(household, "record_former_member_debt_payment")] == [DEBT_OTHER]
 
 
-def test_more_than_remains_is_refused_before_the_rpc(household):
+def test_more_than_remains_is_the_databases_to_refuse(household):
+    _refuse_payment(household, "overpayment", details="100.00")
     resp = _pay(HUSBAND, amount=100.01)
     assert resp.status_code == 409
-    assert resp.json()["detail"] == {"message": "Payment exceeds what remains of this record.", "code": "overpayment",
-                                     "outstanding": 100.0}
-    assert _calls(household, "record_former_member_debt_payment") == []
+    assert resp.json()["detail"]["code"] == "overpayment" and resp.json()["detail"]["outstanding"] == 100.0
+    assert len(_calls(household, "record_former_member_debt_payment")) == 1
 
 
-def test_a_closed_record_is_refused_before_the_rpc(household):
+def test_a_closed_record_is_the_databases_to_refuse(household):
+    _refuse_payment(household, "debt_closed")
     resp = _pay(HUSBAND, debt=DEBT_CLOSED, amount=1)
     assert resp.status_code == 409 and resp.json()["detail"]["code"] == "debt_closed"
-    assert _calls(household, "record_former_member_debt_payment") == []
+    assert len(_calls(household, "record_former_member_debt_payment")) == 1
 
 
 @pytest.mark.parametrize("hint, code, status_code, detail_code", [
@@ -316,8 +329,13 @@ def test_nobody_else_may_waive(household, caller):
 
 
 def test_a_closed_record_cannot_be_waived(household):
+    def refuse(_params):
+        raise db_error("debt_closed")
+
+    household.rpc_handlers["waive_former_member_debt"] = refuse
     resp = _waive(HUSBAND, debt=DEBT_CLOSED)
     assert resp.status_code == 409 and resp.json()["detail"]["code"] == "debt_closed"
+    assert len(_calls(household, "waive_former_member_debt")) == 1, "the database decides, after its replay lookup"
 
 
 def test_a_waiver_needs_a_request_key(household):

@@ -147,6 +147,14 @@ def nafaqah_http_error(exc: NafaqahError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
+def _family_context(household_id: str):
+    """The household's context, refused outside a family (the Nafaqah ledgers are a family's)."""
+    ctx = load_family_context(household_id)
+    if not ctx.is_family:
+        raise NotFamilyHousehold("Nafaqah ledgers apply to family households with a spouse member.")
+    return ctx
+
+
 async def _run(fn, *args, public_message: str):
     try:
         return await asyncio.to_thread(fn, *args)
@@ -439,7 +447,8 @@ async def nafaqah_set_provider(
 
 
 # ─── A former member's record (migration 20261105001200) ────────────────────────
-# What the husband still owed a wife who deleted her account. The husband or any admin closes it:
+# What the husband still owed a wife who deleted her account. The husband or any admin who is not a
+# wife closes it (review R1-01), in a family household only, as the ledger routes (review R1-10):
 # a payment (amount, payment method and the account it is paid from, required, as an ordinary
 # reimbursement: his account goes down, no budget moves) or her waiver (إبراء). A tracked payment
 # is corrected by a reversal. request_key makes a retried tap record once.
@@ -463,7 +472,7 @@ async def nafaqah_former_member_debt_payment(
 
     def work():
         return record_former_member_debt_payment(
-            load_family_context(household_id), caller, debt_id, str(payload.amount),
+            _family_context(household_id), caller, debt_id, str(payload.amount),
             payload.payment_method, payload.request_key, account_id=payload.account_id,
         )
 
@@ -490,7 +499,7 @@ async def nafaqah_former_member_debt_payment_reversal(
 
     def work():
         return reverse_former_member_debt_payment(
-            load_family_context(household_id), caller, debt_id, event_id, payload.request_key,
+            _family_context(household_id), caller, debt_id, event_id, payload.request_key,
         )
 
     return await _run(work, public_message="Failed to reverse the payment.")
@@ -513,6 +522,6 @@ async def nafaqah_former_member_debt_waiver(
     caller = get_current_user_id(request)
 
     def work():
-        return waive_former_member_debt(load_family_context(household_id), caller, debt_id, payload.request_key)
+        return waive_former_member_debt(_family_context(household_id), caller, debt_id, payload.request_key)
 
     return await _run(work, public_message="Failed to record the waiver.")

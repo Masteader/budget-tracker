@@ -660,16 +660,22 @@ def can_set_allowance(ctx: FamilyContext, actor_id: str, wife_id: Optional[str] 
 
 
 def can_record_reimbursement(ctx: FamilyContext, actor_id: str, wife_id: Optional[str] = None) -> bool:
-    """The husband or a household admin (owner decision 2026-11-06): never the wife the repayment
-    is for, who asks instead (``can_request_reimbursement``). The same people approve, decline and
-    reverse."""
-    if not ctx.is_member(actor_id):
-        return False
-    if wife_id is None and ctx.is_wife(actor_id):
+    """The husband, or a household admin who is not a wife (owner decisions 2026-11-06, review
+    R1-01): never the wife the repayment is for, who asks instead (``can_request_reimbursement``),
+    and never a co-wife, even an admin. The same people approve and decline. Who reverses follows
+    the account (``can_reverse_repayment``). Mirrors ``public.nafaqah_may_repay``."""
+    if not ctx.is_member(actor_id) or ctx.is_wife(actor_id):
         return False
     if wife_id is not None and str(actor_id) == str(wife_id):
         return False
     return str(actor_id) == ctx.husband_id or ctx.is_admin(actor_id)
+
+
+def can_reverse_repayment(ctx: FamilyContext, actor_id: Optional[str], account: Optional[Dict[str, Any]]) -> bool:
+    """Who reverses a repayment (or a former member's payment) follows the account it left (review
+    R1-07): its owner while he is a member and not a wife, whatever his role now; a shared pool's,
+    any admin who is not a wife. The database checks the same under its locks."""
+    return ctx.is_member(actor_id) and not ctx.is_wife(actor_id) and _account_usable_by(ctx, account, actor_id)
 
 
 def can_request_reimbursement(ctx: FamilyContext, actor_id: str, wife_id: Optional[str] = None) -> bool:
@@ -845,8 +851,8 @@ def _accounts(client, account_ids: Iterable[Any]) -> Dict[str, Dict[str, Any]]:
 
 def _account_usable_by(ctx: FamilyContext, account: Optional[Dict[str, Any]], actor_id: Optional[str]) -> bool:
     """The account rules of the RPCs: in this household, not archived, in SAR; a shared pool only by
-    an admin, a personal account only by its owner."""
-    if not account or not actor_id:
+    an admin, a personal account only by its owner; never by a wife, who pays nothing (review R1-01)."""
+    if not account or not actor_id or ctx.is_wife(actor_id):
         return False
     if str(account.get("household_id")) != ctx.household_id or account.get("is_archived"):
         return False
@@ -929,8 +935,9 @@ def get_reimbursement_ledger(ctx: FamilyContext, wife_id: str, caller_id: Option
         str(r.get("id")): (transfers.get(str(r.get("transfer_id"))) or {}).get("from")
         for r in repayments if r.get("transfer_id") and str(r.get("kind") or KIND_PAYMENT) == KIND_PAYMENT
     }
-    accounts = _accounts(client, paid_from.values()) if caller_id else {}
-    may_reverse = bool(caller_id) and can_record_reimbursement(ctx, caller_id, wife_id)
+    # Who may reverse follows the account it left (review R1-07), never a wife.
+    may_reverse = bool(caller_id) and ctx.is_member(caller_id) and not ctx.is_wife(caller_id)
+    accounts = _accounts(client, paid_from.values()) if may_reverse else {}
 
     def repayment_entry(r: Dict[str, Any]) -> Dict[str, Any]:
         kind = str(r.get("kind") or KIND_PAYMENT)
@@ -945,6 +952,9 @@ def get_reimbursement_ledger(ctx: FamilyContext, wife_id: str, caller_id: Option
             "payment_method": r.get("payment_method"),
             "notes": r.get("notes"),
             "recorded_by": r.get("recorded_by"),
+            # Who actually paid (review R1-08): the owner of the account it left, or the admin who
+            # paid from a pool; for a reversal, the payer of the repayment it reverses.
+            "paid_by_user_id": r.get("paid_by_user_id"),
             "timestamp": r.get("created_at"),
             # Whether it moved money in the app, and through which account (the app names it only
             # when the viewer can see that account).
@@ -955,7 +965,7 @@ def get_reimbursement_ledger(ctx: FamilyContext, wife_id: str, caller_id: Option
             "reversed_by_id": reversal,
             "can_reverse": (
                 may_reverse and kind == KIND_PAYMENT and reversal is None and bool(account)
-                and _account_usable_by(ctx, accounts.get(str(account)), caller_id)
+                and can_reverse_repayment(ctx, caller_id, accounts.get(str(account)))
             ),
         }
 
@@ -990,7 +1000,8 @@ def get_reimbursement_ledger(ctx: FamilyContext, wife_id: str, caller_id: Option
 
 
 def _require_payer(ctx: FamilyContext, actor_id: str, wife_id: str) -> None:
-    """The husband or a household admin; the wife is told to ask instead."""
+    """The husband or a household admin who is not a wife; the wife herself is told to ask instead,
+    and a co-wife is refused (review R1-01)."""
     _require_member(ctx, actor_id)
     if str(actor_id) == str(wife_id):
         raise WifeMustRequest("The wife asks for a repayment; the husband or an admin records it.")
@@ -1014,7 +1025,8 @@ def _repayment_answer(ctx: FamilyContext, wife_id: str, data: Dict[str, Any]) ->
         "reverses_id": data.get("reverses_id"),
         "household_id": ctx.household_id,
         "wife_user_id": wife_id,
-        "paid_by_user_id": data.get("paid_by_user_id") or ctx.husband_id,
+        # Who actually paid, as the database recorded it (review R1-08); never assumed.
+        "paid_by_user_id": data.get("paid_by_user_id"),
         "amount": halalas_to_sar(to_halalas(data.get("amount"))),
         "payment_method": data.get("payment_method"),
         "outstanding_before": halalas_to_sar(to_halalas(data.get("outstanding_before"))),
@@ -1150,6 +1162,7 @@ def decline_reimbursement_request(
     row = _request_row(ctx, request_id)
     _require_payer(ctx, actor_id, str(row.get("wife_user_id")))
     clean = (reason or "").strip() or None
+    # Unicode code points (len), as the database's char_length and the app's runes count them.
     if clean and len(clean) > 200:
         raise InvalidCodedRequest("A reason is at most 200 characters.", "invalid_reason")
     data = _rpc_mapped("decline_spouse_reimbursement_request", {
@@ -1187,24 +1200,42 @@ def approve_reimbursement_request(
     return _repayment_answer(ctx, wife_id, data)
 
 
+def _require_reverser(ctx: FamilyContext, actor_id: str, transfer_id: Any, *, reversal: bool = False) -> None:
+    """Never a wife (review R1-01). Otherwise who reverses follows the account the payment left
+    (review R1-07): an early, clear refusal for one the caller may not use. A row with no transfer,
+    or a reversal, is left to the database, which names why it cannot be reversed."""
+    _require_member(ctx, actor_id)
+    if ctx.is_wife(actor_id):
+        raise NafaqahForbidden("A wife does not reverse a repayment.")
+    if not transfer_id or reversal:
+        return
+    client = get_client()
+    source = (_transfers(client, [transfer_id]).get(str(transfer_id)) or {}).get("from")
+    if not source:
+        return
+    account = _accounts(client, [source]).get(str(source))
+    if account and str(account.get("household_id")) == ctx.household_id and not account.get("is_archived") \
+            and not can_reverse_repayment(ctx, actor_id, account):
+        raise AccountForbidden("You cannot take money back into this account.")
+
+
 def reverse_reimbursement(ctx: FamilyContext, actor_id: str, reimbursement_id: str, request_key: Optional[str]) -> Dict[str, Any]:
     """Reverses a tracked repayment in full: the money goes back to the account it left and the
-    amount back to what is owed. The original stays, marked reversed. Whoever could record it may
-    reverse it, under the same account rules; once per repayment."""
+    amount back to what is owed. The original stays, marked reversed. Who reverses follows the
+    account (review R1-07): its owner while he is a member and not a wife, whatever his role now; a
+    pool's repayment, any admin who is not a wife. Once per repayment."""
     _require_family(ctx)
     row = first_row(
         get_client()
         .table("spouse_reimbursements")
-        .select("id, household_id, wife_user_id")
+        .select("id, household_id, wife_user_id, transfer_id, kind")
         .eq("id", reimbursement_id)
         .eq("household_id", ctx.household_id)
     )
     if not row:
         raise RecordNotFound("No such repayment in this household.", "reimbursement_not_found")
     wife_id = str(row.get("wife_user_id"))
-    _require_member(ctx, actor_id)
-    if str(actor_id) == wife_id or not can_record_reimbursement(ctx, actor_id, wife_id):
-        raise NafaqahForbidden("Only the husband or a household admin can reverse a repayment.")
+    _require_reverser(ctx, actor_id, row.get("transfer_id"), reversal=str(row.get("kind") or KIND_PAYMENT) == KIND_REVERSAL)
     _require_key(request_key)
     data = _rpc_mapped("reverse_spouse_reimbursement", {
         "p_household_id": ctx.household_id,
@@ -1231,8 +1262,9 @@ def reverse_reimbursement(ctx: FamilyContext, actor_id: str, reimbursement_id: s
 
 
 def can_manage_former_member_debts(ctx: FamilyContext, actor_id: Optional[str]) -> bool:
-    """The household's Nafaqah provider (the husband) or any admin, co-admins included."""
-    if not ctx.is_member(actor_id):
+    """The household's Nafaqah provider (the husband) or any admin, co-admins included, never a wife
+    (review R1-01: no wife acts on a former member's record, even as an admin)."""
+    if not ctx.is_member(actor_id) or ctx.is_wife(actor_id):
         return False
     return ctx.is_admin(actor_id) or (bool(ctx.provider_user_id) and str(actor_id) == ctx.provider_user_id)
 
@@ -1294,9 +1326,10 @@ def list_former_member_debts(ctx: FamilyContext, caller_id: Optional[str] = None
         .execute()
     ).data or []
     transfers = _transfers(client, [e.get("transfer_id") for e in events])
-    manager = bool(caller_id) and can_manage_former_member_debts(ctx, caller_id)
+    # Who may reverse follows the account the payment left (review R1-07), never a wife.
+    may_reverse = bool(caller_id) and ctx.is_member(caller_id) and not ctx.is_wife(caller_id)
     sources = [(transfers.get(str(e.get("transfer_id"))) or {}).get("from") for e in events if e.get("kind") == "payment"]
-    accounts = _accounts(client, sources) if manager else {}
+    accounts = _accounts(client, sources) if may_reverse else {}
     by_debt: Dict[str, List[Dict[str, Any]]] = {}
     for e in events:
         moved = transfers.get(str(e.get("transfer_id"))) if e.get("transfer_id") else None
@@ -1304,8 +1337,8 @@ def list_former_member_debts(ctx: FamilyContext, caller_id: Optional[str] = None
         e = {
             **e,
             "account_id": account,
-            "can_reverse": manager and e.get("kind") == "payment" and bool(account)
-            and _account_usable_by(ctx, accounts.get(str(account)), caller_id),
+            "can_reverse": may_reverse and e.get("kind") == "payment" and bool(account)
+            and can_reverse_repayment(ctx, caller_id, accounts.get(str(account))),
         }
         by_debt.setdefault(str(e.get("debt_id")), []).append(e)
     rows.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
@@ -1373,6 +1406,7 @@ def record_former_member_debt_payment(
     ``account_id`` (migration 20261105001300): the account it is paid from, debited by the amount;
     she is gone, so nothing is credited. Without one the caller is an app that predates this:
     AppUpdateRequired, and nothing is recorded."""
+    _require_family(ctx)
     _require_debt_manager(ctx, actor_id)
     if not account_id:
         raise AppUpdateRequired("Payments are now paid from an account: update the app.")
@@ -1381,13 +1415,10 @@ def record_former_member_debt_payment(
     if method not in PAYMENT_METHODS:
         raise InvalidNafaqahRequest(f"Unsupported payment method {payment_method!r}.")
 
-    row = _former_member_debt(ctx, debt_id)
-    if row.get("status") != "open":
-        raise DebtClosed("This record is already settled or waived.")
-    remaining_h = to_halalas(row.get("original_amount")) - to_halalas(row.get("paid_amount"))
-    if to_halalas(value) > remaining_h:
-        raise OverpaymentError("Payment exceeds what remains of this record.", outstanding=halalas_to_sar(remaining_h))
-
+    # No look at the record first (review R1-02): a retry of a payment that went through finds it
+    # settled, or with less remaining than this payment, and must still get the first answer. The
+    # database answers a replay before it checks the record is open, held and big enough
+    # (debt_closed, overpayment with what remains, debt_not_found).
     data = _rpc_mapped("record_former_member_debt_payment", {
         "p_household_id": ctx.household_id,
         "p_debt_id": debt_id,
@@ -1418,9 +1449,18 @@ def reverse_former_member_debt_payment(
 ) -> Dict[str, Any]:
     """Reverses a tracked payment of a former member's record in full: the money goes back to the
     account it left and the amount back to what remains, reopening a settled record. Refused after
-    her waiver, for a payment with no transfer, from an archived or deleted account, and twice."""
-    _require_debt_manager(ctx, actor_id)
-    _former_member_debt(ctx, debt_id)
+    her waiver, for a payment with no transfer, from an archived or deleted account, and twice. Who
+    reverses follows the account (review R1-07), never a wife."""
+    _require_family(ctx)
+    row = _former_member_debt(ctx, debt_id)
+    event = first_row(
+        get_client()
+        .table("former_member_debt_events")
+        .select("id, debt_id, kind, transfer_id")
+        .eq("id", event_id)
+        .eq("debt_id", row.get("id"))
+    )
+    _require_reverser(ctx, actor_id, (event or {}).get("transfer_id"), reversal=(event or {}).get("kind") != "payment")
     data = _rpc_mapped("reverse_former_member_debt_payment", {
         "p_household_id": ctx.household_id,
         "p_debt_id": debt_id,
@@ -1443,11 +1483,10 @@ def reverse_former_member_debt_payment(
 
 
 def waive_former_member_debt(ctx: FamilyContext, actor_id: str, debt_id: str, request_key: str) -> Dict[str, Any]:
-    """Her release (إبراء): closes the record as waived; no money moves."""
+    """Her release (إبراء): closes the record as waived; no money moves. A retry of a waiver that
+    went through finds the record closed: the database answers the replay (review R1-02)."""
+    _require_family(ctx)
     _require_debt_manager(ctx, actor_id)
-    row = _former_member_debt(ctx, debt_id)
-    if row.get("status") != "open":
-        raise DebtClosed("This record is already settled or waived.")
     data = _rpc_mapped("waive_former_member_debt", {
         "p_household_id": ctx.household_id,
         "p_debt_id": debt_id,
