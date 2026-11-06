@@ -19,6 +19,9 @@
 --       exactly -reversal -purchase, his by exactly +reversal.
 --   C5  The same repayment twice at once (one key): one is recorded, the other answers it again;
 --       one credit, one debit.
+--   C6  Her husband reassigns a new wife account of hers to her co-wife, not yet committed: a
+--       repayment to her into it waits, then is refused as wife_account_invalid (it is not hers
+--       any more); nothing moves.
 -- ============================================================================
 \set ON_ERROR_STOP on
 
@@ -48,9 +51,9 @@ CREATE FUNCTION pg_temp.k(p_n int) RETURNS uuid LANGUAGE sql
 AS $$ SELECT ('e69e0000-0000-0000-0000-' || lpad(p_n::text, 12, '0'))::uuid $$;
 CREATE FUNCTION pg_temp.t(p_n int) RETURNS uuid LANGUAGE sql
 AS $$ SELECT ('e69f0000-0000-0000-0000-' || lpad(p_n::text, 12, '0'))::uuid $$;
--- Her wife account: the one assigned to W in the fixture household.
+-- Her wife account: the first one made for W in the fixture household.
 CREATE FUNCTION pg_temp.wa() RETURNS uuid LANGUAGE sql
-AS $$ SELECT id FROM public.accounts WHERE household_id = pg_temp.h(1) AND account_type = 'wife' $$;
+AS $$ SELECT id FROM public.accounts WHERE household_id = pg_temp.h(1) AND account_type = 'wife' AND name = 'T69 her account' $$;
 
 CREATE FUNCTION pg_temp.cleanup() RETURNS void LANGUAGE plpgsql AS $$
 DECLARE
@@ -170,11 +173,12 @@ SELECT pg_temp.cleanup();
 --     Her wife account, made by H through the RPC.
 DO $$
 BEGIN
-    INSERT INTO auth.users (id, email) SELECT pg_temp.u(n), 't69-' || n || '@test.local' FROM unnest(ARRAY[1, 2]) AS n;
+    INSERT INTO auth.users (id, email) SELECT pg_temp.u(n), 't69-' || n || '@test.local' FROM unnest(ARRAY[1, 2, 3]) AS n;
     INSERT INTO public.households (id, name, invite_code, household_type) VALUES (pg_temp.h(1), 'T69 H1', 'T69CODE000000001', 'family');
     INSERT INTO public.household_memberships (household_id, user_id, role, financial_role, is_default) VALUES
         (pg_temp.h(1), pg_temp.u(1), 'admin', 'provider', true),
-        (pg_temp.h(1), pg_temp.u(2), 'member', 'spouse', true);
+        (pg_temp.h(1), pg_temp.u(2), 'member', 'spouse', true),
+        (pg_temp.h(1), pg_temp.u(3), 'member', 'spouse', true);
     UPDATE public.users u SET household_id = m.household_id, role = m.role, financial_role = m.financial_role
     FROM public.household_memberships m WHERE m.user_id = u.id AND m.household_id = pg_temp.h(1);
     UPDATE public.households SET owner_user_id = pg_temp.u(1), nafaqah_provider_user_id = pg_temp.u(1) WHERE id = pg_temp.h(1);
@@ -341,6 +345,50 @@ BEGIN
     PERFORM pg_temp.expect('C5 one credit', pg_temp.bal(pg_temp.wa())::text, (v_wa0 + 70)::numeric(14, 2)::text);
     PERFORM pg_temp.expect('C5 one debit', pg_temp.bal(pg_temp.a(1))::text, (v_his0 - 70)::numeric(14, 2)::text);
     RAISE NOTICE 'PASSED: C5 the same repayment twice at once credits her wife account once.';
+END $$;
+
+-- ── C6: a reassignment of a new wife account racing a repayment into it ──────────────────────
+DO $$
+DECLARE
+    v_new uuid;
+    v_his0 numeric := pg_temp.bal(pg_temp.a(1));
+    v_p int;
+    v_rep text;
+BEGIN
+    PERFORM set_config('request.jwt.claims', jsonb_build_object('role', 'authenticated', 'sub', pg_temp.u(1))::text, true);
+    SET LOCAL ROLE authenticated;
+    v_new := (public.create_wife_account(pg_temp.h(1), pg_temp.u(2), 'T69 new', NULL) ->> 'id')::uuid;
+    RESET ROLE;
+    PERFORM set_config('request.jwt.claims', '', true);
+END $$;
+DO $$
+DECLARE
+    v_new uuid := (SELECT id FROM public.accounts WHERE household_id = pg_temp.h(1) AND name = 'T69 new');
+    v_his0 numeric := pg_temp.bal(pg_temp.a(1));
+    v_p int;
+    v_rep text;
+BEGIN
+    PERFORM pg_temp.disconnect_all();
+    PERFORM pg_temp.connect('a');
+    PERFORM pg_temp.as_user('a', pg_temp.u(1));
+    PERFORM t69_dblink.dblink_exec('a', 'BEGIN');
+    PERFORM * FROM t69_dblink.dblink('a', format('SELECT public.assign_wife_account(%L, %L, %L, NULL)::text',
+                                                 pg_temp.h(1), v_new, pg_temp.u(3))) AS t(r text);
+    v_p := pg_temp.connect('h');
+    PERFORM pg_temp.as_user('h', pg_temp.u(1));
+    PERFORM t69_dblink.dblink_send_query('h', format(
+        'SELECT public.record_spouse_reimbursement(%L, %L, 10, %L, NULL, NULL, %L::uuid, %L::uuid, %L::uuid)::text',
+        pg_temp.h(1), pg_temp.u(2), 'cash', pg_temp.a(1), pg_temp.k(8), v_new));
+    PERFORM pg_temp.expect('C6 the repayment waits for the account', pg_temp.wait('h', v_p), 'blocked');
+    PERFORM t69_dblink.dblink_exec('a', 'COMMIT');
+    v_rep := pg_temp.result('h');
+    PERFORM pg_temp.disconnect_all();
+
+    PERFORM pg_temp.expect('C6 refused: no longer hers', v_rep, 'ERR:P0002:wife_account_invalid');
+    PERFORM pg_temp.expect('C6 now the co-wife''s', (SELECT assigned_wife_id::text FROM public.accounts WHERE id = v_new), pg_temp.u(3)::text);
+    PERFORM pg_temp.expect('C6 nothing moved', pg_temp.bal(v_new)::text || '|' || pg_temp.bal(pg_temp.a(1))::text,
+                           '0.00|' || v_his0::text);
+    RAISE NOTICE 'PASSED: C6 a repayment racing the reassignment of a new wife account is refused, and nothing moves.';
 END $$;
 
 SELECT pg_temp.disconnect_all();

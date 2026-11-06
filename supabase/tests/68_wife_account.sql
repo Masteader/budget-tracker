@@ -588,6 +588,11 @@ BEGIN
     PERFORM pg_temp.keep('WA3', pg_temp.j(pg_temp.create(1, 1, 2, 'wa3'), 'id'));
     PERFORM pg_temp.keep('q3', pg_temp.j(pg_temp.ask(2, '5', pg_temp.id('WA3'), 15), 'request_id'));
     PERFORM pg_temp.check('a pending request is history', pg_temp.assign(1, 'WA3', 3), 'ERR:wife_account_has_history');
+    -- Her purchase alone is history too (no transfer, no request on it).
+    PERFORM pg_temp.keep('WA5', pg_temp.j(pg_temp.create(1, 1, 2, 'wa5'), 'id'));
+    PERFORM pg_temp.check('she spends from a new one', pg_temp.spend(2, 1, 32, pg_temp.id('WA5'), 1, 'wife_personal', 2), '1');
+    PERFORM pg_temp.check('a purchase is history', pg_temp.assign(1, 'WA5', 3), 'ERR:wife_account_has_history');
+    PERFORM pg_temp.check('a transfer is history', pg_temp.assign(1, 'WA1', 3), 'ERR:wife_account_has_history');
     PERFORM pg_temp.check('he archives WA3', pg_temp.j(pg_temp.archive(1, 1, 'WA3'), 'is_archived'), 'true');
     PERFORM pg_temp.check('her choice is archived', pg_temp.approve(1, pg_temp.id('q3'), pg_temp.a(3), NULL, 16), 'ERR:wife_account_invalid');
     PERFORM pg_temp.check('he picks WA2', pg_temp.j(pg_temp.approve(1, pg_temp.id('q3'), pg_temp.a(3), pg_temp.id('WA2'), 16), 'wife_account_id'), pg_temp.id('WA2')::text);
@@ -662,7 +667,7 @@ DECLARE
     v_debt uuid;
 BEGIN
     PERFORM pg_temp.check('her purchases on them exist', (SELECT count(*)::text FROM public.transactions WHERE nafaqah_spouse_id = pg_temp.u(2)
-                                                          AND nafaqah_class = 'wife_personal' AND account_id IS NOT NULL), '2');
+                                                          AND nafaqah_class = 'wife_personal' AND account_id IS NOT NULL), '3');
     v_res := pg_temp.purge(2);
     PERFORM pg_temp.check('her purge is prepared (the ledger invariant held)', pg_temp.j(v_res, 'prepared') || '|' || pg_temp.j(v_res, 'deferred'), 'true|false');
     DELETE FROM pg_temp.people WHERE n = 2;
