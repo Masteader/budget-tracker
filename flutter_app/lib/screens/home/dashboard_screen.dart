@@ -457,7 +457,8 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
       const SizedBox(height: 12),
       QuickAccessStrip(
         accountsCount: totalAccountsCount,
-        wifeAllowance: _nafaqah?.primaryWife?.allowance.allocated,
+        // Only a figure the caller reads (owner decision 2026-11-06).
+        wifeAllowance: _nafaqah?.primaryWifeAllowance,
         billsCount: context.watch<RecurringBillsProvider>().summary?.bills.length,
         onAccountsTap: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => AccountsOverviewScreen(householdId: hid)),

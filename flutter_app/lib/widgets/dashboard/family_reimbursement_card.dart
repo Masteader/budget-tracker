@@ -234,7 +234,11 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
     final wives = summary.visibleWives;
     // An admin who reads no ledger (the husband is there) still sets each
     // wife's allowance (rule 04): her allowance alone, nothing of her ledger.
-    final allowanceOnly = summary.callerIsWife ? const <NafaqahWife>[] : summary.allowanceWives;
+    // A wife's allowance only for her, her husband and an admin who is not a
+    // wife (owner decision 2026-11-06), whatever a server sends.
+    final allowanceOnly = summary.callerIsWife
+        ? const <NafaqahWife>[]
+        : summary.allowanceWives.where(summary.canSeeAllowanceOf).toList();
     final showNames = wives.length + allowanceOnly.length > 1;
     // A former member's record only for whoever manages it (review R3-01).
     final debts = summary.canManageFormerMemberDebts ? summary.formerMemberDebts : const <FormerMemberDebt>[];
@@ -287,17 +291,19 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
             ),
             onChanged: onChanged,
           ),
-          const SizedBox(height: 12),
-          WifeAllowanceCard(
-            householdId: widget.householdId,
-            wife: wives[i],
-            cycleKey: summary.cycleKey,
-            viewerIsWife: summary.callerIsWife,
-            canSet: summary.canSetAllowance && wives[i].id != summary.callerUserId,
-            showWifeName: showNames,
-            setAllowance: widget.setAllowance,
-            onChanged: _loadSummary,
-          ),
+          if (summary.canSeeAllowanceOf(wives[i])) ...[
+            const SizedBox(height: 12),
+            WifeAllowanceCard(
+              householdId: widget.householdId,
+              wife: wives[i],
+              cycleKey: summary.cycleKey,
+              viewerIsWife: summary.callerIsWife,
+              canSet: summary.canSetAllowanceFor(wives[i]),
+              showWifeName: showNames,
+              setAllowance: widget.setAllowance,
+              onChanged: _loadSummary,
+            ),
+          ],
         ],
         for (var i = 0; i < allowanceOnly.length; i++) ...[
           if (i > 0 || wives.isNotEmpty) const SizedBox(height: 12),
@@ -305,7 +311,7 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
             householdId: widget.householdId,
             wife: allowanceOnly[i],
             cycleKey: summary.cycleKey,
-            canSet: summary.canSetAllowance,
+            canSet: summary.canSetAllowanceFor(allowanceOnly[i]),
             showWifeName: showNames,
             setAllowance: widget.setAllowance,
             onChanged: _loadSummary,

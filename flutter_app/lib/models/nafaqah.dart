@@ -643,6 +643,26 @@ class NafaqahSummary {
   /// co-wife who is an admin, whatever the server says (review R1-01).
   bool canDecideFor(NafaqahWife wife) => !callerIsWife && (wife.canDecide ?? canRecordReimbursement);
 
+  /// Whether the caller reads [wife]'s personal allowance (owner decision
+  /// 2026-11-06): she herself, her husband, or an admin who is not a wife.
+  /// Among those who are not wives, the ones who read it are exactly the ones
+  /// who set it, so `can_set_allowance` stands for the admin. Never a co-wife,
+  /// even an admin, and never an ordinary member, whatever a server sends.
+  bool canSeeAllowanceOf(NafaqahWife wife) =>
+      callerIsWife ? wife.id == callerUserId : (callerRole == 'husband' || canSetAllowance);
+
+  /// Whether the caller may change [wife]'s allowance: the husband or an
+  /// admin who is not a wife; never a wife, for herself or a co-wife.
+  bool canSetAllowanceFor(NafaqahWife wife) =>
+      canSetAllowance && !callerIsWife && wife.id != callerUserId;
+
+  /// The allowance figure the dashboard names, for [primaryWife]: only when
+  /// the caller reads it.
+  double? get primaryWifeAllowance {
+    final wife = primaryWife;
+    return wife != null && canSeeAllowanceOf(wife) ? wife.allowance.allocated : null;
+  }
+
   /// Every wife the caller may name (classifying an expense, her allowance):
   /// the wives the server sent, in either list. Who a wife is is not her
   /// ledger; a wife still names only herself (review R3-01).
