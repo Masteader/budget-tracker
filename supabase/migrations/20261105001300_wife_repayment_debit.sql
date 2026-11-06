@@ -105,7 +105,9 @@
 --   Then run these CREATE OR REPLACE statements: record_spouse_reimbursement and
 --   get_spouse_reimbursement_balance from 20261020300000; guard_wife_reimbursable_ledger and
 --   remove_nafaqah_ledger_on_membership_end from 20261020900000; record_former_member_debt_payment,
---   former_member_debt_outstanding and prepare_account_purge from 20261105001200.
+--   former_member_debt_outstanding and prepare_account_purge from 20261105001200, and put back
+--   001200's privilege on the payment (the service role only):
+--   REVOKE EXECUTE ON FUNCTION public.record_former_member_debt_payment(uuid, uuid, numeric, text, uuid, uuid) FROM authenticated;
 --   DROP FUNCTION public.nafaqah_outstanding(uuid, uuid), public.nafaqah_net_repaid(uuid, uuid);
 --   DROP TABLE public.spouse_reimbursement_request_outcomes, public.spouse_reimbursement_requests;
 --   ALTER TABLE public.former_member_debt_events DROP CONSTRAINT former_member_debt_events_kind_check,
