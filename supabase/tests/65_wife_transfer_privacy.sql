@@ -13,11 +13,14 @@
 -- household admin who is not a wife. A co-wife (even an admin) and an ordinary member read none.
 --   * account_transfers: a row with either side a personal (not shared) account owned by a wife
 --     of the household. She reads the rows of her own accounts, a transfer between two wives'
---     accounts included. The other side's balance is unchanged and read as before (a pool's
---     balance by every member); only the row leaves its history for the others. A repayment
---     (from his account or a pool to no account) never involves her account and stays as it is.
---     Whose accounts a transfer touched is kept on the row (personal_owner_ids, set on insert), so
---     a row stays hers after her account is deleted; a deleted person's id leaves it.
+--     accounts included. The owner of the other side reads it too when that side is his own
+--     personal account (owner decision 2026-11-06): a member who sends money to her account, or
+--     receives from it, keeps that row in his history; nobody else does. A shared pool has no
+--     owner here (its owner_user_id reads nothing more), so a pool's history is as before. The
+--     other side's balance is unchanged and read as before (a pool's balance by every member).
+--     A repayment (from his account or a pool to no account) never involves her account and stays
+--     as it is. Whose accounts a transfer touched is kept on the row (personal_owner_ids, set on
+--     insert), so a row stays theirs after the account is deleted; a deleted person's id leaves it.
 --   * installment_plans: a plan linked (original_transaction_id) to a personal purchase is read
 --     by whoever reads that purchase; its schedule (next_due_at) and its payments
 --     (paid_installments) are columns of the plan. A caller who cannot read a plan cannot pick it
@@ -143,18 +146,18 @@ $$;
 
 -- ── Fixtures ────────────────────────────────────────────────────────────────
 -- F1(1): husband H(1) admin and provider; wife W(2); co-wife W2(3); member K(4); admin C(5) who is
---        not a wife; wife WA(6) who is an admin.
+--        not a wife; wife WA(6) who is an admin; another member K2(12).
 -- F2(2): husband H2(7) a member (not an admin) and provider; wife V(8); primary admin D(9) who is
 --        not a wife; wife VA(10) who is an admin; member M(11).
 -- Accounts: F1 pool P(1) 5000, a second pool P'(8) 0 that the wife-admin owns (a pool is
 --           everyone's, whoever owns it), W's bank A(2) 1000 and cash A(4) 200, W2's bank A(5) 800,
---           H's own A(6) 3000, K's own A(7) 500;
+--           H's own A(6) 3000, K's own A(7) 500, K2's own A(11) 300;
 --           F2 pool P2(3) 3000, V's bank A(9) 400, H2's own A(10) 1000.
 DO $$
 BEGIN
     INSERT INTO auth.users (id, email, raw_user_meta_data)
     SELECT pg_temp.u(n), 't65-' || n || '@test.local', jsonb_build_object('display_name', 'T65 User ' || n)
-    FROM generate_series(1, 11) AS n;
+    FROM generate_series(1, 12) AS n;
 
     INSERT INTO public.households (id, name, invite_code, household_type, payday_day) VALUES
         (pg_temp.h(1), 'T65 H1', 'T65CODE000000001', 'family', 27),
@@ -165,6 +168,7 @@ BEGIN
     PERFORM pg_temp.join(3, 1, 'member', 'spouse');
     PERFORM pg_temp.join(4, 1, 'member', 'family_member');
     PERFORM pg_temp.join(6, 1, 'admin', 'spouse');
+    PERFORM pg_temp.join(12, 1, 'member', 'family_member');
     PERFORM pg_temp.join(9, 2, 'admin', 'family_member');
     PERFORM pg_temp.join(7, 2, 'member', 'provider');
     PERFORM pg_temp.join(8, 2, 'member', 'spouse');
@@ -181,6 +185,7 @@ BEGIN
         (pg_temp.a(5), pg_temp.h(1), pg_temp.u(3), 'T65 co-wife bank', 'bank', 800, false, false, 'SAR'),
         (pg_temp.a(6), pg_temp.h(1), pg_temp.u(1), 'T65 his bank', 'bank', 3000, false, false, 'SAR'),
         (pg_temp.a(7), pg_temp.h(1), pg_temp.u(4), 'T65 member bank', 'bank', 500, false, false, 'SAR'),
+        (pg_temp.a(11), pg_temp.h(1), pg_temp.u(12), 'T65 member 2 bank', 'bank', 300, false, false, 'SAR'),
         (pg_temp.a(3), pg_temp.h(2), pg_temp.u(9), 'T65 pool F2', 'shared_pool', 3000, true, false, 'SAR'),
         (pg_temp.a(9), pg_temp.h(2), pg_temp.u(8), 'T65 V bank', 'bank', 400, false, false, 'SAR'),
         (pg_temp.a(10), pg_temp.h(2), pg_temp.u(7), 'T65 H2 bank', 'bank', 1000, false, false, 'SAR');
@@ -197,13 +202,19 @@ BEGIN
     -- The co-wife's (W2's account 5), and one between the two wives.
     PERFORM pg_temp.check('W2 pays into the pool', pg_temp.move(3, 1, 5, 1, 70, 'x04 co-wife bank to pool'), 'x04 co-wife bank to pool');
     PERFORM pg_temp.check('W2 sends W money', pg_temp.move(3, 1, 5, 2, 30, 'x08 co-wife bank to her bank'), 'x08 co-wife bank to her bank');
-    -- A member sends her money: it involves her account, so he does not read it afterwards
-    -- (ordinary members read nothing of them); his balance still shows it.
+    -- A member sends her money, and she sends him some: they involve her account and his own, so he
+    -- reads these two rows (the owner of an account reads its transfers) and no other of hers.
     PERFORM pg_temp.check('K sends W money', pg_temp.move(4, 1, 7, 2, 40, 'x11 member bank to her bank'), 'x11 member bank to her bank');
+    PERFORM pg_temp.check('W sends K money', pg_temp.move(2, 1, 2, 7, 15, 'x13 her bank to member bank'), 'x13 her bank to member bank');
+    -- Another member sends her money: he reads that row, K does not.
+    PERFORM pg_temp.check('K2 sends W money', pg_temp.move(12, 1, 11, 2, 35, 'x14 member 2 bank to her bank'), 'x14 member 2 bank to her bank');
     -- Ordinary transfers, read by every member.
     PERFORM pg_temp.check('H pays into the pool', pg_temp.move(1, 1, 6, 1, 300, 'x05 his bank to pool'), 'x05 his bank to pool');
     PERFORM pg_temp.check('K pays into the pool', pg_temp.move(4, 1, 7, 1, 40, 'x06 member bank to pool'), 'x06 member bank to pool');
     PERFORM pg_temp.check('H moves between pools', pg_temp.move(1, 1, 1, 8, 500, 'x07 pool to pool 2'), 'x07 pool to pool 2');
+    -- The husband pays her from the pool the wife-admin owns: a pool is no one's own account, so
+    -- its owner_user_id reads nothing more (WA does not read it, as before).
+    PERFORM pg_temp.check('H pays her from pool 2', pg_temp.move(1, 1, 8, 2, 60, 'x15 pool 2 to her bank'), 'x15 pool 2 to her bank');
     -- F2.
     PERFORM pg_temp.check('V pays into the pool', pg_temp.move(8, 2, 9, 3, 60, 'y01 V bank to pool'), 'y01 V bank to pool');
     PERFORM pg_temp.check('D pays H2 from the pool', pg_temp.move(9, 2, 3, 10, 90, 'y02 pool to H2 bank'), 'y02 pool to H2 bank');
@@ -247,6 +258,7 @@ INSERT INTO pg_temp.who VALUES
     (1, 3, 'a co-wife', false),
     (1, 6, 'a wife who is an admin', false),
     (1, 4, 'an ordinary member', false),
+    (1, 12, 'another ordinary member', false),
     (2, 7, 'F2 husband (not an admin)', true),
     (2, 9, 'F2 admin who is not a wife', true),
     (2, 8, 'F2 wife', false),
@@ -260,7 +272,11 @@ CREATE FUNCTION pg_temp.expected_transfers(p_hh int, p_actor int, p_all boolean)
                   'x12 repayment reversed']
             -- W's accounts: hers, and the husband's and the admins'.
             || CASE WHEN p_all OR p_actor = 2 THEN ARRAY['x01 her bank to pool', 'x02 pool to her bank',
-                   'x03 her bank to her cash', 'x09 his bank to her bank', 'x11 member bank to her bank'] ELSE '{}' END
+                   'x03 her bank to her cash', 'x09 his bank to her bank', 'x11 member bank to her bank',
+                   'x13 her bank to member bank', 'x14 member 2 bank to her bank', 'x15 pool 2 to her bank'] ELSE '{}' END
+            -- The other side's owner, when that side is his own personal account (not a pool).
+            || CASE WHEN NOT p_all AND p_actor = 4 THEN ARRAY['x11 member bank to her bank', 'x13 her bank to member bank'] ELSE '{}' END
+            || CASE WHEN NOT p_all AND p_actor = 12 THEN ARRAY['x14 member 2 bank to her bank'] ELSE '{}' END
             -- W2's account: hers, and the husband's and the admins'.
             || CASE WHEN p_all OR p_actor = 3 THEN ARRAY['x04 co-wife bank to pool'] ELSE '{}' END
             -- Between the two wives: each of them, and the husband and the admins.
@@ -294,14 +310,20 @@ BEGIN
             pg_temp.transfers(v.actor), pg_temp.expected_transfers(v.hh, v.actor, v.sees_all));
         PERFORM pg_temp.check(format('%s: %s reads the installment plans', p_when, v.label),
             pg_temp.plans(v.actor), pg_temp.expected_plans(v.hh, v.actor, v.sees_all));
-        -- Nothing of hers by amount, account or note either.
+        -- Nothing more of hers by amount, account or note either: only the rows of his own account.
         IF NOT v.sees_all AND v.hh = 1 AND v.actor NOT IN (2, 3) THEN
             PERFORM pg_temp.check(format('%s: %s finds a transfer of a wife''s account by account', p_when, v.label),
                 pg_temp.call(pg_temp.u(v.actor), format(
                     'SELECT count(*)::text FROM public.account_transfers WHERE from_account_id IN (%L, %L, %L) OR to_account_id IN (%L, %L, %L)',
-                    pg_temp.a(2), pg_temp.a(4), pg_temp.a(5), pg_temp.a(2), pg_temp.a(4), pg_temp.a(5))), '0');
+                    pg_temp.a(2), pg_temp.a(4), pg_temp.a(5), pg_temp.a(2), pg_temp.a(4), pg_temp.a(5))),
+                (SELECT count(*)::text FROM public.account_transfers t
+                 WHERE t.notes = ANY (string_to_array(pg_temp.expected_transfers(v.hh, v.actor, v.sees_all), ','))
+                   AND (t.from_account_id IN (pg_temp.a(2), pg_temp.a(4), pg_temp.a(5)) OR t.to_account_id IN (pg_temp.a(2), pg_temp.a(4), pg_temp.a(5)))));
             PERFORM pg_temp.check(format('%s: %s sums the transfers', p_when, v.label),
-                pg_temp.call(pg_temp.u(v.actor), 'SELECT sum(amount)::text FROM public.account_transfers'), '890.00');
+                pg_temp.call(pg_temp.u(v.actor), 'SELECT sum(amount)::text FROM public.account_transfers'),
+                (SELECT sum(amount)::text FROM public.account_transfers t
+                 WHERE t.household_id = pg_temp.h(1)
+                   AND t.notes = ANY (string_to_array(pg_temp.expected_transfers(v.hh, v.actor, v.sees_all), ','))));
             PERFORM pg_temp.check(format('%s: %s finds a plan of a co-wife by amount', p_when, v.label),
                 pg_temp.call(pg_temp.u(v.actor), format(
                     'SELECT count(*)::text FROM public.installment_plans WHERE total_amount IN (1200, 900, %s)',
@@ -326,15 +348,28 @@ BEGIN
     PERFORM pg_temp.check(p_when || ': a wife-admin reads the pool''s balance', pg_temp.balance(6, 1), '4760.00');
     PERFORM pg_temp.check(p_when || ': a member reads the pool''s balance', pg_temp.balance(4, 1), '4760.00');
     PERFORM pg_temp.check(p_when || ': an admin reads the pool''s balance', pg_temp.balance(5, 1), '4760.00');
-    PERFORM pg_temp.check(p_when || ': a member reads the second pool''s balance', pg_temp.balance(4, 8), '500.00');
+    PERFORM pg_temp.check(p_when || ': a member reads the second pool''s balance', pg_temp.balance(4, 8), '440.00');
+    -- The second pool's history: the wife-admin who owns it reads it as any wife does.
+    PERFORM pg_temp.check(p_when || ': the wife-admin who owns pool 2 reads its history', pg_temp.history(6, 1, 8), 'x07 pool to pool 2');
+    PERFORM pg_temp.check(p_when || ': a member reads pool 2''s history', pg_temp.history(4, 1, 8), 'x07 pool to pool 2');
+    PERFORM pg_temp.check(p_when || ': an admin who is not a wife reads pool 2''s history', pg_temp.history(5, 1, 8),
+        'x07 pool to pool 2,x15 pool 2 to her bank');
     PERFORM pg_temp.check(p_when || ': F2 member reads the pool''s balance', pg_temp.balance(11, 3), '2970.00');
-    -- The member's own account: its balance shows what he sent her, the row does not.
-    PERFORM pg_temp.check(p_when || ': the member reads his balance', pg_temp.balance(4, 7), '420.00');
-    PERFORM pg_temp.check(p_when || ': the member reads his history', pg_temp.history(4, 1, 7), 'x06 member bank to pool');
+    -- The member's own account: its balance and its history both show what he sent her and
+    -- what she sent him (500 - 40 - 40 + 15).
+    PERFORM pg_temp.check(p_when || ': the member reads his balance', pg_temp.balance(4, 7), '435.00');
+    PERFORM pg_temp.check(p_when || ': the member reads his history', pg_temp.history(4, 1, 7),
+        'x06 member bank to pool,x11 member bank to her bank,x13 her bank to member bank');
+    PERFORM pg_temp.check(p_when || ': another member reads his balance', pg_temp.balance(12, 11), '265.00');
+    PERFORM pg_temp.check(p_when || ': another member reads his history', pg_temp.history(12, 1, 11), 'x14 member 2 bank to her bank');
+    PERFORM pg_temp.check(p_when || ': another member reads the first member''s history', pg_temp.history(12, 1, 7), 'x06 member bank to pool');
+    PERFORM pg_temp.check(p_when || ': the first member reads her bank''s history', pg_temp.history(4, 1, 2),
+        'x11 member bank to her bank,x13 her bank to member bank');
     -- Her accounts' balances: only she reads them (as before).
-    PERFORM pg_temp.check(p_when || ': the wife reads her bank', pg_temp.balance(2, 2), '1290.00');
+    PERFORM pg_temp.check(p_when || ': the wife reads her bank', pg_temp.balance(2, 2), '1370.00');
     PERFORM pg_temp.check(p_when || ': the wife reads her bank''s history', pg_temp.history(2, 1, 2),
-        'x01 her bank to pool,x02 pool to her bank,x03 her bank to her cash,x08 co-wife bank to her bank,x09 his bank to her bank,x11 member bank to her bank');
+        'x01 her bank to pool,x02 pool to her bank,x03 her bank to her cash,x08 co-wife bank to her bank,x09 his bank to her bank,'
+        'x11 member bank to her bank,x13 her bank to member bank,x14 member 2 bank to her bank,x15 pool 2 to her bank');
     PERFORM pg_temp.check(p_when || ': the co-wife reads her own bank''s history', pg_temp.history(3, 1, 5),
         'x04 co-wife bank to pool,x08 co-wife bank to her bank');
     PERFORM pg_temp.check(p_when || ': a co-wife reads the wife''s bank''s history', pg_temp.history(3, 1, 2),
@@ -347,7 +382,8 @@ BEGIN
     PERFORM pg_temp.check_reads('present');
     -- The husband reads her accounts' rows, not her account itself (as before).
     PERFORM pg_temp.check('present: the husband reads her bank''s history', pg_temp.history(1, 1, 2),
-        'x01 her bank to pool,x02 pool to her bank,x03 her bank to her cash,x08 co-wife bank to her bank,x09 his bank to her bank,x11 member bank to her bank');
+        'x01 her bank to pool,x02 pool to her bank,x03 her bank to her cash,x08 co-wife bank to her bank,x09 his bank to her bank,'
+        'x11 member bank to her bank,x13 her bank to member bank,x14 member 2 bank to her bank,x15 pool 2 to her bank');
     PERFORM pg_temp.check('present: the husband reads her bank', pg_temp.balance(1, 2), 'ok');
     PERFORM pg_temp.check('present: F2 husband (not an admin) reads V''s transfer', pg_temp.history(7, 2, 9), 'y01 V bank to pool');
 END $$;
@@ -414,8 +450,8 @@ BEGIN
         format('{%s,%s}', pg_temp.u(3), pg_temp.u(6)));
     PERFORM pg_temp.check('the husband: none', pg_temp.call(pg_temp.u(1), 'SELECT public.nafaqah_caller_hidden_wives()::text'), '{}');
     PERFORM pg_temp.check('an admin who is not a wife: none', pg_temp.call(pg_temp.u(5), 'SELECT public.nafaqah_caller_hidden_wives()::text'), '{}');
-    PERFORM pg_temp.check('the wife is a wife', pg_temp.call(pg_temp.u(2), 'SELECT public.nafaqah_caller_wife_id()::text'), pg_temp.u(2)::text);
-    PERFORM pg_temp.check('a member is no wife', pg_temp.call(pg_temp.u(4), 'SELECT public.nafaqah_caller_wife_id()::text'), 'ok');
+    -- The policy reads the caller's own id; the earlier helper for it is gone.
+    PERFORM pg_temp.check('no helper names the caller as a wife', (to_regprocedure('public.nafaqah_caller_wife_id()') IS NULL)::text, 'true');
     PERFORM pg_temp.check('anon runs no transfer helper',
         pg_temp.call(NULL, 'SELECT public.nafaqah_caller_hidden_wives()::text', 'anon'),
         'ERR:42501:permission denied for function nafaqah_caller_hidden_wives');
@@ -427,6 +463,9 @@ BEGIN
             pg_temp.h(1), 'x01 her bank to pool', 'x03 her bank to her cash', 'x08 co-wife bank to her bank', 'x07 pool to pool 2'),
             'postgres'),
         'x01 her bank to pool=1,x03 her bank to her cash=1,x07 pool to pool 2=0,x08 co-wife bank to her bank=2');
+    PERFORM pg_temp.check('a pool''s owner is never kept',
+        pg_temp.call(NULL, format('SELECT (personal_owner_ids = ARRAY[%L]::uuid[])::text FROM public.account_transfers WHERE notes = %L',
+                                  pg_temp.u(2), 'x15 pool 2 to her bank'), 'postgres'), 'true');
 END $$;
 
 -- ── Her account deleted later: the rows stay hers ───────────────────────────────────────────────
@@ -463,18 +502,35 @@ BEGIN
     PERFORM pg_temp.check('gone: F2 husband who left reads no transfer', pg_temp.transfers(7), '');
 END $$;
 
+-- ── His account deleted later: he still reads the rows of it ───────────────────────────────────
+DO $$
+BEGIN
+    PERFORM pg_temp.check('the member deletes his account',
+        pg_temp.write(pg_temp.u(4), format('DELETE FROM public.accounts WHERE id = %L', pg_temp.a(7))), '1');
+    PERFORM pg_temp.check('deleted account: he still reads its rows with her',
+        pg_temp.transfers(4, format('notes IN (%L, %L)', 'x11 member bank to her bank', 'x13 her bank to member bank')),
+        'x11 member bank to her bank,x13 her bank to member bank');
+    PERFORM pg_temp.check('deleted account: another member still does not',
+        pg_temp.transfers(12, format('notes IN (%L, %L)', 'x11 member bank to her bank', 'x13 her bank to member bank')), '');
+    PERFORM pg_temp.check('deleted account: a co-wife still does not',
+        pg_temp.transfers(3, format('notes IN (%L, %L)', 'x11 member bank to her bank', 'x13 her bank to member bank')), '');
+END $$;
+
 -- ── A deleted person's id leaves the owners kept on transfers ───────────────────────────────
 DO $$
 BEGIN
-    PERFORM pg_temp.check('before: the member is an owner of two transfers',
-        (SELECT count(*)::text FROM public.account_transfers WHERE pg_temp.u(4) = ANY (personal_owner_ids)), '2');
+    PERFORM pg_temp.check('before: the member is an owner of three transfers',
+        (SELECT count(*)::text FROM public.account_transfers WHERE pg_temp.u(4) = ANY (personal_owner_ids)), '3');
     DELETE FROM auth.users WHERE id = pg_temp.u(4);
     PERFORM pg_temp.check('after: his id is nowhere in them',
         (SELECT count(*)::text FROM public.account_transfers WHERE pg_temp.u(4) = ANY (personal_owner_ids)), '0');
-    PERFORM pg_temp.check('after: the transfer he sent her is still hers',
-        (SELECT (personal_owner_ids = ARRAY[pg_temp.u(2)])::text FROM public.account_transfers WHERE notes = 'x11 member bank to her bank'), 'true');
-    PERFORM pg_temp.check('after: a co-wife still does not read it',
-        pg_temp.transfers(3, format('notes = %L', 'x11 member bank to her bank')), '');
+    PERFORM pg_temp.check('after: the transfers between them are still hers',
+        (SELECT string_agg((personal_owner_ids = ARRAY[pg_temp.u(2)])::text, ',' ORDER BY notes) FROM public.account_transfers
+         WHERE notes IN ('x11 member bank to her bank', 'x13 her bank to member bank')), 'true,true');
+    PERFORM pg_temp.check('after: a co-wife still does not read them',
+        pg_temp.transfers(3, format('notes IN (%L, %L)', 'x11 member bank to her bank', 'x13 her bank to member bank')), '');
+    PERFORM pg_temp.check('after: another member still does not read them',
+        pg_temp.transfers(12, format('notes IN (%L, %L)', 'x11 member bank to her bank', 'x13 her bank to member bank')), '');
 END $$;
 
 -- ── The rule stated where it lives ──────────────────────────────────────────────────────────
@@ -487,10 +543,11 @@ BEGIN
          WHERE schemaname = 'public' AND tablename = 'account_transfers'),
         'transfers_select_household/SELECT/authenticated');
     SELECT qual INTO v_qual FROM pg_policies WHERE schemaname = 'public' AND tablename = 'account_transfers';
-    PERFORM pg_temp.check('the transfers policy keeps the household and names her rule',
+    PERFORM pg_temp.check('the transfers policy keeps the household and names her rule and the owners''',
         (v_qual LIKE '%household_id = ( SELECT get_auth_user_household_id()%'
          AND v_qual LIKE '%personal_owner_ids && ( SELECT nafaqah_caller_hidden_wives()%'
-         AND v_qual LIKE '%SELECT nafaqah_caller_wife_id()%')::text, 'true');
+         AND v_qual LIKE '%( SELECT auth.uid() AS uid) = ANY (personal_owner_ids)%'
+         AND v_qual NOT LIKE '%nafaqah_caller_wife_id%')::text, 'true');
     PERFORM pg_temp.check('one policy on installment_plans',
         (SELECT string_agg(cmd || '/' || array_to_string(roles, ','), ';') FROM pg_policies
          WHERE schemaname = 'public' AND tablename = 'installment_plans'), 'ALL/authenticated');
@@ -507,16 +564,16 @@ BEGIN
         (SELECT string_agg(p.proname || '=' || (p.provolatile = 's' AND p.prosecdef
                                                  AND p.proconfig::text LIKE '%search_path=public, pg_temp%')::text, ',' ORDER BY p.proname)
          FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
-           AND p.proname IN ('nafaqah_caller_hidden_wives', 'nafaqah_caller_wife_id', 'nafaqah_personal_owners_of')),
-        'nafaqah_caller_hidden_wives=true,nafaqah_caller_wife_id=true,nafaqah_personal_owners_of=true');
+           AND p.proname IN ('nafaqah_caller_hidden_wives', 'nafaqah_personal_owners_of')),
+        'nafaqah_caller_hidden_wives=true,nafaqah_personal_owners_of=true');
     PERFORM pg_temp.check('the policy runs the caller''s helpers as the caller; anon none; the rest internal',
         (SELECT string_agg(r || ':' || f || '=' || COALESCE(has_function_privilege(r, to_regprocedure('public.' || f), 'EXECUTE')::text, 'missing'), ',' ORDER BY r, f)
          FROM unnest(ARRAY['authenticated', 'anon']) r,
-              unnest(ARRAY['nafaqah_caller_hidden_wives()', 'nafaqah_caller_wife_id()', 'nafaqah_personal_owners_of(uuid, uuid)',
+              unnest(ARRAY['nafaqah_caller_hidden_wives()', 'nafaqah_personal_owners_of(uuid, uuid)',
                            'nafaqah_transfer_personal_owners()', 'nafaqah_forget_transfer_owner()']) f),
-        'anon:nafaqah_caller_hidden_wives()=false,anon:nafaqah_caller_wife_id()=false,anon:nafaqah_forget_transfer_owner()=false,'
+        'anon:nafaqah_caller_hidden_wives()=false,anon:nafaqah_forget_transfer_owner()=false,'
         'anon:nafaqah_personal_owners_of(uuid, uuid)=false,anon:nafaqah_transfer_personal_owners()=false,'
-        'authenticated:nafaqah_caller_hidden_wives()=true,authenticated:nafaqah_caller_wife_id()=true,'
+        'authenticated:nafaqah_caller_hidden_wives()=true,'
         'authenticated:nafaqah_forget_transfer_owner()=false,'
         'authenticated:nafaqah_personal_owners_of(uuid, uuid)=false,authenticated:nafaqah_transfer_personal_owners()=false');
     PERFORM pg_temp.check('every transfer carries its owners, set on insert',

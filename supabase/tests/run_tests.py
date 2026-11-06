@@ -116,9 +116,23 @@ BEGIN
         AND qual LIKE '%personal_owner_ids%' AND qual LIKE '%nafaqah_caller_hidden_wives%') <> 1
        OR (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'account_transfers') <> 1
        OR (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'installment_plans'
-           AND qual LIKE '%FROM transactions t%') <> 1
+           AND qual LIKE '%FROM transactions t%' AND qual LIKE '%ARRAY[personal_owner_id] && %') <> 1
        OR (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'installment_plans') <> 1 THEN
         RAISE EXCEPTION 'transfers and plans: a read policy reads household-wide';
+    END IF;
+    -- The owner of an account reads its transfers (owner decision 2026-11-06), with no helper left
+    -- from the first version of 10e.
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'account_transfers'
+                   AND qual LIKE '%( SELECT auth.uid() AS uid) = ANY (personal_owner_ids)%')
+       OR to_regprocedure('public.nafaqah_caller_wife_id()') IS NOT NULL THEN
+        RAISE EXCEPTION 'transfers: the owner of an account does not read its transfers';
+    END IF;
+    -- A plan keeps her as its owner after her purchase is deleted (owner decision 2026-11-06).
+    IF (SELECT count(*) FROM pg_trigger WHERE tgenabled = 'O' AND tgname IN
+        ('trg_installment_plans_personal_owner', 'trg_transactions_plan_owner', 'trg_users_forget_transfer_owner')) <> 3
+       OR EXISTS (SELECT 1 FROM public.installment_plans p WHERE p.original_transaction_id IS NOT NULL
+                  AND p.personal_owner_id IS DISTINCT FROM public.nafaqah_purchase_personal_owner(p.original_transaction_id, p.household_id)) THEN
+        RAISE EXCEPTION 'plans: a plan does not keep whose personal purchase it is';
     END IF;
 END $$;
 """,
@@ -132,7 +146,7 @@ REVOKE TRUNCATE ON public.inquiries FROM anon, authenticated;
 DRIFT_MISSING = ("20261026120000",)
 # Tests that do not need what the drifted database lacks (42 and 43 test that migration's objects).
 DRIFT_TESTS = ("36_", "37_", "38_", "39_", "40_", "41_", "44_", "45_", "46_", "47_", "49_", "50_", "51_", "52_", "53_",
-               "54_", "55_", "56_", "57_", "63_", "64_", "65_")
+               "54_", "55_", "56_", "57_", "63_", "64_", "65_", "66_")
 
 # Live as measured read-only on 2026-11-05: exactly these two older files never ran, 000500 and
 # REVOKE TRUNCATE on inquiries did, and cost_control_sub_categories holds 50 rows with no
