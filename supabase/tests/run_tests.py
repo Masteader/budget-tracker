@@ -64,8 +64,10 @@ REPLAY_DEPENDENCIES = {
 ROLLOUT_BATCH = "20261105000000"
 ROLLOUT_HOTFIXES = ("20261105000500",)
 # Files an operator may run again while following the chain. Each must be harmless the second time.
-# Run in this order: 001200 after 001300 puts its own 6-argument payment back, which must stay harmless.
-ROLLOUT_RERUN = ("20261105000500", "20261105000600", "20261105000700", "20261105001300", "20261105001200")
+# Run in this order. 001200 again puts back its own versions of functions 001300 replaces (among
+# them an amount-only 6-argument payment), so 001300 must follow it, as OWNER_ACTIONS says; then
+# 001300 again must itself be harmless.
+ROLLOUT_RERUN = ("20261105000500", "20261105000600", "20261105000700", "20261105001200", "20261105001300")
 # Run by hand on live (2026-11-05). Live has no cost_control_templates table.
 ROLLOUT_ALREADY_ON_LIVE = """
 REVOKE TRUNCATE ON public.inquiries FROM anon, authenticated;
