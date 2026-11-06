@@ -278,6 +278,7 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
               approveRequest: widget.approveRequest,
               declineRequest: widget.declineRequest,
               reverse: widget.reverseReimbursement,
+              viewerIsWife: summary.callerIsWife,
             ),
             onChanged: onChanged,
           ),
@@ -305,6 +306,7 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
             key: ValueKey('fmd_panel_${debts[i].id}'),
             debt: debts[i],
             canManage: summary.canManageFormerMemberDebts,
+            viewerIsWife: summary.callerIsWife,
             householdId: widget.householdId,
             recordPayment: widget.recordFormerMemberDebtPayment,
             waive: widget.waiveFormerMemberDebt,
@@ -330,9 +332,14 @@ class _LedgerActions {
   final NafaqahRequestDecliner? declineRequest;
   final NafaqahReimbursementReverser? reverse;
 
+  /// The viewer is a wife: she decides, pays and reverses nothing (review
+  /// R1-01), whatever the server says.
+  final bool viewerIsWife;
+
   const _LedgerActions({
     required this.householdId,
     required this.wifeUserId,
+    this.viewerIsWife = false,
     this.record,
     this.loadLedger,
     this.createRequest,
@@ -449,7 +456,8 @@ class _ReimbursementPanel extends StatelessWidget {
     final canDecide = summary.canDecideFor(wife);
     final pending = wife.pendingRequests;
     final pendingTotal = pending.fold<int>(0, (sum, r) => sum + _halalas(r.amount)) / 100;
-    final owedLabel = summary.callerIsWife ? context.tr('nafaqah_owed_to_you') : context.tr('husband_owes_wife');
+    // The label carries its own punctuation, localized (review R1-12).
+    final owedLabel = summary.callerIsWife ? context.tr('nafaqah_owed_to_you_label') : context.tr('husband_owes_wife_label');
     final historyButton = TextButton.icon(
       style: TextButton.styleFrom(foregroundColor: context.accentText),
       onPressed: () => _openHistory(context),
@@ -565,7 +573,7 @@ class _ReimbursementPanel extends StatelessWidget {
             const SizedBox(height: 12),
           ],
           if (!isSettled) ...[
-            Text('$owedLabel:', style: TextStyle(color: context.textSecondary, fontSize: 12)),
+            Text(owedLabel, key: const ValueKey('nafaqah_owed_label'), style: TextStyle(color: context.textSecondary, fontSize: 12)),
             const SizedBox(height: 2),
             Text(
               context.sar(balance.outstanding),
@@ -828,6 +836,13 @@ class _RequestsSectionState extends State<_RequestsSection> {
       logFailure('NafaqahRequest.cancel', e);
       if (!mounted) return;
       setState(() => _busy = null);
+      if (_isUnknownOutcome(e)) {
+        // It may be cancelled: the card reloads to show it. Cancelling again is
+        // safe, the server answers the same (review R1-06).
+        AppSnackBar.showWarning(context, context.tr('fmd_unconfirmed_msg'), title: context.tr('settle_unconfirmed_title'));
+        widget.onChanged();
+        return;
+      }
       _showError(context, e);
       return;
     }
@@ -838,9 +853,7 @@ class _RequestsSectionState extends State<_RequestsSection> {
   }
 
   void _showError(BuildContext context, Object e) {
-    final message = trackedRepaymentErrorText(context, e, owedNow: widget.totalOwed) ??
-        (e is NafaqahApiException && e.code == 'forbidden' ? context.tr('nafaqah_err_forbidden') : context.tr('settle_record_failed_msg'));
-    AppSnackBar.showError(context, message, title: context.tr('settle_record_failed'));
+    AppSnackBar.showError(context, repaymentErrorText(context, e, owedNow: widget.totalOwed), title: context.tr('settle_record_failed'));
     // The request changed elsewhere, or the answer was lost: show what is stored now.
     if (_isUnknownOutcome(e) || (e is NafaqahApiException && (e.code == 'request_not_pending' || e.code == 'request_not_found'))) {
       widget.onChanged();
@@ -865,7 +878,7 @@ class _RequestsSectionState extends State<_RequestsSection> {
   Future<void> _decline(ReimbursementRequest r) async {
     final declined = await showDialog<bool>(
       context: context,
-      builder: (ctx) => _DeclineRequestDialog(request: r, actions: widget.actions),
+      builder: (ctx) => _DeclineRequestDialog(request: r, actions: widget.actions, onRefresh: widget.onChanged),
     );
     if (declined != true || !mounted) return;
     AppSnackBar.showSuccess(context, context.tr('req_declined_done'), icon: Icons.check_circle_outline);
@@ -876,7 +889,7 @@ class _RequestsSectionState extends State<_RequestsSection> {
     if (r.status == kRequestDeclined && (r.reason ?? '').isNotEmpty) {
       return context.trArgs('req_declined_reason', {'reason': r.reason!});
     }
-    const known = {kRequestPending, kRequestApproved, kRequestDeclined, kRequestCancelled, kRequestClosed};
+    const known = {kRequestPending, kRequestApproved, kRequestDeclined, kRequestCancelled, kRequestClosed, kRequestAlreadyRepaid};
     return context.tr('req_status_${known.contains(r.status) ? r.status : kRequestClosed}');
   }
 
@@ -983,6 +996,10 @@ class _RequestSheetState extends State<_RequestSheet> {
   String _paymentMethod = 'cash';
   bool _isSubmitting = false;
 
+  /// What was sent when the answer was lost (review R1-06): the sheet keeps
+  /// it, and its key, and offers to send exactly that again.
+  ({double amount, String method})? _held;
+
   @override
   void initState() {
     super.initState();
@@ -997,37 +1014,44 @@ class _RequestSheetState extends State<_RequestSheet> {
   }
 
   Future<void> _submit() async {
-    final rounded = roundedMoneyTextIfRounded(_amountCtrl.text);
-    if (rounded != null) setState(() => _amountCtrl.text = rounded);
-    final amt = parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0;
-    if (_halalas(amt) <= 0) {
-      AppSnackBar.showError(context, context.tr('settle_invalid_amount'));
-      return;
-    }
-    if (_halalas(amt) > _halalas(widget.available)) {
-      AppSnackBar.showError(context, context.trArgs('req_err_pending_cap', {'amount': context.sar(widget.available)}),
-          title: context.tr('settle_record_failed'));
-      return;
+    final held = _held;
+    final double amt;
+    final String method;
+    if (held != null) {
+      // The same request again, with the same key: the server keeps it once.
+      amt = held.amount;
+      method = held.method;
+    } else {
+      final rounded = roundedMoneyTextIfRounded(_amountCtrl.text);
+      if (rounded != null) setState(() => _amountCtrl.text = rounded);
+      amt = parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0;
+      method = _paymentMethod;
+      if (_halalas(amt) <= 0) {
+        AppSnackBar.showError(context, context.tr('settle_invalid_amount'));
+        return;
+      }
+      if (_halalas(amt) > _halalas(widget.available)) {
+        AppSnackBar.showError(context, context.trArgs('req_err_pending_cap', {'amount': context.sar(widget.available)}),
+            title: context.tr('settle_record_failed'));
+        return;
+      }
     }
     setState(() => _isSubmitting = true);
     try {
-      await widget.actions.ask(amount: amt, paymentMethod: _paymentMethod, requestKey: _requestKey);
+      await widget.actions.ask(amount: amt, paymentMethod: method, requestKey: _requestKey);
     } catch (e) {
       logFailure('NafaqahRequest.create', e);
       if (!mounted) return;
       setState(() => _isSubmitting = false);
       if (_isUnknownOutcome(e)) {
-        // It may be stored; a retry sends the same key, which the server keeps once.
-        AppSnackBar.showWarning(context, context.tr('fmd_unconfirmed_msg'), title: context.tr('settle_unconfirmed_title'));
+        // It may be stored. The sheet stays open with what was sent and its
+        // key; trying again is safe (review R1-06).
+        setState(() => _held = (amount: amt, method: method));
         widget.onSent();
         return;
       }
-      AppSnackBar.showError(
-        context,
-        trackedRepaymentErrorText(context, e, owedNow: widget.available) ??
-            (e is NafaqahApiException && e.code == 'invalid' ? context.tr('nafaqah_err_invalid_amount') : context.tr('settle_record_failed_msg')),
-        title: context.tr('settle_record_failed'),
-      );
+      setState(() => _held = null);
+      AppSnackBar.showError(context, repaymentErrorText(context, e, owedNow: widget.available), title: context.tr('settle_record_failed'));
       return;
     }
     if (!mounted) return;
@@ -1051,6 +1075,7 @@ class _RequestSheetState extends State<_RequestSheet> {
         TextField(
           key: const ValueKey('req_amount_field'),
           controller: _amountCtrl,
+          readOnly: _held != null,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: InputDecoration(
             labelText: context.tr('settle_payment_amount'),
@@ -1065,14 +1090,23 @@ class _RequestSheetState extends State<_RequestSheet> {
           style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        _MethodChips(selected: _paymentMethod, onChanged: (m) => setState(() => _paymentMethod = m)),
+        _MethodChips(
+          selected: _held?.method ?? _paymentMethod,
+          onChanged: (m) {
+            if (_held == null) setState(() => _paymentMethod = m);
+          },
+        ),
+        if (_held != null) ...[
+          const SizedBox(height: 12),
+          const RepaymentUnconfirmedNote(key: ValueKey('req_unconfirmed')),
+        ],
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
           child: _GoldButton(
             key: const ValueKey('req_send'),
-            icon: Icons.send_rounded,
-            label: context.tr('req_send'),
+            icon: _held != null ? Icons.refresh_rounded : Icons.send_rounded,
+            label: context.tr(_held != null ? 'try_again' : 'req_send'),
             onPressed: _isSubmitting ? null : _submit,
           ),
         ),
@@ -1111,6 +1145,10 @@ class _ApproveRequestSheetState extends State<_ApproveRequestSheet> {
   String? _source;
   bool _isSubmitting = false;
 
+  /// The account it was sent with when the answer was lost (review R1-06):
+  /// the sheet keeps it, and its key, and offers to send exactly that again.
+  Account? _held;
+
   @override
   void initState() {
     super.initState();
@@ -1122,8 +1160,10 @@ class _ApproveRequestSheetState extends State<_ApproveRequestSheet> {
 
   Future<void> _submit() async {
     final amt = widget.request.amount;
-    final sources = RepaymentSources.of(context, widget.householdId, listen: false);
-    final account = _chosenAccount(context, sources, _source, amt, onStale: () => setState(() => _source = null));
+    final sources = RepaymentSources.of(context, widget.householdId, listen: false, viewerIsWife: widget.actions.viewerIsWife);
+    // A retry after a lost answer sends what was sent, unchecked here: the
+    // balance may already show the payment, and the server decides.
+    final account = _held ?? _chosenAccount(context, sources, _source, amt, onStale: () => setState(() => _source = null));
     if (account == null) return;
 
     setState(() => _isSubmitting = true);
@@ -1134,15 +1174,18 @@ class _ApproveRequestSheetState extends State<_ApproveRequestSheet> {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
       if (_isUnknownOutcome(e)) {
-        // It may be stored. The sheet stays open: a retry sends the same key.
-        AppSnackBar.showWarning(context, context.tr('fmd_unconfirmed_msg'), title: context.tr('settle_unconfirmed_title'));
+        // It may be stored. The sheet stays open with the account and the key;
+        // the balances and the card reload (review R1-06).
+        setState(() => _held = account);
+        sources.provider?.refresh(force: true);
         widget.onDone();
         return;
       }
+      setState(() => _held = null);
       if (e is NafaqahApiException && repaymentAccountErrorKey(e.code) != null) sources.provider?.refresh(force: true);
       AppSnackBar.showError(
         context,
-        trackedRepaymentErrorText(context, e, owedNow: widget.totalOwed) ?? context.tr('settle_record_failed_msg'),
+        repaymentErrorText(context, e, owedNow: widget.totalOwed),
         title: context.tr('settle_record_failed'),
       );
       if (e is NafaqahApiException && (e.code == 'request_not_pending' || e.code == 'request_not_found')) {
@@ -1166,7 +1209,7 @@ class _ApproveRequestSheetState extends State<_ApproveRequestSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final sources = RepaymentSources.of(context, widget.householdId);
+    final sources = RepaymentSources.of(context, widget.householdId, viewerIsWife: widget.actions.viewerIsWife);
     final amount = widget.request.amount;
     return _SheetFrame(
       children: [
@@ -1186,17 +1229,23 @@ class _ApproveRequestSheetState extends State<_ApproveRequestSheet> {
           RepaymentAccountPicker(
             householdId: widget.householdId,
             accounts: sources.accounts,
-            selected: _source,
+            selected: _held?.id ?? _source,
             amount: amount,
-            onChanged: (id) => setState(() => _source = id),
+            onChanged: (id) {
+              if (_held == null) setState(() => _source = id);
+            },
           ),
+        if (_held != null) ...[
+          const SizedBox(height: 12),
+          const RepaymentUnconfirmedNote(key: ValueKey('req_approve_unconfirmed')),
+        ],
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
           child: _GoldButton(
             key: const ValueKey('req_approve_submit'),
-            icon: Icons.check_circle_outline_rounded,
-            label: context.tr('req_approve_submit'),
+            icon: _held != null ? Icons.refresh_rounded : Icons.check_circle_outline_rounded,
+            label: context.tr(_held != null ? 'try_again' : 'req_approve_submit'),
             onPressed: _isSubmitting ? null : _submit,
           ),
         ),
@@ -1245,7 +1294,10 @@ class _DeclineRequestDialog extends StatefulWidget {
   final ReimbursementRequest request;
   final _LedgerActions actions;
 
-  const _DeclineRequestDialog({required this.request, required this.actions});
+  /// The answer was lost: the card reloads to show what is stored.
+  final VoidCallback onRefresh;
+
+  const _DeclineRequestDialog({required this.request, required this.actions, required this.onRefresh});
 
   @override
   State<_DeclineRequestDialog> createState() => _DeclineRequestDialogState();
@@ -1255,6 +1307,10 @@ class _DeclineRequestDialogState extends State<_DeclineRequestDialog> {
   final _reasonCtrl = TextEditingController();
   bool _busy = false;
   String? _message;
+
+  /// The answer was lost (review R1-06): the reason stays as sent; declining
+  /// again is safe, the server answers the same.
+  bool _held = false;
 
   @override
   void dispose() {
@@ -1272,13 +1328,18 @@ class _DeclineRequestDialogState extends State<_DeclineRequestDialog> {
     } catch (e) {
       logFailure('NafaqahRequest.decline', e);
       if (!mounted) return;
+      final unknown = _isUnknownOutcome(e);
       setState(() {
         _busy = false;
-        _message = _isUnknownOutcome(e)
-            ? context.tr('fmd_unconfirmed_msg')
-            : trackedRepaymentErrorText(context, e) ??
-                (e is NafaqahApiException && e.code == 'forbidden' ? context.tr('nafaqah_err_forbidden') : context.tr('settle_record_failed_msg'));
+        _held = unknown;
+        _message = unknown
+            ? context.tr('repay_unconfirmed_hold')
+            // A 422 here can only be the reason's length (validated as code points).
+            : (e is NafaqahApiException && e.code == 'invalid' ? context.tr('req_err_reason_long') : repaymentErrorText(context, e));
       });
+      if (unknown || (e is NafaqahApiException && (e.code == 'request_not_pending' || e.code == 'request_not_found'))) {
+        widget.onRefresh();
+      }
       return;
     }
     if (mounted) Navigator.of(context).pop(true);
@@ -1307,16 +1368,35 @@ class _DeclineRequestDialogState extends State<_DeclineRequestDialog> {
           TextField(
             key: const ValueKey('req_decline_reason'),
             controller: _reasonCtrl,
-            maxLength: 200,
+            readOnly: _held,
+            // Counted in Unicode code points, as the API and the database count
+            // them (review R1-09); the counter shows the same count.
+            inputFormatters: const [CodePointLengthFormatter(kDeclineReasonMaxCodePoints)],
+            onChanged: (_) => setState(() {}),
             maxLines: 2,
             decoration: InputDecoration(
               labelText: context.tr('req_decline_reason'),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: Text(
+              context.trArgs('req_decline_counter', {
+                'count': '${_reasonCtrl.text.runes.length}',
+                'max': '$kDeclineReasonMaxCodePoints',
+              }),
+              key: const ValueKey('req_decline_counter'),
+              style: TextStyle(color: context.textSecondary, fontSize: 11),
+            ),
+          ),
           if (_message != null) ...[
             const SizedBox(height: 8),
-            Text(_message!, style: TextStyle(color: context.dangerColor, fontSize: 12, fontWeight: FontWeight.w600)),
+            Text(
+              _message!,
+              key: const ValueKey('req_decline_message'),
+              style: TextStyle(color: _held ? context.goldText : context.dangerColor, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
           ],
         ],
       ),
@@ -1334,7 +1414,7 @@ class _DeclineRequestDialogState extends State<_DeclineRequestDialog> {
             side: BorderSide(color: context.dangerColor),
           ),
           onPressed: _busy ? null : _submit,
-          child: Text(context.tr('req_decline')),
+          child: Text(context.tr(_held ? 'try_again' : 'req_decline')),
         ),
       ],
     );
@@ -1433,6 +1513,11 @@ class _LedgerHistorySheetState extends State<_LedgerHistorySheet> {
   late Future<NafaqahLedger> _future;
   String? _reversing;
 
+  /// One key per repayment while the sheet is open (review R1-06): a reversal
+  /// whose answer was lost is sent again with the same key, which the server
+  /// answers once.
+  final Map<String, String> _reverseKeys = {};
+
   @override
   void initState() {
     super.initState();
@@ -1450,7 +1535,7 @@ class _LedgerHistorySheetState extends State<_LedgerHistorySheet> {
     );
     if (ok != true || !mounted) return;
     setState(() => _reversing = e.id);
-    final requestKey = const Uuid().v4();
+    final requestKey = _reverseKeys.putIfAbsent(e.id, () => const Uuid().v4());
     final sources = RepaymentSources.of(context, widget.actions.householdId, listen: false);
     try {
       await widget.actions.reverseRepayment(reimbursementId: e.id, requestKey: requestKey);
@@ -1458,14 +1543,16 @@ class _LedgerHistorySheetState extends State<_LedgerHistorySheet> {
       logFailure('FamilyReimbursement.reverse', err);
       if (!mounted) return;
       setState(() => _reversing = null);
-      AppSnackBar.showError(
-        context,
-        _isUnknownOutcome(err)
-            ? context.tr('fmd_unconfirmed_msg')
-            : trackedRepaymentErrorText(context, err) ??
-                (err is NafaqahApiException && err.code == 'forbidden' ? context.tr('nafaqah_err_forbidden') : context.tr('settle_record_failed_msg')),
-        title: context.tr('settle_record_failed'),
-      );
+      final unknown = _isUnknownOutcome(err);
+      if (unknown) {
+        // It may be reversed: the account may already be credited. The
+        // balances, the history and the card reload; Reverse again sends the
+        // same key (review R1-06).
+        AppSnackBar.showWarning(context, context.tr('fmd_unconfirmed_msg'), title: context.tr('settle_unconfirmed_title'));
+        sources.provider?.refresh(force: true);
+      } else {
+        AppSnackBar.showError(context, repaymentErrorText(context, err), title: context.tr('settle_record_failed'));
+      }
       setState(() {
         _future = widget.actions.ledger();
       });
@@ -1562,7 +1649,8 @@ class _LedgerHistorySheetState extends State<_LedgerHistorySheet> {
                               label: context.tr('rev_badge'),
                             )
                           : null,
-                      action: e.canReverse && !e.reversed
+                      // Never offered to a wife (review R1-01).
+                      action: e.canReverse && !e.reversed && !widget.actions.viewerIsWife
                           ? TextButton.icon(
                               key: ValueKey('rev_action_${e.id}'),
                               style: TextButton.styleFrom(foregroundColor: context.accentText),
@@ -1702,6 +1790,12 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
   /// One key per opening of the sheet, reused by every retry from it.
   late final String _requestKey;
 
+  /// What was sent when the answer was lost (review R1-06): the sheet stays
+  /// open with it and its key, and offers to send exactly that again. A
+  /// different amount, method or account under the same key would be refused
+  /// (request_key_reused), and a new key could pay twice.
+  ({double amount, String method, Account account})? _held;
+
   @override
   void initState() {
     super.initState();
@@ -1719,33 +1813,46 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
   }
 
   Future<void> _submit() async {
-    final rounded = roundedMoneyTextIfRounded(_amountCtrl.text);
-    if (rounded != null) setState(() => _amountCtrl.text = rounded); // show what is stored
-    final amt = parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0;
-    if (amt <= 0) {
-      AppSnackBar.showError(context, context.tr('settle_invalid_amount'));
-      return;
+    final sources = RepaymentSources.of(context, widget.householdId, listen: false, viewerIsWife: widget.actions.viewerIsWife);
+    final held = _held;
+    final double amt;
+    final String method;
+    final Account account;
+    if (held != null) {
+      // The same repayment again, with the same key: the server records it
+      // once, and the checks below may no longer hold if it went through.
+      amt = held.amount;
+      method = held.method;
+      account = held.account;
+    } else {
+      final rounded = roundedMoneyTextIfRounded(_amountCtrl.text);
+      if (rounded != null) setState(() => _amountCtrl.text = rounded); // show what is stored
+      amt = parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0;
+      method = _paymentMethod;
+      if (amt <= 0) {
+        AppSnackBar.showError(context, context.tr('settle_invalid_amount'));
+        return;
+      }
+      // Paying back more than is owed would invent a debt for the wife.
+      if (_halalas(amt) > _halalas(widget.totalOwed)) {
+        AppSnackBar.showError(
+          context,
+          context.trArgs('nafaqah_err_overpayment', {'amount': context.sar(widget.totalOwed)}),
+          title: context.tr('settle_record_failed'),
+        );
+        return;
+      }
+      // Where the money comes from (rule 02): every repayment leaves an account.
+      final chosen = _chosenAccount(context, sources, _source, amt, onStale: () => setState(() => _source = null));
+      if (chosen == null) return;
+      account = chosen;
     }
-    // Paying back more than is owed would invent a debt for the wife.
-    if (_halalas(amt) > _halalas(widget.totalOwed)) {
-      AppSnackBar.showError(
-        context,
-        context.trArgs('nafaqah_err_overpayment', {'amount': context.sar(widget.totalOwed)}),
-        title: context.tr('settle_record_failed'),
-      );
-      return;
-    }
-
-    // Where the money comes from (rule 02): every repayment leaves an account.
-    final sources = RepaymentSources.of(context, widget.householdId, listen: false);
-    final account = _chosenAccount(context, sources, _source, amt, onStale: () => setState(() => _source = null));
-    if (account == null) return;
 
     setState(() => _isSubmitting = true);
     try {
       await widget.actions.recordRepayment(
         amount: amt,
-        paymentMethod: _paymentMethod,
+        paymentMethod: method,
         accountId: account.id,
         requestKey: _requestKey,
       );
@@ -1753,40 +1860,27 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
       // Never report a repayment as recorded when the server rejected it.
       logFailure('FamilyReimbursement.record', e);
       if (!mounted) return;
-      // It may be stored. A retry from this sheet sends the same key, which the
-      // server records once; the card reloads to show what is stored.
+      setState(() => _isSubmitting = false);
+      // As before: a failure the API names (or none at all) is unknown only when
+      // no answer came, or the server failed without saying what it stored.
       if (e is NafaqahApiException && e.outcomeUnknown) {
-        AppSnackBar.showWarning(
-          context,
-          context.tr('settle_unconfirmed_msg'),
-          title: context.tr('settle_unconfirmed_title'),
-        );
-        Navigator.of(context).pop();
+        // It may be stored. The sheet stays open with what was sent and its
+        // key: trying again is safe. The balances and the card reload to show
+        // what is stored (review R1-06).
+        setState(() => _held = (amount: amt, method: method, account: account));
+        sources.provider?.refresh(force: true);
         widget.onConfirmed();
         return;
       }
-      setState(() => _isSubmitting = false);
-      final String message;
-      final tracked = trackedRepaymentErrorText(context, e, owedNow: widget.totalOwed);
+      setState(() => _held = null);
       if (e is NafaqahApiException && repaymentAccountErrorKey(e.code) != null) {
         // The balance or the account changed since the sheet opened.
         sources.provider?.refresh(force: true);
-        message = tracked!;
-      } else if (tracked != null) {
-        message = tracked;
-      } else if (e is NafaqahApiException && e.code == 'overpayment') {
-        message = context.trArgs('nafaqah_err_overpayment', {'amount': context.sar(e.outstanding ?? widget.totalOwed)});
-      } else if (e is NafaqahApiException && e.code == 'forbidden') {
-        message = context.tr('nafaqah_err_forbidden');
-      } else if (e is NafaqahApiException && e.code == 'no_wife') {
-        message = context.tr('nafaqah_err_no_wife');
-      } else if (e is NafaqahApiException && e.code == 'invalid') {
-        message = context.tr('nafaqah_err_invalid_amount');
-      } else if (nafaqahWriteRefusalOf(e) != null) {
-        message = nafaqahWriteRefusalText(context, nafaqahWriteRefusalOf(e)!);
-      } else {
-        message = context.tr('settle_record_failed_msg');
       }
+      final refusal = nafaqahWriteRefusalOf(e);
+      final message = e is NafaqahApiException && kNafaqahErrorCodes.contains(e.code) || refusal == null
+          ? repaymentErrorText(context, e, owedNow: widget.totalOwed)
+          : nafaqahWriteRefusalText(context, refusal);
       AppSnackBar.showError(context, message, title: context.tr('settle_record_failed'));
       return;
     }
@@ -1809,7 +1903,8 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
     final full = widget.totalOwed.toStringAsFixed(2);
     // The fill is fixed rose gold in both modes, so one ink works for both.
     const onGold = VelvetBurgundyColors.primaryLight;
-    final sources = RepaymentSources.of(context, widget.householdId);
+    final sources = RepaymentSources.of(context, widget.householdId, viewerIsWife: widget.actions.viewerIsWife);
+    final held = _held;
     return _SheetFrame(
       children: [
         Text(
@@ -1823,13 +1918,14 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
           label: Text(context.trArgs('settle_full', {'amount': context.sar(widget.totalOwed)})),
           selected: _amountCtrl.text == full,
           onSelected: (val) {
-            if (val) setState(() => _amountCtrl.text = full);
+            if (val && held == null) setState(() => _amountCtrl.text = full);
           },
         ),
         const SizedBox(height: 14),
         TextField(
           key: const ValueKey('reimburse_amount_field'),
           controller: _amountCtrl,
+          readOnly: held != null,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
@@ -1845,7 +1941,12 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
           style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        _MethodChips(selected: _paymentMethod, onChanged: (m) => setState(() => _paymentMethod = m)),
+        _MethodChips(
+          selected: held?.method ?? _paymentMethod,
+          onChanged: (m) {
+            if (held == null) setState(() => _paymentMethod = m);
+          },
+        ),
         const SizedBox(height: 16),
         if (!sources.loaded)
           Center(child: CircularProgressIndicator(strokeWidth: 2, color: context.accentText))
@@ -1853,10 +1954,16 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
           RepaymentAccountPicker(
             householdId: widget.householdId,
             accounts: sources.accounts,
-            selected: _source,
-            amount: parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0,
-            onChanged: (id) => setState(() => _source = id),
+            selected: held?.account.id ?? _source,
+            amount: held?.amount ?? parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0,
+            onChanged: (id) {
+              if (held == null) setState(() => _source = id);
+            },
           ),
+        if (held != null) ...[
+          const SizedBox(height: 12),
+          const RepaymentUnconfirmedNote(key: ValueKey('reimburse_unconfirmed')),
+        ],
         const SizedBox(height: 16),
         OutlinedButton.icon(
           style: OutlinedButton.styleFrom(
@@ -1893,9 +2000,9 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2, color: onGold),
                   )
-                : const Icon(Icons.check_circle_outline_rounded, size: 18),
+                : Icon(held != null ? Icons.refresh_rounded : Icons.check_circle_outline_rounded, size: 18),
             label: Text(
-              context.tr('settle_record_payment'),
+              context.tr(held != null ? 'try_again' : 'settle_record_payment'),
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
             onPressed: _isSubmitting ? null : _submit,

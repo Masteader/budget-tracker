@@ -313,6 +313,10 @@ const String kRequestDeclined = 'declined';
 const String kRequestCancelled = 'cancelled';
 const String kRequestClosed = 'closed';
 
+/// Closed because what is owed dropped below it (a repayment, an approval or a
+/// smaller advance, review R1-03); nothing moved for it.
+const String kRequestAlreadyRepaid = 'already_repaid';
+
 /// The wife's "I received X" (migration 20261105001300): pending until the
 /// husband or an admin approves it (a repayment from his account) or declines
 /// it, or she cancels it, or an account deletion closes it. A pending request
@@ -323,7 +327,7 @@ class ReimbursementRequest {
   final String? paymentMethod;
 
   /// [kRequestPending], [kRequestApproved], [kRequestDeclined],
-  /// [kRequestCancelled] or [kRequestClosed].
+  /// [kRequestCancelled], [kRequestClosed] or [kRequestAlreadyRepaid].
   final String status;
 
   /// Only a decline carries one, and only if he gave it.
@@ -587,7 +591,9 @@ class NafaqahSummary {
   /// What deleted wives were still owed, newest first, visible to every member.
   final List<FormerMemberDebt> formerMemberDebts;
 
-  /// The caller (the husband/provider or an admin) may record payments or a waiver.
+  /// The caller (the husband/provider or an admin who is not a wife) may
+  /// record payments or a waiver. Never a wife, whatever the server says
+  /// (review R1-01).
   final bool canManageFormerMemberDebts;
 
   const NafaqahSummary({
@@ -614,9 +620,10 @@ class NafaqahSummary {
   /// The viewer is [wife] herself: she marks what she received (a request).
   bool canRequestFor(NafaqahWife wife) => wife.canRequest ?? (callerIsWife && callerUserId == wife.id);
 
-  /// The viewer is the husband or an admin (never [wife]): records, approves,
-  /// declines and reverses repayments to her.
-  bool canDecideFor(NafaqahWife wife) => wife.canDecide ?? (canRecordReimbursement && !callerIsWife);
+  /// The viewer is the husband or an admin who is not a wife: records,
+  /// approves and declines repayments to [wife]. Never a wife, not even a
+  /// co-wife who is an admin, whatever the server says (review R1-01).
+  bool canDecideFor(NafaqahWife wife) => !callerIsWife && (wife.canDecide ?? canRecordReimbursement);
 
   /// The wife the caller is concerned with: herself, or the first wife.
   NafaqahWife? get primaryWife {
@@ -651,7 +658,7 @@ class NafaqahSummary {
           .map((d) => FormerMemberDebt.fromMap(Map<String, dynamic>.from(d)))
           .where((d) => d.id.isNotEmpty)
           .toList(),
-      canManageFormerMemberDebts: map['can_manage_former_member_debts'] == true,
+      canManageFormerMemberDebts: map['can_manage_former_member_debts'] == true && map['caller_role'] != 'wife',
     );
   }
 }
@@ -764,6 +771,41 @@ class NafaqahLedger {
 /// ('already_reversed', 'reversal_not_tracked', 'reversal_account_unavailable',
 /// 'reversal_after_waiver', 'not_reversible', 'reimbursement_not_found',
 /// 'payment_not_found').
+/// Every code the Nafaqah API names in `detail.code`. Each one has a
+/// localized message (`repaymentErrorText`, review R1-09).
+const Set<String> kNafaqahErrorCodes = {
+  'overpayment',
+  'not_family',
+  'ledger_would_be_overpaid',
+  'no_provider',
+  'no_wife',
+  'account_pending_deletion',
+  'debt_closed',
+  'debt_not_found',
+  'request_key_reused',
+  // Migration 20261105001300: the account a repayment is paid from,
+  // the wife's requests and reversals.
+  'account_unavailable',
+  'account_forbidden',
+  'insufficient_funds',
+  'app_update_required',
+  'wife_must_request',
+  'request_not_found',
+  'request_not_pending',
+  'request_exceeds_outstanding',
+  'pending_exceeds_outstanding',
+  'reimbursement_not_found',
+  'payment_not_found',
+  'not_reversible',
+  'already_reversed',
+  'reversal_not_tracked',
+  'reversal_account_unavailable',
+  'reversal_after_waiver',
+  'account_required',
+  'request_key_required',
+  'invalid_reason',
+};
+
 class NafaqahApiException implements Exception {
   final String code;
   final String message;
@@ -789,39 +831,7 @@ class NafaqahApiException implements Exception {
     final detailCode = detail is Map ? detail['code'] as String? : null;
     final message = res['message']?.toString() ?? '';
     final String code;
-    const stateCodes = {
-      'overpayment',
-      'not_family',
-      'ledger_would_be_overpaid',
-      'no_provider',
-      'no_wife',
-      'account_pending_deletion',
-      'debt_closed',
-      'debt_not_found',
-      'request_key_reused',
-      // Migration 20261105001300: the account a repayment is paid from,
-      // the wife's requests and reversals.
-      'account_unavailable',
-      'account_forbidden',
-      'insufficient_funds',
-      'app_update_required',
-      'wife_must_request',
-      'request_not_found',
-      'request_not_pending',
-      'request_exceeds_outstanding',
-      'pending_exceeds_outstanding',
-      'reimbursement_not_found',
-      'payment_not_found',
-      'not_reversible',
-      'already_reversed',
-      'reversal_not_tracked',
-      'reversal_account_unavailable',
-      'reversal_after_waiver',
-      'account_required',
-      'request_key_required',
-      'invalid_reason',
-    };
-    if (stateCodes.contains(detailCode)) {
+    if (kNafaqahErrorCodes.contains(detailCode)) {
       code = detailCode!;
     } else if (status == 426) {
       // Upgrade Required: this build predates what the server now asks for.

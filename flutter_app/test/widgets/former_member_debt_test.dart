@@ -442,23 +442,25 @@ void main() {
       await _tapKey(tester, 'fmd_confirm_ok');
 
       expect(calls, hasLength(1));
-      expect(find.text('Not Confirmed'), findsOneWidget);
+      // Review R1-06: the sheet says so where the retry is, and keeps what it sent.
+      expect(_k('fmd_pay_unconfirmed'), findsOneWidget);
       expect(find.textContaining('Recorded SAR'), findsNothing, reason: 'never claimed as recorded');
       expect(loads, 1, reason: 'refreshed to show what the server holds');
       expect(_k('fmd_pay_submit'), findsOneWidget, reason: 'the sheet stays open for a safe retry');
 
-      await pickPayerAccount(tester);
+      // The retry sends exactly what was sent, already confirmed.
       await _tapKey(tester, 'fmd_pay_submit');
-      await _tapKey(tester, 'fmd_confirm_ok');
       expect(calls, hasLength(2));
       expect(calls[1].requestKey, calls[0].requestKey);
       expect(find.text('Recorded SAR 100.00, paid from Payer bank'), findsOneWidget);
     });
 
-    testWidgets('a replayed retry reports what the server recorded, not what was typed again', (tester) async {
-      // The first answer was lost, but the server stored 100 via STC Pay. The user then types
-      // 50 and Cash: the same key replays the 100, and the app must say so.
+    testWidgets('a retry after a lost answer sends what was sent, and reports what the server recorded', (tester) async {
+      // The first answer was lost, but the server stored 100 via STC Pay. The sheet keeps
+      // what it sent (review R1-06): tapping Cash afterwards changes nothing, and the same
+      // key replays the 100, which the app reports.
       var n = 0;
+      final sent = <(double, String)>[];
       await tester.pumpWidget(_app(FamilyReimbursementCard(
         householdId: 'hh',
         summary: _summary(),
@@ -471,6 +473,7 @@ void main() {
           required String accountId,
         }) async {
           n++;
+          sent.add((amount, paymentMethod));
           if (n == 1) throw const NafaqahApiException('network', 'timeout', noResponse: true);
           return FormerMemberDebtReceipt.fromMap({
             'status': 'open', 'replayed': true, 'debt_id': debtId, 'event_id': 'e1',
@@ -484,13 +487,12 @@ void main() {
       await pickPayerAccount(tester);
       await _tapKey(tester, 'fmd_pay_submit');
       await _tapKey(tester, 'fmd_confirm_ok');
-      await tester.enterText(_k('fmd_amount_field'), '50');
+      await tester.ensureVisible(find.text('Cash'));
       await tester.tap(find.text('Cash'));
       await tester.pumpAndSettle();
-      await pickPayerAccount(tester);
       await _tapKey(tester, 'fmd_pay_submit');
-      await _tapKey(tester, 'fmd_confirm_ok');
       expect(n, 2);
+      expect(sent[1], sent[0], reason: 'the same amount and method under the same key');
       expect(find.text('Recorded SAR 100.00, paid from Payer bank'), findsOneWidget);
       expect(find.textContaining('SAR 50.00 via Cash'), findsNothing);
     });
@@ -539,7 +541,7 @@ void main() {
       ),
       'forbidden': (
         const NafaqahApiException('forbidden', 'x', statusCode: 403),
-        'Only the husband or a household admin can close this record.',
+        'Only the husband, or a household admin who is not a wife, can close this record.',
       ),
       'invalid': (
         const NafaqahApiException('invalid', 'x', statusCode: 422),
@@ -646,7 +648,7 @@ void main() {
       ),
       'forbidden': (
         const NafaqahApiException('forbidden', 'x', statusCode: 403),
-        'Only the husband or a household admin can close this record.',
+        'Only the husband, or a household admin who is not a wife, can close this record.',
       ),
       'other': (const NafaqahApiException('invalid', 'x', statusCode: 422), 'The waiver was not recorded.'),
     };

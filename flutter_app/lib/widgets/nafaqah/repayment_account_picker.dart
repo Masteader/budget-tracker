@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -18,19 +19,47 @@ int _halalas(double sar) => (sar * 100).round();
 /// checks the same, and refuses an account that does not hold the amount.
 /// Every repayment leaves one of them (owner decision 2026-11-06): a cash
 /// payment comes out of his Cash account, and there is no "not tracked".
+/// A wife pays nothing, from a pool least of all, even as an admin
+/// ([isWife], review R1-01): none for her.
 List<Account> repaymentAccounts(
   List<Account> accounts, {
   required String householdId,
   required String? currentUserId,
   required bool isAdmin,
+  bool isWife = false,
 }) =>
-    accounts
-        .where((a) =>
-            a.householdId == householdId &&
-            !a.isArchived &&
-            a.currency == 'SAR' &&
-            HouseholdPermissions.canWithdrawFrom(a, currentUserId: currentUserId, isAdmin: isAdmin))
-        .toList();
+    isWife
+        ? const []
+        : accounts
+            .where((a) =>
+                a.householdId == householdId &&
+                !a.isArchived &&
+                a.currency == 'SAR' &&
+                HouseholdPermissions.canWithdrawFrom(a, currentUserId: currentUserId, isAdmin: isAdmin))
+            .toList();
+
+/// The longest decline reason, in Unicode code points (review R1-09). The API
+/// (Python `len`) and the database (`char_length`) count code points, so the
+/// app does too: an Arabic reason with harakat that fits here fits there.
+/// Graphemes would let through a reason the server refuses; UTF-16 units
+/// would cut one it accepts.
+const int kDeclineReasonMaxCodePoints = 200;
+
+/// Keeps a text field within [maxCodePoints] Unicode code points, never
+/// splitting a surrogate pair.
+class CodePointLengthFormatter extends TextInputFormatter {
+  final int maxCodePoints;
+
+  const CodePointLengthFormatter(this.maxCodePoints);
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final runes = newValue.text.runes;
+    if (runes.length <= maxCodePoints) return newValue;
+    final text = String.fromCharCodes(runes.take(maxCodePoints));
+    return TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
+  }
+}
 
 /// The accounts the providers above [context] say the viewer can repay from,
 /// and whether they are known yet. Without an [AccountProvider] (nothing to
@@ -42,7 +71,8 @@ class RepaymentSources {
 
   const RepaymentSources(this.accounts, {required this.loaded, this.provider});
 
-  static RepaymentSources of(BuildContext context, String householdId, {bool listen = true}) {
+  /// [viewerIsWife]: she pays from nothing (review R1-01).
+  static RepaymentSources of(BuildContext context, String householdId, {bool listen = true, bool viewerIsWife = false}) {
     AccountProvider? provider;
     try {
       provider = Provider.of<AccountProvider>(context, listen: listen);
@@ -60,6 +90,7 @@ class RepaymentSources {
       householdId: householdId,
       currentUserId: currentUserId,
       isAdmin: viewerIsAdminOf(context, householdId),
+      isWife: viewerIsWife,
     );
     return RepaymentSources(list, loaded: provider.hasLoaded, provider: provider);
   }
@@ -136,9 +167,53 @@ String? trackedRepaymentErrorText(BuildContext context, Object error, {double? o
     case 'reimbursement_not_found':
     case 'payment_not_found':
       return context.tr('rev_err_not_found');
+    // Review R1-09: these fell back to the generic failure.
+    case 'request_key_reused':
+      return context.tr('repay_err_key_reused');
+    case 'account_required':
+      return context.tr('repay_source_required');
+    case 'request_key_required':
+      return context.tr('repay_err_update_app');
+    case 'invalid_reason':
+      return context.tr('req_err_reason_long');
   }
   final accountKey = repaymentAccountErrorKey(error.code);
   return accountKey == null ? null : context.tr(accountKey);
+}
+
+/// The localized text for any refusal of a repayment, an approval, a decline,
+/// a request, a cancel or a reversal (review R1-09): every code in
+/// [kNafaqahErrorCodes] has its own message, in en, ar and ur; only an
+/// unknown failure gets the generic one. [owedNow] fills the amount of an
+/// overpayment or a request above what is owed when the server sends none.
+String repaymentErrorText(BuildContext context, Object error, {double? owedNow}) {
+  final tracked = trackedRepaymentErrorText(context, error, owedNow: owedNow);
+  if (tracked != null) return tracked;
+  if (error is NafaqahApiException) {
+    switch (error.code) {
+      case 'overpayment':
+        return context.trArgs('nafaqah_err_overpayment', {'amount': context.sar(error.outstanding ?? owedNow ?? 0)});
+      case 'not_family':
+        return context.tr('nafaqah_err_not_family');
+      case 'ledger_would_be_overpaid':
+        return context.tr('nafaqah_err_ledger_overpaid');
+      case 'no_provider':
+        return context.tr('nafaqah_err_no_provider');
+      case 'no_wife':
+        return context.tr('nafaqah_err_no_wife');
+      case 'account_pending_deletion':
+        return context.tr('del_err_account_pending');
+      case 'debt_closed':
+        return context.tr('fmd_err_closed');
+      case 'debt_not_found':
+        return context.tr('fmd_err_not_found');
+      case 'forbidden':
+        return context.tr('repay_err_forbidden');
+      case 'invalid':
+        return context.tr('nafaqah_err_invalid_amount');
+    }
+  }
+  return context.tr('settle_record_failed_msg');
 }
 
 /// The history line under a repayment: which account it came from (or, for a
@@ -152,6 +227,39 @@ String? repaymentSourceLine(BuildContext context, {required bool? movedBalance, 
     return name == null ? context.tr('repay_history_back_to_account') : context.trArgs('repay_history_back_to', {'account': name});
   }
   return name == null ? context.tr('repay_history_from_account') : context.trArgs('repay_history_from', {'account': name});
+}
+
+/// Said in a sheet whose answer was lost (review R1-06): it may already be
+/// recorded; the sheet keeps what was sent and its key, so trying again is
+/// safe. The inputs stay as they were sent.
+class RepaymentUnconfirmedNote extends StatelessWidget {
+  const RepaymentUnconfirmedNote({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = context.goldText;
+    return Container(
+      padding: const EdgeInsetsDirectional.all(10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.help_outline_rounded, size: 18, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              context.tr('repay_unconfirmed_hold'),
+              style: TextStyle(color: context.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Where a repayment to the wife (or of a former member's record, or an

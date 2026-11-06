@@ -148,11 +148,13 @@ void main() {
     for (final lang in ['en', 'ar', 'ur']) {
       final l = AppLocalizations(Locale(lang));
 
-      testWidgets('$lang: no answer closes the sheet, says to check, and reloads', (tester) async {
+      // Review R1-06: the sheet stays with what it sent and its key, offers a safe
+      // retry, and the card reloads.
+      testWidgets('$lang: no answer keeps the sheet with a safe retry, and reloads', (tester) async {
         final reimbursed = await reimburseFailing(tester, const NafaqahApiException('network', 'timed out', noResponse: true), lang: lang);
-        expect(find.text(l.get('settle_unconfirmed_msg')), findsOneWidget);
+        expect(find.text(l.get('repay_unconfirmed_hold')), findsOneWidget);
         expect(find.text(l.get('settle_record_failed_msg')), findsNothing);
-        expect(find.text(l.get('settle_record_payment')), findsNothing, reason: 'the sheet closed');
+        expect(find.text(l.get('try_again')), findsOneWidget, reason: 'the sheet stays open');
         expect(reimbursed(), 1);
       });
     }
@@ -160,15 +162,15 @@ void main() {
     testWidgets('a server fault is treated like no answer', (tester) async {
       final l = AppLocalizations(const Locale('en'));
       final reimbursed = await reimburseFailing(tester, const NafaqahApiException('network', 'boom', statusCode: 500));
-      expect(find.text(l.get('settle_unconfirmed_msg')), findsOneWidget);
+      expect(find.text(l.get('repay_unconfirmed_hold')), findsOneWidget);
       expect(reimbursed(), 1);
     });
 
     testWidgets('a refusal keeps the sheet open and says why', (tester) async {
       final l = AppLocalizations(const Locale('en'));
       final reimbursed = await reimburseFailing(tester, const NafaqahApiException('forbidden', 'no', statusCode: 403));
-      expect(find.text(l.get('nafaqah_err_forbidden')), findsOneWidget);
-      expect(find.text(l.get('settle_unconfirmed_msg')), findsNothing);
+      expect(find.text(l.get('repay_err_forbidden')), findsOneWidget);
+      expect(find.text(l.get('repay_unconfirmed_hold')), findsNothing);
       expect(find.text(l.get('settle_record_payment')), findsOneWidget);
       expect(reimbursed(), 0);
     });

@@ -60,7 +60,8 @@ bool _isStale(Object error) => error is NafaqahApiException && (error.code == 'd
 String formerMemberDebtErrorText(BuildContext context, Object error, {required double remaining, required bool payment}) {
   final fallback = context.tr(payment ? 'settle_record_failed_msg' : 'fmd_waive_failed');
   if (error is! NafaqahApiException) return fallback;
-  if (error.code != 'overpayment') {
+  // The record's own words first: it is a record, not her balance.
+  if (error.code != 'overpayment' && error.code != 'request_key_reused' && error.code != 'forbidden') {
     final tracked = trackedRepaymentErrorText(context, error, owedNow: remaining);
     if (tracked != null) return tracked;
   }
@@ -88,6 +89,10 @@ String formerMemberDebtErrorText(BuildContext context, Object error, {required d
 class FormerMemberDebtPanel extends StatelessWidget {
   final FormerMemberDebt debt;
   final bool canManage;
+
+  /// The viewer is a wife: she pays, waives and reverses nothing on this
+  /// record (review R1-01), whatever the server says.
+  final bool viewerIsWife;
   final String householdId;
   final FormerMemberDebtPaymentRecorder? recordPayment;
   final FormerMemberDebtWaiver? waive;
@@ -103,6 +108,7 @@ class FormerMemberDebtPanel extends StatelessWidget {
     super.key,
     required this.debt,
     required this.canManage,
+    this.viewerIsWife = false,
     required this.householdId,
     required this.onChanged,
     required this.onRefresh,
@@ -151,6 +157,7 @@ class FormerMemberDebtPanel extends StatelessWidget {
       builder: (ctx) => _FormerDebtHistorySheet(
         debt: debt,
         householdId: householdId,
+        viewerIsWife: viewerIsWife,
         reverse: reverse,
         onChanged: onChanged,
         onRefresh: onRefresh,
@@ -163,7 +170,7 @@ class FormerMemberDebtPanel extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final gold = context.goldText;
     final closed = debt.isSettled || debt.isWaived;
-    final manage = canManage && debt.isOpen;
+    final manage = canManage && !viewerIsWife && debt.isOpen;
     final badgeColor = debt.isWaived ? context.accentText : context.successText;
 
     const puck = ThreeDIconPuck(
@@ -236,7 +243,9 @@ class FormerMemberDebtPanel extends StatelessWidget {
             ),
           const SizedBox(height: 14),
           if (!closed) ...[
-            Text('${context.tr('fmd_remaining')}:', style: TextStyle(color: context.textSecondary, fontSize: 12)),
+            // The label carries its own punctuation, localized (review R1-12).
+            Text(context.tr('fmd_remaining_label'), key: ValueKey('fmd_remaining_label_${debt.id}'),
+                style: TextStyle(color: context.textSecondary, fontSize: 12)),
             const SizedBox(height: 2),
             Text(
               context.sar(debt.remaining),
@@ -358,6 +367,7 @@ class _DebtPill extends StatelessWidget {
 class _FormerDebtHistorySheet extends StatefulWidget {
   final FormerMemberDebt debt;
   final String householdId;
+  final bool viewerIsWife;
   final FormerMemberDebtReverser? reverse;
 
   /// A reversal was recorded: the record changed.
@@ -371,6 +381,7 @@ class _FormerDebtHistorySheet extends StatefulWidget {
     required this.householdId,
     required this.onChanged,
     required this.onRefresh,
+    this.viewerIsWife = false,
     this.reverse,
   });
 
@@ -380,6 +391,10 @@ class _FormerDebtHistorySheet extends StatefulWidget {
 
 class _FormerDebtHistorySheetState extends State<_FormerDebtHistorySheet> {
   bool _busy = false;
+
+  /// One key per payment while the sheet is open (review R1-06): a reversal
+  /// whose answer was lost is sent again with the same key.
+  final Map<String, String> _reverseKeys = {};
 
   Future<void> _reverse(FormerMemberDebtEvent e) async {
     final account = repaymentAccountName(context, e.accountId) ?? context.tr('repay_history_from_account');
@@ -421,18 +436,23 @@ class _FormerDebtHistorySheetState extends State<_FormerDebtHistorySheet> {
           ({required String debtId, required String eventId, required String requestKey}) =>
               ApiService.instance.reverseFormerMemberDebtPayment(widget.householdId,
                   debtId: debtId, eventId: eventId, requestKey: requestKey);
-      await reverse(debtId: widget.debt.id, eventId: e.id, requestKey: const Uuid().v4());
+      await reverse(debtId: widget.debt.id, eventId: e.id, requestKey: _reverseKeys.putIfAbsent(e.id, () => const Uuid().v4()));
     } catch (err) {
       logFailure('FormerMemberDebt.reverse', err);
       if (!mounted) return;
       setState(() => _busy = false);
-      AppSnackBar.showError(
-        context,
-        _isUnknownOutcome(err)
-            ? context.tr('fmd_unconfirmed_msg')
-            : formerMemberDebtErrorText(context, err, remaining: widget.debt.remaining, payment: true),
-        title: context.tr('settle_record_failed'),
-      );
+      if (_isUnknownOutcome(err)) {
+        // It may be reversed: the account may already be credited. The
+        // balances and the record reload; Reverse again sends the same key.
+        AppSnackBar.showWarning(context, context.tr('fmd_unconfirmed_msg'), title: context.tr('settle_unconfirmed_title'));
+        sources.provider?.refresh(force: true);
+      } else {
+        AppSnackBar.showError(
+          context,
+          formerMemberDebtErrorText(context, err, remaining: widget.debt.remaining, payment: true),
+          title: context.tr('settle_record_failed'),
+        );
+      }
       widget.onRefresh();
       return;
     }
@@ -482,7 +502,8 @@ class _FormerDebtHistorySheetState extends State<_FormerDebtHistorySheet> {
           date: e.createdAt == null ? null : l10n.date(e.createdAt!, 'd MMM yyyy'),
           reversed: e.reversed,
           reversedKey: 'fmd_rev_badge_${e.id}',
-          action: e.canReverse && !e.reversed
+          // Never offered to a wife (review R1-01).
+          action: e.canReverse && !e.reversed && !widget.viewerIsWife
               ? TextButton.icon(
                   key: ValueKey('fmd_reverse_${e.id}'),
                   style: TextButton.styleFrom(foregroundColor: context.accentText),
@@ -643,6 +664,10 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
   /// The account it is paid from; null until chosen.
   String? _source;
 
+  /// What was sent when the answer was lost (review R1-06): the sheet keeps
+  /// it, and its key, and offers to send exactly that again.
+  ({double amount, String method, Account account})? _held;
+
   @override
   void initState() {
     super.initState();
@@ -705,6 +730,13 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
   }
 
   Future<void> _submit() async {
+    final held = _held;
+    if (held != null) {
+      // The same payment again, with the same key: the server records it once,
+      // and the checks below may no longer hold if it went through.
+      await _send(held.amount, held.method, held.account);
+      return;
+    }
     final rounded = roundedMoneyTextIfRounded(_amountCtrl.text);
     if (rounded != null) setState(() => _amountCtrl.text = rounded); // show what is stored
     final amt = parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0;
@@ -750,8 +782,11 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
       return;
     }
     if (!await _confirm(amt, account) || !mounted) return;
+    await _send(amt, _paymentMethod, account);
+  }
 
-    var method = _paymentMethod;
+  Future<void> _send(double amt, String sentMethod, Account account) async {
+    final sources = RepaymentSources.of(context, widget.householdId, listen: false);
     var recorded = amt;
     setState(() => _isSubmitting = true);
     try {
@@ -774,25 +809,27 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
       final receipt = await record(
         debtId: widget.debtId,
         amount: amt,
-        paymentMethod: method,
+        paymentMethod: sentMethod,
         requestKey: _requestKey,
         accountId: account.id,
       );
       // A retry of a lost answer replays what the server stored first, whatever was typed since.
       if (receipt.amount > 0) recorded = receipt.amount;
-      if (_knownMethods.contains(receipt.paymentMethod)) method = receipt.paymentMethod!;
     } catch (e) {
       // Never report a payment as recorded when the server did not say so.
       logFailure('FormerMemberDebt.pay', e);
       if (!mounted) return;
       setState(() => _isSubmitting = false);
       if (_isUnknownOutcome(e)) {
-        // It may be stored. The sheet stays open: a retry sends the same key,
-        // which the server records once.
-        AppSnackBar.showWarning(context, context.tr('fmd_unconfirmed_msg'), title: context.tr('settle_unconfirmed_title'));
+        // It may be stored. The sheet stays open with what was sent and its
+        // key, which the server records once; the balances and the record
+        // reload (review R1-06).
+        setState(() => _held = (amount: amt, method: sentMethod, account: account));
+        sources.provider?.refresh(force: true);
         widget.onRefresh();
         return;
       }
+      setState(() => _held = null);
       if (_isStale(e)) widget.onRefresh();
       // The balance or the account changed since the sheet opened.
       if (e is NafaqahApiException && repaymentAccountErrorKey(e.code) != null) sources.provider?.refresh(force: true);
@@ -823,6 +860,7 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
     // The fill is fixed rose gold in both modes, so one ink works for both.
     const onGold = VelvetBurgundyColors.primaryLight;
     final sources = RepaymentSources.of(context, widget.householdId);
+    final held = _held;
     return Container(
       padding: EdgeInsetsDirectional.fromSTEB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
       decoration: BoxDecoration(
@@ -854,13 +892,14 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
               label: Text(context.trArgs('settle_full', {'amount': context.sar(widget.remaining)})),
               selected: _amountCtrl.text == full,
               onSelected: (val) {
-                if (val) setState(() => _amountCtrl.text = full);
+                if (val && held == null) setState(() => _amountCtrl.text = full);
               },
             ),
             const SizedBox(height: 14),
             TextField(
               key: const ValueKey('fmd_amount_field'),
               controller: _amountCtrl,
+              readOnly: held != null,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
@@ -892,11 +931,17 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
               RepaymentAccountPicker(
                 householdId: widget.householdId,
                 accounts: sources.accounts,
-                selected: _source,
-                amount: parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0,
+                selected: held?.account.id ?? _source,
+                amount: held?.amount ?? parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0,
                 formerMember: true,
-                onChanged: (id) => setState(() => _source = id),
+                onChanged: (id) {
+                  if (held == null) setState(() => _source = id);
+                },
               ),
+            if (held != null) ...[
+              const SizedBox(height: 12),
+              const RepaymentUnconfirmedNote(key: ValueKey('fmd_pay_unconfirmed')),
+            ],
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
@@ -916,9 +961,9 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2, color: onGold),
                       )
-                    : const Icon(Icons.check_circle_outline_rounded, size: 18),
+                    : Icon(held != null ? Icons.refresh_rounded : Icons.check_circle_outline_rounded, size: 18),
                 label: Text(
-                  context.tr('fmd_record_payment'),
+                  context.tr(held != null ? 'try_again' : 'fmd_record_payment'),
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 onPressed: _isSubmitting ? null : _submit,
@@ -931,7 +976,7 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
   }
 
   Widget _methodChip(String id, IconData icon) {
-    final isSelected = _paymentMethod == id;
+    final isSelected = (_held?.method ?? _paymentMethod) == id;
     return ChoiceChip(
       avatar: Icon(icon, size: 14, color: isSelected ? context.accentText : context.textSecondary),
       label: Text(context.tr('pay_method_$id')),
@@ -945,7 +990,7 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
       ),
       side: BorderSide(color: isSelected ? context.accentText : context.borderColor),
       onSelected: (val) {
-        if (val) setState(() => _paymentMethod = id);
+        if (val && _held == null) setState(() => _paymentMethod = id);
       },
     );
   }
