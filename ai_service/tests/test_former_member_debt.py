@@ -4,7 +4,8 @@ What the husband still owes a wife who deleted her account (owner decision 2026-
 Migration 20261105001200_account_deletion_former_member_debt.sql keeps one anonymised record per
 household. The API shows it in the Nafaqah summary and closes it through two SECURITY DEFINER
 RPCs, passing the verified caller: a payment (amount plus payment method, exactly as an ordinary
-reimbursement, so no account, budget or transaction is touched) or her waiver (إبراء). Before the
+reimbursement; the API itself touches no table, and paying from an account, which the database
+debits, is test_wife_repayment_debit's) or her waiver (إبراء). Before the
 deletion the creditor sees an in-app notice; the worker emails it ('creditor_owed').
 
 The database suite (tests 54 and 55) proves the RPCs; here they are stand-ins that record their
@@ -278,7 +279,7 @@ def test_database_refusals_map_to_codes_the_app_knows(household, hint, code, sta
 
 @pytest.mark.parametrize("body", [
     {"amount": 0}, {"amount": -5}, {"amount": 10.001}, {"payment_method": "gold"}, {"request_key": "not-a-uuid"},
-    {"request_key": None}, {"account_id": "a5000000-0000-4000-8000-000000000001"},
+    {"request_key": None}, {"account_id": "not-a-uuid"}, {"account": "a5000000-0000-4000-8000-000000000001"},
 ])
 def test_malformed_requests_are_refused(household, body):
     payload = {"amount": 30, "payment_method": "cash", "request_key": KEY, **body}

@@ -385,13 +385,20 @@ async def record_household_reimbursement_endpoint(
             method = "other"
         try:
             result = await asyncio.to_thread(
-                record_reimbursement, ctx, caller, wife_id, str(payload.amount), method, payload.notes
+                lambda: record_reimbursement(
+                    ctx, caller, wife_id, str(payload.amount), method, payload.notes,
+                    account_id=payload.account_id, request_key=payload.request_key,
+                )
             )
         except NafaqahError as exc:
             raise nafaqah_http_error(exc)
         except Exception as exc:
             raise safe_error_response(exc, public_message="Failed to record reimbursement.")
         return {**result, "mode": "family_nafaqah", "is_settlement": False}
+    # A roommate settlement records no account (migration 20261105001300 is the family ledger's):
+    # an account here would be silently ignored, so it is refused.
+    if payload.account_id:
+        raise HTTPException(status_code=422, detail="A roommate settlement is recorded without an account.")
     # Both parties must be members of this household (the ids are stored on the transaction and
     # read back by the settlement engines).
     payer_id = payload.payer_id.strip().lower()

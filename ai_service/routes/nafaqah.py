@@ -26,6 +26,9 @@ from models import (
     NafaqahReimbursementCreateRequest,
 )
 from nafaqah_service import (
+    AccountForbidden,
+    AccountUnavailable,
+    InsufficientFunds,
     DebtClosed,
     DebtNotFound,
     InvalidNafaqahRequest,
@@ -61,7 +64,15 @@ _CYCLE_KEY_PATTERN = r"^[0-9]{4}-(0[1-9]|1[0-2])$"
 
 def nafaqah_http_error(exc: NafaqahError) -> HTTPException:
     """Rule violations → 403 (who), 404 (no such record here), 409 (state: not a family / overpayment /
-    ledger / no provider / record closed), 422 (input)."""
+    ledger / no provider / record closed / insufficient funds), 422 (input)."""
+    if isinstance(exc, (AccountForbidden, AccountUnavailable)):
+        # Migration 20261105001300: an account he may not pay from, or one this household cannot use.
+        return HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN if isinstance(exc, AccountForbidden) else 422,
+            detail={"message": str(exc), "code": exc.code},
+        )
+    if isinstance(exc, InsufficientFunds):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"message": str(exc), "code": exc.code})
     if isinstance(exc, NafaqahClassificationForbidden):
         # D2: the recorder may not classify (chat / receipt / DB refusal); the client shows why.
         return HTTPException(
@@ -169,7 +180,8 @@ async def nafaqah_record_reimbursement(
             raise NafaqahForbidden("Not a member of this household.")
         wife_id = resolve_wife_id(ctx, payload.wife_user_id)
         return record_reimbursement(
-            ctx, caller, wife_id, str(payload.amount), payload.payment_method, payload.notes
+            ctx, caller, wife_id, str(payload.amount), payload.payment_method, payload.notes,
+            account_id=payload.account_id, request_key=payload.request_key,
         )
 
     return await _run(work, public_message="Failed to record the reimbursement.")
@@ -244,8 +256,8 @@ async def nafaqah_set_provider(
 
 # ─── A former member's record (migration 20261105001200) ────────────────────────
 # What the husband still owed a wife who deleted her account. The husband or any admin closes it:
-# a payment (amount and payment method, as an ordinary reimbursement: no account or budget moves)
-# or her waiver (إبراء). request_key makes a retried tap record once.
+# a payment (amount, payment method and the account it is paid from, as an ordinary reimbursement:
+# his account goes down, no budget moves; without an account nothing moves) or her waiver (إبراء). request_key makes a retried tap record once.
 
 
 @router.post(
@@ -267,7 +279,7 @@ async def nafaqah_former_member_debt_payment(
     def work():
         return record_former_member_debt_payment(
             load_family_context(household_id), caller, debt_id, str(payload.amount),
-            payload.payment_method, payload.request_key,
+            payload.payment_method, payload.request_key, account_id=payload.account_id,
         )
 
     return await _run(work, public_message="Failed to record the payment.")

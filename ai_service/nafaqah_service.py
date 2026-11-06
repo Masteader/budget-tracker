@@ -129,6 +129,26 @@ class RequestKeyReused(NafaqahError):
     code = "request_key_reused"
 
 
+# ─── Repayments that move money (migration 20261105001300) ─────────────────────
+
+class AccountUnavailable(InvalidNafaqahRequest):
+    """The account is not in this household, is archived or is not in SAR (HTTP 422)."""
+
+    code = "account_unavailable"
+
+
+class AccountForbidden(NafaqahForbidden):
+    """Not his own personal account, a shared pool for a non-admin, or the wife picking one (HTTP 403)."""
+
+    code = "account_forbidden"
+
+
+class InsufficientFunds(NafaqahError):
+    """The account does not hold the amount (HTTP 409), as transfer_between_accounts refuses."""
+
+    code = "insufficient_funds"
+
+
 # ─── Money ────────────────────────────────────────────────────────────────────
 
 def _decimal(value: Any) -> Decimal:
@@ -612,6 +632,13 @@ def _map_db_error(exc: Exception) -> Exception:
     guard = account_deletion_guard_error(exc)
     if guard is not None:
         return AccountPendingDeletion(str(guard), guard.code)
+    # Migration 20261105001300 (a repayment from an account).
+    if hint == "account_unavailable":
+        return AccountUnavailable("This account cannot be used in this household.")
+    if hint == "account_forbidden":
+        return AccountForbidden("You cannot pay from this account.")
+    if hint == "insufficient_funds":
+        return InsufficientFunds("This account does not hold the amount.")
     # Migration 20261105001200 (the former member record): every refusal carries a HINT.
     if hint == "debt_not_found":
         return DebtNotFound("No such record in this household.")
@@ -663,13 +690,15 @@ def get_reimbursement_ledger(ctx: FamilyContext, wife_id: str) -> Dict[str, Any]
         .eq("nafaqah_class", WIFE_REIMBURSABLE)
         .execute()
     ).data or []
+    # Every column: transfer_id exists once 20261105001300 has run, and is read only if present.
     repayments = (
         client.table("spouse_reimbursements")
-        .select("id, amount, payment_method, notes, recorded_by, paid_by_user_id, created_at")
+        .select("*")
         .eq("household_id", ctx.household_id)
         .eq("wife_user_id", wife_id)
         .execute()
     ).data or []
+    paid_from = _transfer_sources(client, [r.get("transfer_id") for r in repayments])
 
     history: List[Dict[str, Any]] = [
         {
@@ -691,6 +720,10 @@ def get_reimbursement_ledger(ctx: FamilyContext, wife_id: str) -> Dict[str, Any]
             "notes": r.get("notes"),
             "recorded_by": r.get("recorded_by"),
             "timestamp": r.get("created_at"),
+            # Whether it moved money in the app, and from which account (the app names it only
+            # when the viewer can see that account).
+            "moved_balance": bool(r.get("transfer_id")),
+            "account_id": paid_from.get(str(r.get("transfer_id"))) if r.get("transfer_id") else None,
         }
         for r in repayments
     ]
@@ -707,6 +740,17 @@ def get_reimbursement_ledger(ctx: FamilyContext, wife_id: str) -> Dict[str, Any]
     }
 
 
+def _transfer_sources(client, transfer_ids: Iterable[Any]) -> Dict[str, Optional[str]]:
+    """{transfer id: the account it was paid from} for the repayments that moved money."""
+    ids = sorted({str(t) for t in transfer_ids if t})
+    if not ids:
+        return {}
+    rows = (
+        client.table("account_transfers").select("id, from_account_id").in_("id", ids).execute()
+    ).data or []
+    return {str(r.get("id")): (str(r["from_account_id"]) if r.get("from_account_id") else None) for r in rows}
+
+
 def record_reimbursement(
     ctx: FamilyContext,
     actor_id: str,
@@ -714,8 +758,18 @@ def record_reimbursement(
     amount: Any,
     payment_method: str = "cash",
     notes: Optional[str] = None,
+    account_id: Optional[str] = None,
+    request_key: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Record a (partial or full) repayment by the husband; overpayment is rejected."""
+    """
+    Record a (partial or full) repayment by the husband; overpayment is rejected.
+
+    ``account_id`` (migration 20261105001300) is the account he pays from: the database debits it
+    and, when the wife has a personal account in the app, credits hers by the same amount, as one
+    transfer; no budget moves. Without it ("not tracked in the app") only the amount and method are
+    recorded. ``request_key`` is the client's idempotency key, required with an account; the same
+    key again is answered as the first time. Neither given: the call old app builds made.
+    """
     _require_family(ctx)
     _require_member(ctx, actor_id)
     if not can_record_reimbursement(ctx, actor_id):
@@ -729,28 +783,35 @@ def record_reimbursement(
     if method not in PAYMENT_METHODS:
         raise InvalidNafaqahRequest(f"Unsupported payment method {payment_method!r}.")
     clean_notes = (notes or "").strip()[:500] or None
+    if account_id:
+        if ctx.is_wife(actor_id):
+            raise AccountForbidden("The wife confirms a repayment without an account; the payer picks it.")
+        if not request_key:
+            raise InvalidNafaqahRequest("A request key is required to pay from an account.")
 
-    # Early, friendly rejection; the RPC re-checks under an advisory lock.
     outstanding_h = to_halalas(get_reimbursement_ledger(ctx, wife_id)["balance"]["outstanding"])
     amount_h = to_halalas(value)
-    if amount_h > outstanding_h:
+    # Early, friendly rejection; the RPC re-checks under an advisory lock. With a request key the
+    # database decides, so a retry of a tap that already paid everything is answered as a replay.
+    if not request_key and amount_h > outstanding_h:
         raise OverpaymentError(
             "Reimbursement exceeds the outstanding balance.", outstanding=halalas_to_sar(outstanding_h)
         )
 
+    params: Dict[str, Any] = {
+        "p_household_id": ctx.household_id,
+        "p_wife_user_id": wife_id,
+        # Exact decimal text ("123.40"): PostgREST casts it to the numeric parameter.
+        "p_amount": format(value, "f"),
+        "p_payment_method": method,
+        "p_notes": clean_notes,
+        "p_actor_user_id": actor_id,
+    }
+    # Either field: the 8-argument function. Neither: the 6-argument one old app builds reach.
+    if account_id or request_key:
+        params.update({"p_account_id": account_id or None, "p_request_key": request_key})
     try:
-        res = get_client().rpc(
-            "record_spouse_reimbursement",
-            {
-                "p_household_id": ctx.household_id,
-                "p_wife_user_id": wife_id,
-                # Exact decimal text ("123.40"): PostgREST casts it to the numeric parameter.
-                "p_amount": format(value, "f"),
-                "p_payment_method": method,
-                "p_notes": clean_notes,
-                "p_actor_user_id": actor_id,
-            },
-        ).execute()
+        res = get_client().rpc("record_spouse_reimbursement", params).execute()
     except Exception as exc:
         mapped = _map_db_error(exc)
         if mapped is exc:
@@ -762,24 +823,31 @@ def record_reimbursement(
         before_h, after_h = to_halalas(data["outstanding_before"]), to_halalas(data["outstanding_after"])
     else:
         before_h, after_h = outstanding_h, outstanding_h - amount_h
+    paid_from = data.get("account_id") if account_id else None
     return {
         "status": "success",
         "reimbursement_id": data.get("reimbursement_id"),
         "household_id": ctx.household_id,
         "wife_user_id": wife_id,
         "paid_by_user_id": ctx.husband_id,
-        "amount": halalas_to_sar(amount_h),
-        "payment_method": method,
+        # A replay answers with what the first tap stored.
+        "amount": halalas_to_sar(to_halalas(data["amount"])) if "amount" in data else halalas_to_sar(amount_h),
+        "payment_method": data.get("payment_method") or method,
         "outstanding_before": halalas_to_sar(before_h),
         "outstanding_after": halalas_to_sar(after_h),
+        "replayed": bool(data.get("replayed")),
+        "account_id": str(paid_from) if paid_from else None,
+        "balance_moved": bool(paid_from),
+        "wife_account_credited": bool(paid_from) and bool(data.get("wife_account_credited")),
     }
 
 
 # ─── A former member's record (migration 20261105001200) ───────────────────────
 #
 # When a wife deletes her account, the purge keeps one anonymised record per household of what
-# the husband still owed her. It is closed by a payment (an amount and a payment method, exactly
-# as record_reimbursement takes them: no account, budget or transaction moves) or by her waiver
+# the husband still owed her. It is closed by a payment (an amount, a payment method and the
+# account it is paid from, as record_reimbursement takes them: his account goes down, no budget or
+# transaction moves; "not tracked in the app" moves nothing) or by her waiver, which moves nothing
 # (إبراء). Both go through SECURITY DEFINER RPCs with the verified caller; the checks here only
 # answer early and clearly, the database decides.
 
@@ -811,6 +879,8 @@ def _debt_view(row: Dict[str, Any], events: List[Dict[str, Any]]) -> Dict[str, A
                 "payment_method": e.get("payment_method"),
                 "remaining_after": halalas_to_sar(to_halalas(e.get("remaining_after"))),
                 "created_at": e.get("created_at"),
+                "moved_balance": bool(e.get("transfer_id")),
+                "account_id": e.get("account_id"),
             }
             for e in ordered
         ],
@@ -829,14 +899,18 @@ def list_former_member_debts(ctx: FamilyContext) -> List[Dict[str, Any]]:
     if not rows:
         return []
     ids = [str(r["id"]) for r in rows if r.get("id")]
+    # Every column: transfer_id exists once 20261105001300 has run, and is read only if present.
     events = (
         client.table("former_member_debt_events")
-        .select("debt_id, kind, amount, payment_method, remaining_after, created_at")
+        .select("*")
         .in_("debt_id", ids)
         .execute()
     ).data or []
+    paid_from = _transfer_sources(client, [e.get("transfer_id") for e in events])
     by_debt: Dict[str, List[Dict[str, Any]]] = {}
     for e in events:
+        transfer = e.get("transfer_id")
+        e = {**e, "account_id": paid_from.get(str(transfer)) if transfer else None}
         by_debt.setdefault(str(e.get("debt_id")), []).append(e)
     rows.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
     return [_debt_view(r, by_debt.get(str(r.get("id")), [])) for r in rows]
@@ -896,8 +970,12 @@ def record_former_member_debt_payment(
     amount: Any,
     payment_method: str,
     request_key: str,
+    account_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """A partial or full payment of a former member's record; never more than remains."""
+    """A partial or full payment of a former member's record; never more than remains.
+
+    ``account_id`` (migration 20261105001300): the account it is paid from, debited by the amount;
+    she is gone, so nothing is credited. Without it only the amount and method are recorded."""
     _require_debt_manager(ctx, actor_id)
     value = parse_sar_amount(amount, allow_zero=False)
     method = _norm(payment_method) or "cash"
@@ -911,7 +989,7 @@ def record_former_member_debt_payment(
     if to_halalas(value) > remaining_h:
         raise OverpaymentError("Payment exceeds what remains of this record.", outstanding=halalas_to_sar(remaining_h))
 
-    data = _rpc_mapped("record_former_member_debt_payment", {
+    params: Dict[str, Any] = {
         "p_household_id": ctx.household_id,
         "p_debt_id": debt_id,
         # Exact decimal text ("123.40"): PostgREST casts it to the numeric parameter.
@@ -919,8 +997,13 @@ def record_former_member_debt_payment(
         "p_payment_method": method,
         "p_request_key": request_key,
         "p_actor_user_id": actor_id,
-    })
+    }
+    # With an account: the 7-argument function. Without: the 6-argument one, as before.
+    if account_id:
+        params["p_account_id"] = account_id
+    data = _rpc_mapped("record_former_member_debt_payment", params)
     data = data if isinstance(data, dict) else {}
+    paid_from = data.get("account_id") if account_id else None
     return {
         "status": data.get("status"),
         "replayed": bool(data.get("replayed")),
@@ -929,6 +1012,8 @@ def record_former_member_debt_payment(
         "amount": halalas_to_sar(to_halalas(data.get("amount", value))),
         "payment_method": data.get("payment_method") or method,
         "remaining": halalas_to_sar(to_halalas(data.get("remaining"))),
+        "account_id": str(paid_from) if paid_from else None,
+        "balance_moved": bool(paid_from),
     }
 
 
