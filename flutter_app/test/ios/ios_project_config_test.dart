@@ -627,6 +627,23 @@ void main() {
       }
     });
 
+    test('Urdu permission text opens with one RLM, so iOS lays it out right to left', () {
+      // Each starts with the Latin name; without the mark iOS takes the paragraph direction
+      // from that first strong character and shows the Urdu sentence left to right.
+      const rlm = '‏';
+      final ur = _strings('ur');
+      for (final key in _usageKeys) {
+        expect(ur[key], startsWith('${rlm}Qawam Money '), reason: key);
+        expect(rlm.allMatches(ur[key]!), hasLength(1), reason: key);
+      }
+      for (final key in ['CFBundleDisplayName', 'CFBundleName']) {
+        expect(ur[key], 'Qawam Money', reason: key);
+      }
+      for (final lang in ['en', 'ar']) {
+        expect(_strings(lang).values.where((value) => value.contains(rlm)), isEmpty, reason: lang);
+      }
+    });
+
     test('Urdu uses the Latin app name, with no Urdu-script form', () {
       final table = _strings('ur');
       for (final key in _usageKeys) {

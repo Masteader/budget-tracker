@@ -1,6 +1,6 @@
 "CFBundleDisplayName" = "Qawam Money";
 "CFBundleName" = "Qawam Money";
-"NSCameraUsageDescription" = "Qawam Money رسیدوں کی تصویر لینے اور ان کے QR کوڈ اسکین کرنے کے لیے کیمرا استعمال کرتا ہے تاکہ آپ اپنے اخراجات درج کر سکیں۔";
-"NSPhotoLibraryUsageDescription" = "Qawam Money آپ کو فوٹو لائبریری سے رسیدوں کی تصاویر منتخب کرنے دیتا ہے تاکہ آپ ان سے اپنے اخراجات درج کر سکیں۔";
-"NSMicrophoneUsageDescription" = "Qawam Money آواز کے ذریعے اخراجات درج کرتے وقت آپ کی بات سننے کے لیے مائیکروفون استعمال کرتا ہے۔";
-"NSSpeechRecognitionUsageDescription" = "Qawam Money آپ کی آواز کو متن میں بدلتا ہے تاکہ آپ بول کر اخراجات درج کر سکیں۔ آواز پر Apple کی اسپیچ ریکگنیشن سروس کارروائی کرتی ہے۔";
+"NSCameraUsageDescription" = "‏Qawam Money رسیدوں کی تصویر لینے اور ان کے QR کوڈ اسکین کرنے کے لیے کیمرا استعمال کرتا ہے تاکہ آپ اپنے اخراجات درج کر سکیں۔";
+"NSPhotoLibraryUsageDescription" = "‏Qawam Money آپ کو فوٹو لائبریری سے رسیدوں کی تصاویر منتخب کرنے دیتا ہے تاکہ آپ ان سے اپنے اخراجات درج کر سکیں۔";
+"NSMicrophoneUsageDescription" = "‏Qawam Money آواز کے ذریعے اخراجات درج کرتے وقت آپ کی بات سننے کے لیے مائیکروفون استعمال کرتا ہے۔";
+"NSSpeechRecognitionUsageDescription" = "‏Qawam Money آپ کی آواز کو متن میں بدلتا ہے تاکہ آپ بول کر اخراجات درج کر سکیں۔ آواز پر Apple کی اسپیچ ریکگنیشن سروس کارروائی کرتی ہے۔";
