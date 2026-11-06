@@ -20,7 +20,7 @@ def test_dependent_beneficiary_treated_as_shared_family_expense(monkeypatch):
             "notes": "Clothes for Sarah"
         }
     ]
-    mock_client.table.return_value.select.return_value.eq.return_value.gte.return_value.order.return_value.execute.return_value.data = mock_txs
+    mock_client.table.return_value.select.return_value.eq.return_value.gte.return_value.order.return_value.range.return_value.execute.return_value.data = mock_txs
     monkeypatch.setattr("settlement_engine.get_client", lambda: mock_client)
 
     with patch("settlement_engine.load_family_context") as mock_ctx:

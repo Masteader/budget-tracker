@@ -73,7 +73,7 @@ def test_simulate_affordability(mock_client, mock_flexible, mock_forecast):
 def test_partner_settlement_calculation(mock_client):
     mock_table = MagicMock()
     mock_client.return_value.table.return_value = mock_table
-    mock_table.select.return_value.eq.return_value.gte.return_value.order.return_value.execute.return_value.data = [
+    mock_table.select.return_value.eq.return_value.gte.return_value.order.return_value.range.return_value.execute.return_value.data = [
         {"id": "1", "amount": 300.0, "category_code": "OPEX-GROCERY", "spent_by": "me", "timestamp": "2026-09-28T10:00:00Z"},
         {"id": "2", "amount": 100.0, "category_code": "OPEX-GROCERY", "spent_by": "partner", "timestamp": "2026-09-28T12:00:00Z"},
     ]
@@ -96,7 +96,7 @@ def test_partner_settlement_2d_attribution(mock_client):
     mock_table = MagicMock()
     mock_client.return_value.table.return_value = mock_table
     # public.transactions has no paid_by/beneficiary columns: attribution lives in raw_sms tags.
-    mock_table.select.return_value.eq.return_value.gte.return_value.order.return_value.execute.return_value.data = [
+    mock_table.select.return_value.eq.return_value.gte.return_value.order.return_value.range.return_value.execute.return_value.data = [
         # 1. Groceries 300 SAR for both, I paid -> Partner owes me 150 (50%)
         {"id": "1", "amount": 300.0, "category_code": "OPEX-GROCERY", "notes": "Chat: test | PaidBy: me | Beneficiary: both", "timestamp": "2026-09-28T10:00:00Z"},
         # 2. Partner dress 200 SAR, I paid -> Partner owes me 200 (100%)
