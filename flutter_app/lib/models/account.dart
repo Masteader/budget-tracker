@@ -238,6 +238,65 @@ class Account {
   }
 }
 
+/// The purposes the Nafaqah RPCs label their transfers with
+/// (`account_transfers.purpose`, migration 20261105001300). None names anyone.
+const String kMovementWifeRepayment = 'wife_repayment';
+const String kMovementWifeRepaymentReversal = 'wife_repayment_reversal';
+const String kMovementFormerMemberPayment = 'former_member_payment';
+const String kMovementFormerMemberPaymentReversal = 'former_member_payment_reversal';
+
+/// One change to an account's balance by an `account_transfers` row, as the
+/// account's own history shows it (review R1-13): a transfer between two
+/// accounts, or a repayment to the wife, a payment of a former member's
+/// record, or the reversal of either, which leave or return to one account
+/// only (the other side is NULL) and carry a [purpose].
+class AccountMovement {
+  final String id;
+  final String? fromAccountId;
+  final String? toAccountId;
+  final double amount;
+  final double fee;
+  final DateTime? timestamp;
+
+  /// One of the `kMovement*` purposes, or null for a transfer between accounts.
+  final String? purpose;
+
+  const AccountMovement({
+    required this.id,
+    this.fromAccountId,
+    this.toAccountId,
+    required this.amount,
+    this.fee = 0,
+    this.timestamp,
+    this.purpose,
+  });
+
+  /// Money came into [accountId] (a credit) rather than left it.
+  bool isInto(String accountId) => toAccountId == accountId && fromAccountId != accountId;
+
+  /// What [accountId]'s balance moved by: plus for money in, minus the amount
+  /// and its fee for money out.
+  double changeFor(String accountId) => isInto(accountId) ? amount : -(amount + fee);
+
+  factory AccountMovement.fromMap(Map<String, dynamic> map) {
+    String? id(Object? v) {
+      final s = v?.toString() ?? '';
+      return s.isEmpty ? null : s;
+    }
+
+    double num0(Object? v) => v is num ? v.toDouble() : double.tryParse('${v ?? ''}') ?? 0.0;
+    return AccountMovement(
+      id: map['id']?.toString() ?? '',
+      fromAccountId: id(map['from_account_id']),
+      toAccountId: id(map['to_account_id']),
+      amount: num0(map['amount']),
+      fee: num0(map['fee']),
+      timestamp: DateTime.tryParse(map['timestamp']?.toString() ?? ''),
+      purpose: id(map['purpose']),
+    );
+  }
+}
+
 /// Inter-account fund transfers with optional fees.
 class AccountTransfer {
   final String id;

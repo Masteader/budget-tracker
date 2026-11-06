@@ -138,6 +138,27 @@ class AccountService {
     }).eq('id', accountId);
   }
 
+  /// The latest movements of [accountId]'s balance by transfers, newest first
+  /// (review R1-13): transfers in and out, and the repayments to the wife or
+  /// of a former member's record and their reversals, which the database
+  /// labels (`purpose`). Read-only, under the household's read rule.
+  Future<List<AccountMovement>> listMovements({
+    required String householdId,
+    required String accountId,
+    int limit = 50,
+  }) async {
+    final client = _safeClient;
+    if (client == null) return const [];
+    final rows = await client
+        .from('account_transfers')
+        .select('id, from_account_id, to_account_id, amount, fee, timestamp, purpose')
+        .eq('household_id', householdId)
+        .or('from_account_id.eq.$accountId,to_account_id.eq.$accountId')
+        .order('timestamp', ascending: false)
+        .limit(limit);
+    return rows.map((r) => AccountMovement.fromMap(Map<String, dynamic>.from(r))).toList();
+  }
+
   /// Execute an inter-account fund transfer via atomic database RPC.
   Future<AccountTransfer> transferFunds({
     required String householdId,

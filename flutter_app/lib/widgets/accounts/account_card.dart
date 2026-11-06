@@ -6,6 +6,7 @@ import '../../models/account.dart';
 import '../../theme/app_themes.dart';
 import '../../core/widgets/three_d_surface_card.dart';
 import '../../core/widgets/three_d_icon_puck.dart';
+import 'account_activity_sheet.dart';
 import 'account_transfer_sheet.dart';
 import 'reconcile_balance_dialog.dart';
 
@@ -262,15 +263,18 @@ class AccountCard extends StatelessWidget {
             ),
           ),
 
-          // Bottom Bar Actions (Reconcile & Transfer Out)
+          // Bottom Bar Actions (Reconcile, Activity & Transfer Out)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               color: context.subtleCardBg,
               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // Wraps at narrow widths and large text rather than overflowing.
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 4,
               children: [
                 TextButton.icon(
                   onPressed: () {
@@ -282,6 +286,17 @@ class AccountCard extends StatelessWidget {
                   },
                   icon: const Icon(Icons.tune_rounded, size: 15),
                   label: Text(context.tr('reconcile'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  style: TextButton.styleFrom(
+                    foregroundColor: context.textSecondary,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  ),
+                ),
+                // What moved this balance, the repayments it paid included (review R1-13).
+                TextButton.icon(
+                  key: ValueKey('acct_activity_${account.id}'),
+                  onPressed: () => AccountActivitySheet.show(context, account: account, householdId: householdId),
+                  icon: const Icon(Icons.receipt_long_outlined, size: 15),
+                  label: Text(context.tr('acct_activity_action'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                   style: TextButton.styleFrom(
                     foregroundColor: context.textSecondary,
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
