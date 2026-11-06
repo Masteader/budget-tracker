@@ -4,7 +4,7 @@
 --              58_wife_repayment_requests_and_reversals.sql, 59_wife_repayment_review_fixes.sql,
 --              60_wife_repayment_r2_fixes.sql, 61_wife_repayment_r2_concurrency.sql,
 --              62_wife_repayment_r3_fixes.sql, 63_wife_allowance_access.sql,
---              64_wife_personal_privacy.sql
+--              64_wife_personal_privacy.sql, 65_wife_transfer_privacy.sql
 -- Rule: .agents/rules/02-saudi-fintech-and-islamic-compliance.md, family mode rules 2 and 3
 --
 -- Owner decisions 2026-11-06. Repaying the wife for shared things she paid (wife_reimbursable):
@@ -71,6 +71,15 @@
 --      co-wife, even an admin, nor an ordinary member (the read policy of transactions through
 --      nafaqah_caller_sees_allowances, the receipts read policy through nafaqah_receipt_hidden).
 --      Every other transaction keeps its household-wide read. Who writes them is unchanged.
+--   9. Transfers of her personal account and plans of her personal purchases (owner decision
+--      2026-11-06, section 10e) are read by the same people: an account_transfers row with either
+--      side a personal account of a wife of the household (her own rows by her, a transfer between
+--      two wives' accounts by both), and an installment plan linked to a purchase only by whoever
+--      reads that purchase (its schedule and payments are the plan's columns). Never by a co-wife,
+--      even an admin, nor an ordinary member (the read policy of account_transfers through
+--      personal_owner_ids and nafaqah_caller_hidden_wives, the installment_plans policy through the
+--      transactions read policy).
+--      Balances are unchanged; a repayment's transfer never involves her account.
 --
 -- What is owed is advances less repayments plus reversals (nafaqah_net_repaid); pending requests
 -- never count. get_spouse_reimbursement_balance, former_member_debt_outstanding (the purge's
@@ -111,8 +120,8 @@
 -- get_spouse_reimbursement_balance (20261020300000) and its policy spouse_reimbursements_select_household,
 -- get_member_allowance_status, set_member_allowance and their table's policy
 -- member_allowances_select_household (20261020300000),
--- the read policies transactions_select_household and storage's receipts_select_household
--- (20261020100000),
+-- the read policies transactions_select_household, storage's receipts_select_household,
+-- transfers_select_household (account_transfers) and the installment_plans policy (20261020100000),
 -- guard_wife_reimbursable_ledger and remove_nafaqah_ledger_on_membership_end (20261020900000),
 -- former_member_debt_outstanding and prepare_account_purge (20261105001200). Re-running 001200 after
 -- this file puts its own versions back (an amount-only 6-argument payment among them, which both
@@ -152,6 +161,20 @@
 --               WHERE m.user_id = (SELECT auth.uid())
 --           ));
 --   DROP INDEX public.idx_transactions_wife_personal_receipt;
+--   DROP POLICY transfers_select_household ON public.account_transfers;
+--   CREATE POLICY transfers_select_household ON public.account_transfers
+--       FOR SELECT TO authenticated
+--       USING (household_id = (SELECT public.get_auth_user_household_id()));
+--   DROP POLICY "Allow household members full access to installment_plans" ON public.installment_plans;
+--   CREATE POLICY "Allow household members full access to installment_plans" ON public.installment_plans
+--       FOR ALL TO authenticated
+--       USING (household_id = (SELECT public.get_auth_user_household_id()))
+--       WITH CHECK (household_id = (SELECT public.get_auth_user_household_id()));
+--   DROP TRIGGER trg_account_transfers_personal_owners ON public.account_transfers;
+--   DROP TRIGGER trg_users_forget_transfer_owner ON public.users;
+--   ALTER TABLE public.account_transfers DROP COLUMN personal_owner_ids;
+--   DROP FUNCTION public.nafaqah_transfer_personal_owners(), public.nafaqah_personal_owners_of(uuid, uuid),
+--     public.nafaqah_forget_transfer_owner();
 --   DROP FUNCTION public.request_spouse_reimbursement(uuid, numeric, text, uuid, uuid),
 --     public.cancel_spouse_reimbursement_request(uuid, uuid, uuid),
 --     public.decline_spouse_reimbursement_request(uuid, uuid, text, uuid),
@@ -170,6 +193,8 @@
 --     public.nafaqah_may_repay(uuid, uuid),
 --     public.nafaqah_refuse_account_delete(),
 --     public.nafaqah_receipt_hidden(text),
+--     public.nafaqah_caller_hidden_wives(),
+--     public.nafaqah_caller_wife_id(),
 --     public.nafaqah_caller_sees_allowances(),
 --     public.nafaqah_may_see_allowances(uuid, uuid);
 --   Then run these CREATE OR REPLACE statements: record_spouse_reimbursement,
@@ -191,7 +216,8 @@
 --   (Their indexes go with the columns.) Balances already moved stay moved: the money did leave his
 --   account; the transfers stay in account_transfers as ordinary history. Data lost: requests and
 --   their outcomes, the ledger's links to the transfers, its request keys and stored outstanding
---   figures, and the transfers' labels. paid_by_user_id keeps whoever paid (a co-admin, say), where
+--   figures, the transfers' labels and who owned their personal sides (personal_owner_ids).
+--   paid_by_user_id keeps whoever paid (a co-admin, say), where
 --   the old record_spouse_reimbursement wrote the husband. The keys this file's calls claimed stay
 --   in 001200's nafaqah_request_keys (ids only): 001200's own calls keep refusing them.
 -- ============================================================================
@@ -2226,7 +2252,161 @@ CREATE POLICY receipts_select_household ON storage.objects
         )
         AND NOT public.nafaqah_receipt_hidden(name));
 
+-- 10e. Transfers of her personal account, plans of her personal purchases (owner decision 2026-11-06)
+-- Read by the same people as her personal purchases (10d): she herself, her husband, and an admin
+-- of the household who is not a wife. A co-wife (even an admin) and an ordinary member read none.
+--   * account_transfers: a row with either side a personal (not shared) account owned by a wife
+--     of the household: no amount, account, note or row. She reads the rows of her own accounts
+--     (one between two wives' accounts is read by both). The other side's balance is unchanged and
+--     read as before (a pool's by every member); only the row leaves its history for the others.
+--     A repayment (his account or a pool to no account) never involves her account: unchanged.
+--     Replaces 20261020100000's transfers_select_household.
+--   * installment_plans: a plan linked to a purchase (original_transaction_id) is read by whoever
+--     reads that purchase under transactions_select_household (10d), so a plan of her personal
+--     purchase follows it: its shop, amounts, dates, schedule (next_due_at) and payments
+--     (paid_installments) are columns of the plan. An unlinked plan, and one of any other purchase,
+--     stay household-wide. A caller who does not read a plan cannot pick it to edit or delete it;
+--     the insert check is unchanged. Replaces the USING half of 20261020100000's policy (its name is
+--     kept for the rollback; it covers every command, as before).
+--
+-- Whose accounts a transfer touched is kept on the row (personal_owner_ids: the owners of its
+-- personal sides when it was made), so the read policy compares two small arrays per row and looks
+-- nothing up. It stays when an account is later deleted (its side becomes NULL), so the row stays
+-- hers. An account's owner and pool flag are never changed by a client (20261019100000 grants
+-- neither column); the server re-owns only pools, which the column never holds. Whether an owner
+-- is a wife is read at the time of the read, so a wife who leaves the household is no longer one
+-- (as her purchases become household expenses then).
+
+ALTER TABLE public.account_transfers ADD COLUMN IF NOT EXISTS personal_owner_ids uuid[];
+COMMENT ON COLUMN public.account_transfers.personal_owner_ids IS
+    'Owners of the personal (not shared) accounts on either side when the transfer was made (20261105001300, 10e). Set by trg_account_transfers_personal_owners; the read policy hides a row with a wife''s from a co-wife and an ordinary member.';
+
+-- The owners of the personal accounts among these (none for a pool or no account).
+CREATE OR REPLACE FUNCTION public.nafaqah_personal_owners_of(p_from uuid, p_to uuid)
+RETURNS uuid[]
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    SELECT COALESCE(array_agg(DISTINCT a.owner_user_id ORDER BY a.owner_user_id), '{}'::uuid[])
+    FROM public.accounts a
+    WHERE a.id IN (p_from, p_to)
+      AND a.is_shared_pool = false
+      AND a.owner_user_id IS NOT NULL;
+$$;
+
+CREATE OR REPLACE FUNCTION public.nafaqah_transfer_personal_owners()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    NEW.personal_owner_ids := public.nafaqah_personal_owners_of(NEW.from_account_id, NEW.to_account_id);
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_account_transfers_personal_owners ON public.account_transfers;
+CREATE TRIGGER trg_account_transfers_personal_owners
+    BEFORE INSERT ON public.account_transfers
+    FOR EACH ROW EXECUTE FUNCTION public.nafaqah_transfer_personal_owners();
+
+-- Existing rows, once (a second run finds none left to fill and changes nothing).
+UPDATE public.account_transfers t
+SET personal_owner_ids = public.nafaqah_personal_owners_of(t.from_account_id, t.to_account_id)
+WHERE t.personal_owner_ids IS NULL;
+ALTER TABLE public.account_transfers ALTER COLUMN personal_owner_ids SET DEFAULT '{}'::uuid[];
+ALTER TABLE public.account_transfers ALTER COLUMN personal_owner_ids SET NOT NULL;
+
+-- A deleted person's id leaves the column with them, as user_id does (ON DELETE SET NULL): the
+-- purge's "nothing names them" holds, and an out-of-band delete leaves no id behind either. It runs
+-- before their row goes, while their accounts (which cascade from it) still exist, so the rows it
+-- rewrites still satisfy their account keys. Once they are gone they are no wife of the household,
+-- so no read changes.
+CREATE OR REPLACE FUNCTION public.nafaqah_forget_transfer_owner()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    UPDATE public.account_transfers t
+    SET personal_owner_ids = array_remove(t.personal_owner_ids, OLD.id)
+    WHERE OLD.id = ANY (t.personal_owner_ids);
+    RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_users_forget_transfer_owner ON public.users;
+CREATE TRIGGER trg_users_forget_transfer_owner
+    BEFORE DELETE ON public.users
+    FOR EACH ROW EXECUTE FUNCTION public.nafaqah_forget_transfer_owner();
+
+-- The wives of the caller's household whose transfers the caller does not read: every wife but the
+-- caller, and none for whoever sees allowances (10c). Who the wives of the household are is no
+-- secret to its members (users_select_household); nothing of their accounts is returned.
+CREATE OR REPLACE FUNCTION public.nafaqah_caller_hidden_wives()
+RETURNS uuid[]
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    SELECT CASE
+        WHEN public.nafaqah_caller_sees_allowances() THEN '{}'::uuid[]
+        ELSE COALESCE((SELECT array_agg(m.user_id ORDER BY m.user_id)
+                       FROM public.household_memberships m
+                       WHERE m.household_id = public.get_auth_user_household_id()
+                         AND m.financial_role = 'spouse'
+                         AND m.user_id IS DISTINCT FROM auth.uid()), '{}'::uuid[])
+    END;
+$$;
+
+-- The caller when she is a wife of her household (she reads the rows of her own accounts), else NULL.
+CREATE OR REPLACE FUNCTION public.nafaqah_caller_wife_id()
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    SELECT m.user_id
+    FROM public.household_memberships m
+    WHERE m.household_id = public.get_auth_user_household_id()
+      AND m.user_id = auth.uid()
+      AND m.financial_role = 'spouse';
+$$;
+
+-- Both halves of the caller run once per statement (InitPlans); per row, two array tests.
+DROP POLICY IF EXISTS transfers_select_household ON public.account_transfers;
+CREATE POLICY transfers_select_household ON public.account_transfers
+    FOR SELECT TO authenticated
+    USING (household_id = (SELECT public.get_auth_user_household_id())
+           AND (NOT (personal_owner_ids && (SELECT public.nafaqah_caller_hidden_wives()))
+                OR (SELECT public.nafaqah_caller_wife_id()) = ANY (personal_owner_ids)));
+
+-- The plan follows its purchase: the transactions read policy (10d) decides, under the caller's own
+-- RLS, so there is one rule for both and no helper that names a hidden row.
+DROP POLICY IF EXISTS "Allow household members full access to installment_plans" ON public.installment_plans;
+CREATE POLICY "Allow household members full access to installment_plans" ON public.installment_plans
+    FOR ALL TO authenticated
+    USING (household_id = (SELECT public.get_auth_user_household_id())
+           AND (original_transaction_id IS NULL
+                OR EXISTS (SELECT 1 FROM public.transactions t WHERE t.id = installment_plans.original_transaction_id)))
+    WITH CHECK (household_id = (SELECT public.get_auth_user_household_id()));
+
 -- 11. Privileges ---------------------------------------------------------------------------------
+-- Her transfers: the read policy runs the caller's two helpers as the caller; the others are internal.
+REVOKE ALL ON FUNCTION public.nafaqah_caller_hidden_wives() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.nafaqah_caller_hidden_wives() TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.nafaqah_caller_wife_id() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.nafaqah_caller_wife_id() TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.nafaqah_personal_owners_of(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.nafaqah_personal_owners_of(uuid, uuid) TO service_role;
+REVOKE ALL ON FUNCTION public.nafaqah_transfer_personal_owners() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.nafaqah_forget_transfer_owner() FROM PUBLIC, anon, authenticated;
 -- Her receipt photo: the storage policy runs the helper as the caller.
 REVOKE ALL ON FUNCTION public.nafaqah_receipt_hidden(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.nafaqah_receipt_hidden(text) TO authenticated, service_role;
