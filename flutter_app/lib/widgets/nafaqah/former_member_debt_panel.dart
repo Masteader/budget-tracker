@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/widgets/three_d_icon_puck.dart';
 import '../../core/widgets/three_d_surface_card.dart';
 import '../../l10n/app_localizations.dart';
+import '../../models/account.dart';
 import '../../models/money.dart';
 import '../../models/nafaqah.dart';
 import '../../services/api_service.dart';
@@ -13,14 +14,17 @@ import '../../theme/app_themes.dart';
 import '../../utils/failure_log.dart';
 import '../app_snackbar.dart';
 import '../settings/settings_section.dart' show isLargeText;
+import 'repayment_account_picker.dart';
 
 /// Records a payment of a former member's record. [requestKey] is the same for
 /// every retry from one sheet, so the server records the payment once.
+/// [accountId] is the account it is paid from (null: not tracked in the app).
 typedef FormerMemberDebtPaymentRecorder = Future<FormerMemberDebtReceipt> Function({
   required String debtId,
   required double amount,
   required String paymentMethod,
   required String requestKey,
+  required String? accountId,
 });
 
 /// Records her waiver (إبراء) of what remains of a former member's record.
@@ -47,6 +51,8 @@ bool _isStale(Object error) => error is NafaqahApiException && (error.code == 'd
 String formerMemberDebtErrorText(BuildContext context, Object error, {required double remaining, required bool payment}) {
   final fallback = context.tr(payment ? 'settle_record_failed_msg' : 'fmd_waive_failed');
   if (error is! NafaqahApiException) return fallback;
+  final accountKey = repaymentAccountErrorKey(error.code);
+  if (accountKey != null) return context.tr(accountKey);
   switch (error.code) {
     case 'overpayment':
       return context.trArgs('fmd_pay_over', {'amount': context.sar(error.outstanding ?? remaining)});
@@ -354,6 +360,7 @@ class _FormerDebtHistorySheet extends StatelessWidget {
               ? context.tr('fmd_history_waiver')
               : context.trArgs('fmd_history_payment', {'method': _methodLabel(context, e.paymentMethod)}),
           amount: '−${context.sar(e.amount)}',
+          source: e.isWaiver ? null : repaymentSourceLine(context, movedBalance: e.movedBalance, accountId: e.accountId),
           date: e.createdAt == null ? null : l10n.date(e.createdAt!, 'd MMM yyyy'),
         ),
     ];
@@ -395,13 +402,26 @@ class _HistoryRow extends StatelessWidget {
   final String amount;
   final String? date;
 
-  const _HistoryRow({required this.icon, required this.color, required this.title, required this.amount, this.date});
+  /// Which account a payment came from, or that it moved no balance.
+  final String? source;
+
+  const _HistoryRow({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.amount,
+    this.date,
+    this.source,
+  });
 
   @override
   Widget build(BuildContext context) {
     final titleText = Text(title, style: TextStyle(color: context.textPrimary, fontSize: 13));
     final amountText = Text(amount, style: GoogleFonts.outfit(color: color, fontWeight: FontWeight.w700));
-    final dateText = date == null ? null : Text(date!, style: TextStyle(color: context.textSecondary, fontSize: 11));
+    final details = [if (source != null) source!, if (date != null) date!];
+    final dateText = details.isEmpty
+        ? null
+        : Text(details.join(' · '), style: TextStyle(color: context.textSecondary, fontSize: 11));
     final large = isLargeText(context);
     return Padding(
       padding: const EdgeInsetsDirectional.symmetric(vertical: 10),
@@ -462,11 +482,17 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
   String _paymentMethod = 'stc_pay';
   bool _isSubmitting = false;
 
+  /// An account id or [kRepayNotTracked]; null until chosen.
+  String? _source;
+
   @override
   void initState() {
     super.initState();
     _amountCtrl = TextEditingController(text: widget.remaining.toStringAsFixed(2));
     _requestKey = const Uuid().v4();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) RepaymentSources.ensureLoaded(context, widget.householdId);
+    });
   }
 
   @override
@@ -475,16 +501,30 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
     super.dispose();
   }
 
-  Future<bool> _confirm(double amount) async {
+  Future<bool> _confirm(double amount, Account? account) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         scrollable: true,
         backgroundColor: ctx.cardBg,
         title: Text(ctx.tr('fmd_pay_confirm_title'), style: TextStyle(color: ctx.textPrimary, fontWeight: FontWeight.bold)),
-        content: Text(
-          ctx.trArgs('fmd_pay_confirm_body', {'amount': ctx.sar(amount), 'method': _methodLabel(ctx, _paymentMethod)}),
-          style: TextStyle(color: ctx.textPrimary),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              ctx.trArgs('fmd_pay_confirm_body', {'amount': ctx.sar(amount), 'method': _methodLabel(ctx, _paymentMethod)}),
+              style: TextStyle(color: ctx.textPrimary),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              account != null
+                  ? ctx.trArgs('repay_effect_former', {'account': account.name, 'amount': ctx.sar(amount)})
+                  : ctx.tr('repay_not_tracked_desc'),
+              key: const ValueKey('fmd_confirm_source'),
+              style: TextStyle(color: ctx.textSecondary, fontSize: 12),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -525,22 +565,60 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
       );
       return;
     }
-    if (!await _confirm(amt) || !mounted) return;
+    // Where the money comes from (rule 02): required, so balances stay right.
+    final sources = RepaymentSources.of(context, widget.householdId, listen: false);
+    final choice = sources.effective(_source);
+    if (choice == null) {
+      AppSnackBar.showError(context, context.tr('repay_source_required'), title: context.tr('settle_record_failed'));
+      return;
+    }
+    final account = sources.accountFor(choice);
+    if (choice != kRepayNotTracked && account == null) {
+      setState(() => _source = null);
+      AppSnackBar.showError(context, context.tr('repay_err_unavailable'), title: context.tr('settle_record_failed'));
+      return;
+    }
+    if (account != null && _halalas(account.balance) < _halalas(amt)) {
+      AppSnackBar.showError(
+        context,
+        context.trArgs('repay_err_insufficient', {
+          'account': account.name,
+          'balance': context.sar(account.balance),
+          'amount': context.sar(amt),
+        }),
+        title: context.tr('settle_record_failed'),
+      );
+      return;
+    }
+    if (!await _confirm(amt, account) || !mounted) return;
 
     var method = _paymentMethod;
     var recorded = amt;
     setState(() => _isSubmitting = true);
     try {
       final record = widget.recordPayment ??
-          ({required String debtId, required double amount, required String paymentMethod, required String requestKey}) =>
+          ({
+            required String debtId,
+            required double amount,
+            required String paymentMethod,
+            required String requestKey,
+            required String? accountId,
+          }) =>
               ApiService.instance.recordFormerMemberDebtPayment(
                 widget.householdId,
                 debtId: debtId,
                 amount: amount,
                 paymentMethod: paymentMethod,
                 requestKey: requestKey,
+                accountId: accountId,
               );
-      final receipt = await record(debtId: widget.debtId, amount: amt, paymentMethod: method, requestKey: _requestKey);
+      final receipt = await record(
+        debtId: widget.debtId,
+        amount: amt,
+        paymentMethod: method,
+        requestKey: _requestKey,
+        accountId: account?.id,
+      );
       // A retry of a lost answer replays what the server stored first, whatever was typed since.
       if (receipt.amount > 0) recorded = receipt.amount;
       if (_knownMethods.contains(receipt.paymentMethod)) method = receipt.paymentMethod!;
@@ -557,6 +635,8 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
         return;
       }
       if (_isStale(e)) widget.onRefresh();
+      // The balance or the account changed since the sheet opened.
+      if (e is NafaqahApiException && repaymentAccountErrorKey(e.code) != null) sources.provider?.refresh(force: true);
       AppSnackBar.showError(
         context,
         formerMemberDebtErrorText(context, e, remaining: widget.remaining, payment: true),
@@ -565,10 +645,14 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
       return;
     }
 
+    // His balance changed on the server: the accounts show it now.
+    if (account != null) sources.provider?.refresh(force: true);
     if (!mounted) return;
     AppSnackBar.showSuccess(
       context,
-      context.trArgs('fmd_paid_success', {'amount': context.sar(recorded), 'method': _methodLabel(context, method)}),
+      account != null
+          ? context.trArgs('repay_paid_from', {'amount': context.sar(recorded), 'account': account.name})
+          : context.trArgs('fmd_paid_success', {'amount': context.sar(recorded), 'method': _methodLabel(context, method)}),
       title: context.tr('settle_recorded_title'),
       icon: Icons.check_circle_outline,
     );
@@ -581,6 +665,7 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
     final full = widget.remaining.toStringAsFixed(2);
     // The fill is fixed rose gold in both modes, so one ink works for both.
     const onGold = VelvetBurgundyColors.primaryLight;
+    final sources = RepaymentSources.of(context, widget.householdId);
     return Container(
       padding: EdgeInsetsDirectional.fromSTEB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
       decoration: BoxDecoration(
@@ -643,6 +728,17 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
                 _methodChip('cash', Icons.payments_rounded),
               ],
             ),
+            const SizedBox(height: 16),
+            if (!sources.loaded)
+              Center(child: CircularProgressIndicator(strokeWidth: 2, color: context.accentText))
+            else
+              RepaymentAccountPicker(
+                accounts: sources.accounts,
+                selected: sources.effective(_source),
+                amount: parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0,
+                formerMember: true,
+                onChanged: (id) => setState(() => _source = id),
+              ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,

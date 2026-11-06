@@ -34,7 +34,7 @@ void main() {
         canRecordReimbursement: true,
       ),
       onReimbursed: () => confirmed = true,
-      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId}) async =>
+      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String? accountId, required String requestKey}) async =>
           throw Exception('HTTP 500'),
     )));
     await tester.pumpAndSettle();

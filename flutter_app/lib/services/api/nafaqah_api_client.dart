@@ -31,12 +31,17 @@ class NafaqahApiClient {
   }
 
   /// Records a partial or full repayment; returns the outstanding balance after it.
+  /// [accountId] is the account it is paid from (his balance goes down, hers up
+  /// when she has one); null when not tracked in the app, which moves nothing.
+  /// [requestKey] is made once per sheet: a retry is recorded once.
   Future<double> recordReimbursement({
     required String householdId,
     required double amount,
     required String paymentMethod,
     String? wifeUserId,
     String? notes,
+    String? accountId,
+    String? requestKey,
   }) async {
     final res = await baseClient.post(
       '/households/$householdId/nafaqah/reimbursements',
@@ -45,6 +50,8 @@ class NafaqahApiClient {
         'payment_method': paymentMethod,
         if (wifeUserId != null && wifeUserId.isNotEmpty) 'wife_user_id': wifeUserId,
         if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+        if (accountId != null && accountId.isNotEmpty) 'account_id': accountId,
+        if (requestKey != null && requestKey.isNotEmpty) 'request_key': requestKey,
       },
       shouldSign: false,
     );
@@ -54,15 +61,17 @@ class NafaqahApiClient {
   static String _debtPath(String householdId, String debtId) =>
       '/households/$householdId/nafaqah/former-member-debts/${Uri.encodeComponent(debtId)}';
 
-  /// Records a payment of what was owed to a former member: an amount and a
-  /// method, never an account (no balance or budget changes). [requestKey] is
-  /// made once per sheet and reused on every retry, so the server records it once.
+  /// Records a payment of what was owed to a former member: an amount, a method
+  /// and [accountId], the account it is paid from (its balance goes down; null
+  /// when not tracked in the app). No budget changes. [requestKey] is made once
+  /// per sheet and reused on every retry, so the server records it once.
   Future<FormerMemberDebtReceipt> recordFormerMemberDebtPayment({
     required String householdId,
     required String debtId,
     required double amount,
     required String paymentMethod,
     required String requestKey,
+    String? accountId,
   }) async {
     final res = await baseClient.post(
       '${_debtPath(householdId, debtId)}/payments',
@@ -70,6 +79,7 @@ class NafaqahApiClient {
         'amount': double.parse(amount.toStringAsFixed(2)),
         'payment_method': paymentMethod,
         'request_key': requestKey,
+        if (accountId != null && accountId.isNotEmpty) 'account_id': accountId,
       },
       shouldSign: false,
     );

@@ -291,6 +291,8 @@ class ApiService {
     required String paymentMethod,
     String? wifeUserId,
     String? notes,
+    String? accountId,
+    String? requestKey,
   }) =>
       nafaqah.recordReimbursement(
         householdId: householdId,
@@ -298,15 +300,19 @@ class ApiService {
         paymentMethod: paymentMethod,
         wifeUserId: wifeUserId,
         notes: notes,
+        accountId: accountId,
+        requestKey: requestKey,
       );
 
-  /// A payment of what a deleted wife was owed (husband or admin; no account).
+  /// A payment of what a deleted wife was owed (husband or admin), from
+  /// [accountId] or not tracked in the app (null).
   Future<FormerMemberDebtReceipt> recordFormerMemberDebtPayment(
     String householdId, {
     required String debtId,
     required double amount,
     required String paymentMethod,
     required String requestKey,
+    String? accountId,
   }) =>
       nafaqah.recordFormerMemberDebtPayment(
         householdId: householdId,
@@ -314,6 +320,7 @@ class ApiService {
         amount: amount,
         paymentMethod: paymentMethod,
         requestKey: requestKey,
+        accountId: accountId,
       );
 
   /// Her waiver (إبراء) of what remains of a former member's record.

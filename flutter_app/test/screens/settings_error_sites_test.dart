@@ -336,7 +336,7 @@ void main() {
         FamilyReimbursementCard(
           householdId: 'hh',
           summary: _familySummary(),
-          recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId}) async => throw const _RawException(),
+          recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String? accountId, required String requestKey}) async => throw const _RawException(),
         ),
         lang: 'en',
       ));

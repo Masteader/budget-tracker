@@ -330,6 +330,7 @@ void main() {
             required double amount,
             required String paymentMethod,
             required String requestKey,
+            required String? accountId,
           }) async {
             calls.add((debtId: debtId, amount: amount, paymentMethod: paymentMethod, requestKey: requestKey));
             final failure = failWith?.call(calls.length);
@@ -460,6 +461,7 @@ void main() {
           required double amount,
           required String paymentMethod,
           required String requestKey,
+          required String? accountId,
         }) async {
           n++;
           if (n == 1) throw const NafaqahApiException('network', 'timeout', noResponse: true);
@@ -736,6 +738,7 @@ void main() {
                 required double amount,
                 required String paymentMethod,
                 required String requestKey,
+                required String? accountId,
               }) async =>
                   const FormerMemberDebtReceipt(),
               waiveFormerMemberDebt: ({required String debtId, required String requestKey}) async => const FormerMemberDebtReceipt(),

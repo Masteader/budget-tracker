@@ -340,12 +340,19 @@ class FormerMemberDebtEvent {
   final double remainingAfter;
   final DateTime? createdAt;
 
+  /// Whether the payment moved money out of an account in the app (migration
+  /// 20261105001300), and which; null from a server that does not say.
+  final bool? movedBalance;
+  final String? accountId;
+
   const FormerMemberDebtEvent({
     required this.kind,
     required this.amount,
     this.paymentMethod,
     this.remainingAfter = 0.0,
     this.createdAt,
+    this.movedBalance,
+    this.accountId,
   });
 
   bool get isWaiver => kind == 'waiver';
@@ -356,6 +363,8 @@ class FormerMemberDebtEvent {
         paymentMethod: map['payment_method'] as String?,
         remainingAfter: _num(map['remaining_after']),
         createdAt: _date(map['created_at']),
+        movedBalance: map['moved_balance'] as bool?,
+        accountId: map['account_id']?.toString(),
       );
 }
 
@@ -429,6 +438,9 @@ class FormerMemberDebtReceipt {
   final String? paymentMethod;
   final double remaining;
 
+  /// The account the payment came out of; null when not tracked in the app.
+  final String? accountId;
+
   const FormerMemberDebtReceipt({
     this.status,
     this.replayed = false,
@@ -437,6 +449,7 @@ class FormerMemberDebtReceipt {
     this.amount = 0.0,
     this.paymentMethod,
     this.remaining = 0.0,
+    this.accountId,
   });
 
   factory FormerMemberDebtReceipt.fromMap(Map<String, dynamic> map) => FormerMemberDebtReceipt(
@@ -447,6 +460,7 @@ class FormerMemberDebtReceipt {
         amount: _num(map['amount'] ?? map['waived_amount']),
         paymentMethod: map['payment_method'] as String?,
         remaining: _num(map['remaining']),
+        accountId: map['account_id']?.toString(),
       );
 }
 
@@ -566,6 +580,11 @@ class NafaqahLedgerEntry {
   final String? paymentMethod;
   final String? notes;
 
+  /// A repayment: whether it moved money out of an account in the app
+  /// (migration 20261105001300), and which; null from a server that does not say.
+  final bool? movedBalance;
+  final String? accountId;
+
   const NafaqahLedgerEntry({
     required this.type,
     required this.id,
@@ -574,6 +593,8 @@ class NafaqahLedgerEntry {
     this.merchant,
     this.paymentMethod,
     this.notes,
+    this.movedBalance,
+    this.accountId,
   });
 
   bool get isAdvance => type == 'advance';
@@ -586,6 +607,8 @@ class NafaqahLedgerEntry {
         merchant: map['merchant'] as String?,
         paymentMethod: map['payment_method'] as String?,
         notes: map['notes'] as String?,
+        movedBalance: map['moved_balance'] as bool?,
+        accountId: map['account_id']?.toString(),
       );
 }
 
@@ -645,6 +668,10 @@ class NafaqahApiException implements Exception {
       'debt_closed',
       'debt_not_found',
       'request_key_reused',
+      // Migration 20261105001300: the account a repayment is paid from.
+      'account_unavailable',
+      'account_forbidden',
+      'insufficient_funds',
     };
     if (stateCodes.contains(detailCode)) {
       code = detailCode!;

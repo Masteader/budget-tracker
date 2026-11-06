@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../../utils/failure_log.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/widgets/three_d_surface_card.dart';
 import '../../core/widgets/three_d_icon_puck.dart';
 import '../../l10n/app_localizations.dart';
+import '../../models/account.dart';
 import '../../models/models.dart';
 import '../../models/money.dart';
 import '../../models/nafaqah.dart';
@@ -15,6 +17,7 @@ import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
 import '../card_error_state.dart';
 import '../nafaqah/former_member_debt_panel.dart';
+import '../nafaqah/repayment_account_picker.dart';
 import '../nafaqah/wife_allowance_card.dart';
 import '../settings/settings_section.dart' show isLargeText;
 
@@ -27,10 +30,14 @@ typedef ReimbursementRecorder = Future<Map<String, dynamic>> Function(Reimbursem
 typedef NafaqahSummaryLoader = Future<NafaqahSummary> Function(String householdId);
 
 /// Records a repayment to the wife and returns the outstanding balance after it.
+/// [accountId] is the account it is paid from (null: not tracked in the app);
+/// [requestKey] is the same for every retry from one sheet.
 typedef NafaqahReimbursementRecorder = Future<double> Function({
   required double amount,
   required String paymentMethod,
   required String wifeUserId,
+  required String? accountId,
+  required String requestKey,
 });
 
 /// Loads one wife's ledger (advances and repayments).
@@ -279,6 +286,8 @@ class _ReimbursementPanel extends StatelessWidget {
         householdId: householdId,
         wifeUserId: wife.id,
         totalOwed: wife.reimbursement.outstanding,
+        // The payer picks the account; the wife confirms what she received.
+        payerView: !summary.callerIsWife,
         recordReimbursement: recordReimbursement,
         onConfirmed: onReimbursed,
       ),
@@ -654,13 +663,20 @@ class _LedgerHistorySheetState extends State<_LedgerHistorySheet> {
                     final title = e.isAdvance
                         ? context.trArgs('nafaqah_history_advance', {'merchant': e.merchant ?? context.tr('merchant_generic')})
                         : context.trArgs('nafaqah_history_reimbursement', {'method': _methodLabel(context, e.paymentMethod)});
+                    final source = e.isAdvance
+                        ? null
+                        : repaymentSourceLine(context, movedBalance: e.movedBalance, accountId: e.accountId);
+                    final details = [
+                      if (source != null) source,
+                      if (e.timestamp != null) l10n.date(e.timestamp!, 'd MMM yyyy'),
+                    ];
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(e.isAdvance ? Icons.north_east_rounded : Icons.south_west_rounded, color: color),
                       title: Text(title, style: TextStyle(color: context.textPrimary, fontSize: 13)),
-                      subtitle: e.timestamp == null
+                      subtitle: details.isEmpty
                           ? null
-                          : Text(l10n.date(e.timestamp!, 'd MMM yyyy'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                          : Text(details.join(' · '), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                       trailing: Text(
                         '${e.isAdvance ? '+' : '−'}${context.sar(e.amount)}',
                         style: GoogleFonts.outfit(color: color, fontWeight: FontWeight.w700),
@@ -686,11 +702,15 @@ class _ReimburseBottomSheet extends StatefulWidget {
   final VoidCallback onConfirmed;
   final NafaqahReimbursementRecorder? recordReimbursement;
 
+  /// The husband or an admin paying: the account it comes out of is chosen.
+  final bool payerView;
+
   const _ReimburseBottomSheet({
     required this.householdId,
     required this.wifeUserId,
     required this.totalOwed,
     required this.onConfirmed,
+    this.payerView = true,
     this.recordReimbursement,
   });
 
@@ -703,10 +723,22 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
   String _paymentMethod = 'stc_pay';
   bool _isSubmitting = false;
 
+  /// An account id or [kRepayNotTracked]; null until chosen.
+  String? _source;
+
+  /// One key per opening of the sheet, reused by every retry from it.
+  late final String _requestKey;
+
   @override
   void initState() {
     super.initState();
     _amountCtrl = TextEditingController(text: widget.totalOwed.toStringAsFixed(2));
+    _requestKey = const Uuid().v4();
+    if (widget.payerView) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) RepaymentSources.ensureLoaded(context, widget.householdId);
+      });
+    }
   }
 
   @override
@@ -733,17 +765,61 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
       return;
     }
 
+    // Where the money comes from (rule 02): required of the payer, so balances stay right.
+    Account? account;
+    RepaymentSources? sources;
+    if (widget.payerView) {
+      sources = RepaymentSources.of(context, widget.householdId, listen: false);
+      final choice = sources.effective(_source);
+      if (choice == null) {
+        AppSnackBar.showError(context, context.tr('repay_source_required'), title: context.tr('settle_record_failed'));
+        return;
+      }
+      account = sources.accountFor(choice);
+      if (choice != kRepayNotTracked && account == null) {
+        setState(() => _source = null);
+        AppSnackBar.showError(context, context.tr('repay_err_unavailable'), title: context.tr('settle_record_failed'));
+        return;
+      }
+      if (account != null && (account.balance * 100).round() < (amt * 100).round()) {
+        AppSnackBar.showError(
+          context,
+          context.trArgs('repay_err_insufficient', {
+            'account': account.name,
+            'balance': context.sar(account.balance),
+            'amount': context.sar(amt),
+          }),
+          title: context.tr('settle_record_failed'),
+        );
+        return;
+      }
+    }
+
     setState(() => _isSubmitting = true);
     try {
       final record = widget.recordReimbursement ??
-          ({required double amount, required String paymentMethod, required String wifeUserId}) =>
+          ({
+            required double amount,
+            required String paymentMethod,
+            required String wifeUserId,
+            required String? accountId,
+            required String requestKey,
+          }) =>
               ApiService.instance.recordNafaqahReimbursement(
                 widget.householdId,
                 amount: amount,
                 paymentMethod: paymentMethod,
                 wifeUserId: wifeUserId,
+                accountId: accountId,
+                requestKey: requestKey,
               );
-      await record(amount: amt, paymentMethod: _paymentMethod, wifeUserId: widget.wifeUserId);
+      await record(
+        amount: amt,
+        paymentMethod: _paymentMethod,
+        wifeUserId: widget.wifeUserId,
+        accountId: account?.id,
+        requestKey: _requestKey,
+      );
     } catch (e) {
       // Never report a repayment as recorded when the server rejected it.
       logFailure('FamilyReimbursement.record', e);
@@ -762,7 +838,11 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
       }
       setState(() => _isSubmitting = false);
       final String message;
-      if (e is NafaqahApiException && e.code == 'overpayment') {
+      if (e is NafaqahApiException && repaymentAccountErrorKey(e.code) != null) {
+        // The balance or the account changed since the sheet opened.
+        sources?.provider?.refresh(force: true);
+        message = context.tr(repaymentAccountErrorKey(e.code)!);
+      } else if (e is NafaqahApiException && e.code == 'overpayment') {
         message = context.trArgs('nafaqah_err_overpayment', {'amount': context.sar(widget.totalOwed)});
       } else if (e is NafaqahApiException && e.code == 'forbidden') {
         message = context.tr('nafaqah_err_forbidden');
@@ -779,10 +859,14 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
       return;
     }
 
+    // His balance (and hers) changed on the server: the accounts show it now.
+    if (account != null) sources?.provider?.refresh(force: true);
     if (!mounted) return;
     AppSnackBar.showSuccess(
       context,
-      context.trArgs('settle_recorded_via', {'amount': context.sar(amt), 'method': context.tr('pay_method_$_paymentMethod')}),
+      account != null
+          ? context.trArgs('repay_paid_from', {'amount': context.sar(amt), 'account': account.name})
+          : context.trArgs('settle_recorded_via', {'amount': context.sar(amt), 'method': context.tr('pay_method_$_paymentMethod')}),
       title: context.tr('settle_recorded_title'),
       icon: Icons.check_circle_outline,
     );
@@ -795,6 +879,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
     final full = widget.totalOwed.toStringAsFixed(2);
     // The fill is fixed rose gold in both modes, so one ink works for both.
     const onGold = VelvetBurgundyColors.primaryLight;
+    final sources = widget.payerView ? RepaymentSources.of(context, widget.householdId) : null;
     return Container(
       padding: EdgeInsets.only(
         left: 20,
@@ -863,6 +948,21 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
               ],
             ),
             const SizedBox(height: 16),
+            if (sources != null) ...[
+              if (!sources.loaded)
+                Center(child: CircularProgressIndicator(strokeWidth: 2, color: context.accentText))
+              else
+                RepaymentAccountPicker(
+                  accounts: sources.accounts,
+                  selected: sources.effective(_source),
+                  amount: parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0,
+                  onChanged: (id) => setState(() => _source = id),
+                ),
+              const SizedBox(height: 16),
+            ] else ...[
+              Text(context.tr('repay_wife_note'), style: TextStyle(color: context.textSecondary, fontSize: 12)),
+              const SizedBox(height: 16),
+            ],
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 foregroundColor: context.textPrimary,
