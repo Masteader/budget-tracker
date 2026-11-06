@@ -349,7 +349,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Record Settlement Payment'));
       await tester.pumpAndSettle();
-      _expectFriendly(en.get('settle_record_failed_msg'));
+      // A failure that is not one of the API's answers may have been recorded:
+      // the sheet says so and offers a safe retry, never the raw text, and never
+      // "not recorded" (review R2-02).
+      _expectFriendly(en.get('repay_unconfirmed_hold'));
     });
 
     testWidgets('family reimbursement: history that fails to load is a load error (S8)', (tester) async {
