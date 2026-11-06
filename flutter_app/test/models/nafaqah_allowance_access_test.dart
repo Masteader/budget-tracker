@@ -47,6 +47,12 @@ void main() {
     expect(s.primaryWifeAllowance, 700);
   });
 
+  test('she is never offered her own, even under a role a server got wrong', () {
+    final s = _summary('member', 'sara', canSet: true, wives: ['sara']);
+    expect(s.canSetAllowanceFor(sara), isFalse);
+    expect(s.canSetAllowanceFor(huda), isTrue);
+  });
+
   test('an ordinary member sees no figure, whatever a server sends', () {
     final s = _summary('member', 'fahad', wives: ['sara'], allowanceOnly: ['huda']);
     expect(s.canSeeAllowanceOf(sara), isFalse);
