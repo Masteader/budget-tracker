@@ -1,7 +1,8 @@
 /// Helper function to enforce Islamic compliance for wife expenses:
 /// Wife personal allowance and wife reimbursable expenses must NEVER be linked
 /// to a household shared account. They may only be linked to the wife's OWN
-/// non-shared personal account (Rule 02 §3.2, §3.3, Rule 04 §4).
+/// non-shared personal account, or the wife account assigned to her (Rule 02
+/// §3.2, §3.3, Rule 04 §4).
 library;
 
 import 'account.dart';
@@ -17,5 +18,9 @@ String? accountForNafaqahClass(
 }) {
   if (cls != kWifePersonal && cls != kWifeReimbursable) return accountId;
   final acc = accounts.where((a) => a.id == accountId).firstOrNull;
-  return (acc != null && !acc.isSharedPool && acc.ownerUserId == spouseId) ? accountId : null;
+  if (acc == null || acc.isSharedPool) return null;
+  // Her own account, or the wife account her husband assigned to her
+  // (migration 20261105001300, section 12).
+  final hers = acc.isWifeAccount ? acc.assignedWifeId == spouseId : acc.ownerUserId == spouseId;
+  return hers ? accountId : null;
 }

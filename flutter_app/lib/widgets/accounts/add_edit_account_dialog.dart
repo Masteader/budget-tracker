@@ -183,7 +183,8 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
                 fillColor: context.inputBg,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              items: AccountType.values.map((t) {
+              // A wife account is made by her husband through its own action.
+              items: AccountType.values.where((t) => t != AccountType.wife || _type == AccountType.wife).map((t) {
                 return DropdownMenuItem<AccountType>(
                   value: t,
                   child: Row(

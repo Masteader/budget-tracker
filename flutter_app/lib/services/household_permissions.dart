@@ -27,10 +27,41 @@ class HouseholdPermissions {
       account.isSharedPool || account.accountType == AccountType.sharedPool;
 
   /// Money leaves a shared pool only by an admin; a personal account only by its owner.
+  /// Nothing is transferred out of a wife account (migration 20261105001300,
+  /// section 12), nor paid from it: she spends from it ([canSpendFrom]).
   static bool canWithdrawFrom(Account account, {required String? currentUserId, required bool isAdmin}) {
+    if (account.isWifeAccount) return false;
     if (isSharedPool(account)) return isAdmin;
     return currentUserId != null && account.ownerUserId == currentUserId;
   }
+
+  /// A wife account the viewer spends from: hers (assigned to her), not
+  /// archived, in SAR. Only her personal purchases and her advances go on it;
+  /// her husband funds it and does not spend from it.
+  static bool isHerWifeAccount(Account account, {required String? currentUserId}) =>
+      account.isWifeAccount &&
+      !account.isArchived &&
+      account.currency.toUpperCase() == 'SAR' &&
+      currentUserId != null &&
+      account.assignedWifeId == currentUserId;
+
+  /// Where the viewer may move money to: every account they see but their own
+  /// wife account (she does not fund it; its owner or her ledger's managers do).
+  static List<Account> transferDestinations(List<Account> accounts, {required String? currentUserId}) =>
+      accounts.where((a) => !(a.isWifeAccount && a.assignedWifeId == currentUserId)).toList();
+
+  /// The usable wife accounts of [wifeId] in [householdId], as the viewer sees
+  /// them (her own; all of hers for her husband).
+  static List<Account> wifeAccountsOf(List<Account> accounts, {required String householdId, required String? wifeId}) =>
+      accounts
+          .where((a) =>
+              a.isWifeAccount &&
+              a.householdId == householdId &&
+              !a.isArchived &&
+              a.currency.toUpperCase() == 'SAR' &&
+              wifeId != null &&
+              a.assignedWifeId == wifeId)
+          .toList();
 
   /// Source accounts the user may move money out of.
   static List<Account> withdrawableAccounts(

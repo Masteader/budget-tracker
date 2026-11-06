@@ -291,6 +291,7 @@ class ApiService {
     required String paymentMethod,
     required String accountId,
     required String requestKey,
+    String? wifeAccountId,
     String? wifeUserId,
     String? notes,
   }) =>
@@ -302,7 +303,12 @@ class ApiService {
         notes: notes,
         accountId: accountId,
         requestKey: requestKey,
+        wifeAccountId: wifeAccountId,
       );
+
+  /// Her husband makes her a wife account; returns its id.
+  Future<String> createWifeAccount(String householdId, {required String wifeUserId, required String name}) =>
+      nafaqah.createWifeAccount(householdId: householdId, wifeUserId: wifeUserId, name: name);
 
   /// Reverses a tracked repayment to the wife (husband or admin).
   Future<double> reverseNafaqahReimbursement(String householdId,
@@ -311,17 +317,25 @@ class ApiService {
 
   /// The wife's "I received X": a pending request.
   Future<void> createNafaqahReimbursementRequest(String householdId,
-          {required double amount, required String paymentMethod, required String requestKey}) =>
+          {required double amount, required String paymentMethod, required String requestKey, String? wifeAccountId}) =>
       nafaqah.createReimbursementRequest(
-          householdId: householdId, amount: amount, paymentMethod: paymentMethod, requestKey: requestKey);
+          householdId: householdId,
+          amount: amount,
+          paymentMethod: paymentMethod,
+          requestKey: requestKey,
+          wifeAccountId: wifeAccountId);
 
   Future<void> cancelNafaqahReimbursementRequest(String householdId, {required String requestId}) =>
       nafaqah.cancelReimbursementRequest(householdId: householdId, requestId: requestId);
 
   Future<double> approveNafaqahReimbursementRequest(String householdId,
-          {required String requestId, required String accountId, required String requestKey}) =>
+          {required String requestId, required String accountId, required String requestKey, String? wifeAccountId}) =>
       nafaqah.approveReimbursementRequest(
-          householdId: householdId, requestId: requestId, accountId: accountId, requestKey: requestKey);
+          householdId: householdId,
+          requestId: requestId,
+          accountId: accountId,
+          requestKey: requestKey,
+          wifeAccountId: wifeAccountId);
 
   Future<void> declineNafaqahReimbursementRequest(String householdId, {required String requestId, String? reason}) =>
       nafaqah.declineReimbursementRequest(householdId: householdId, requestId: requestId, reason: reason);

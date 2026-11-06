@@ -8,23 +8,33 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
+import '../../models/nafaqah.dart';
 import '../../services/account_service.dart';
+import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../../widgets/accounts/account_card.dart';
 import '../../widgets/accounts/account_transfer_sheet.dart';
 import '../../widgets/accounts/add_edit_account_dialog.dart';
 import '../../widgets/accounts/record_income_sheet.dart';
+import '../../widgets/nafaqah/wife_account_picker.dart';
 import '../../core/widgets/three_d_surface_card.dart';
 import '../../services/salary_cycle_service.dart';
 import '../analytics/income_spending_report_screen.dart';
 
 /// Screen displaying all user accounts, live balances, budget capacity statuses, and quick transfers.
+/// Loads the viewer's Nafaqah summary (who her husband is, the wives).
+typedef AccountsNafaqahLoader = Future<NafaqahSummary> Function(String householdId);
+
 class AccountsOverviewScreen extends StatefulWidget {
   final String householdId;
+
+  /// Defaults to the API; injectable for tests.
+  final AccountsNafaqahLoader? loadNafaqah;
 
   const AccountsOverviewScreen({
     super.key,
     required this.householdId,
+    this.loadNafaqah,
   });
 
   @override
@@ -34,6 +44,33 @@ class AccountsOverviewScreen extends StatefulWidget {
 class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   bool _hideBalances = false;
   Map<String, double> _committedBudgets = {};
+
+  /// The family's Nafaqah summary: the husband creates the wives' wife
+  /// accounts here (migration 20261105001300, section 12). Null outside a
+  /// family, or before it loads.
+  NafaqahSummary? _nafaqah;
+
+  bool get _viewerIsHusband {
+    final s = _nafaqah;
+    return s != null && s.husbandId != null && s.callerUserId == s.husbandId && s.wives.isNotEmpty;
+  }
+
+  Future<void> _loadNafaqah() async {
+    try {
+      final loader = widget.loadNafaqah ?? ApiService.instance.getNafaqahSummary;
+      final summary = await loader(widget.householdId);
+      if (mounted) setState(() => _nafaqah = summary);
+    } catch (_) {
+      if (mounted) setState(() => _nafaqah = null);
+    }
+  }
+
+  Future<void> _addWifeAccount() async {
+    final summary = _nafaqah;
+    if (summary == null) return;
+    final made = await AddWifeAccountDialog.show(context, householdId: widget.householdId, wives: wifeChoicesOf(summary));
+    if (made && mounted) unawaited(_refreshAll());
+  }
 
   @override
   void initState() {
@@ -73,6 +110,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   }
 
   Future<void> _refreshAll() async {
+    unawaited(_loadNafaqah());
     try {
       await AccountService.instance.reconcileUnlinkedTransactions(
         widget.householdId,
@@ -224,6 +262,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
           final cash = accounts.where((a) => a.accountType == AccountType.cash && !a.isSharedPool).toList();
           final savings = accounts.where((a) => a.accountType == AccountType.savings && !a.isSharedPool).toList();
           final sharedPools = accounts.where((a) => a.isSharedPool || a.accountType == AccountType.sharedPool).toList();
+          final wifeAccounts = accounts.where((a) => a.isWifeAccount).toList();
 
           return RefreshIndicator(
             onRefresh: _refreshAll,
@@ -418,6 +457,24 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                   ...savings.map((a) => _buildCard(a)),
                   const SizedBox(height: 12),
                 ],
+
+                // 8. Wife accounts (section 12): hers to spend; his to fund and to add.
+                if (wifeAccounts.isNotEmpty || _viewerIsHusband) ...[
+                  _buildSectionHeader('💝 ${context.tr("wife_acc_section")}', wifeAccounts.length),
+                  ...wifeAccounts.map(_buildWifeAccount),
+                  if (_viewerIsHusband)
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: OutlinedButton.icon(
+                        key: const ValueKey('accounts_add_wife_account'),
+                        style: OutlinedButton.styleFrom(foregroundColor: context.accentText),
+                        onPressed: _addWifeAccount,
+                        icon: const Icon(Icons.favorite_border_rounded, size: 18),
+                        label: Text(context.tr('wife_acc_add_title')),
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                ],
               ],
             ),
           );
@@ -444,6 +501,35 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// A wife account: hers to spend (she sees "from your husband"), or, for
+  /// her husband, whose it is.
+  Widget _buildWifeAccount(Account account) {
+    String? currentUserId;
+    try {
+      currentUserId = context.read<HouseholdRoleProvider>().currentUserId;
+    } catch (_) {
+      currentUserId = null;
+    }
+    final hers = currentUserId != null && account.assignedWifeId == currentUserId;
+    final wifeName = _nafaqah?.wives.where((w) => w.id == account.assignedWifeId).firstOrNull?.displayName;
+    final caption = hers ? context.tr('wife_acc_yours') : wifeName;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (caption != null && caption.isNotEmpty)
+          Padding(
+            padding: const EdgeInsetsDirectional.only(start: 4, bottom: 4),
+            child: Text(
+              caption,
+              key: ValueKey('wife_acc_caption_${account.id}'),
+              style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+        _buildCard(account),
+      ],
     );
   }
 

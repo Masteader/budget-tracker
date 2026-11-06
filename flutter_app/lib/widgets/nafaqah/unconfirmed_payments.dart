@@ -54,5 +54,15 @@ class UnconfirmedPayment {
   /// The account it was paid from; null for her request, which moves nothing.
   final Account? account;
 
-  const UnconfirmedPayment({required this.requestKey, required this.amount, required this.method, this.account});
+  /// The wife account it credits (a repayment, an approval) or she named (her
+  /// request); null for a former member's payment.
+  final String? wifeAccountId;
+
+  const UnconfirmedPayment({
+    required this.requestKey,
+    required this.amount,
+    required this.method,
+    this.account,
+    this.wifeAccountId,
+  });
 }

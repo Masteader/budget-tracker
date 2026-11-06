@@ -19,6 +19,7 @@ import '../../models/account.dart';
 import '../../models/household_membership.dart';
 import '../../services/account_service.dart';
 import '../../services/api_service.dart';
+import '../../services/household_permissions.dart';
 import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
 import '../../utils/failure_log.dart';
@@ -247,10 +248,13 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
             _householdMembers.any((m) =>
                 m["id"] == _currentUserId && (m["role"] as String?)?.toLowerCase() == "admin");
         final currentUserId = _currentUserId;
+        // Her wife account too (migration 20261105001300, section 12): hers to
+        // spend on herself and on what she pays for the home.
         final debitable = list.where((a) =>
-            !a.isArchived &&
-            a.accountType.isOperatingPool &&
-            (a.ownerUserId == currentUserId || (a.isSharedPool && callerIsAdmin))
+            (!a.isArchived &&
+                a.accountType.isOperatingPool &&
+                (a.ownerUserId == currentUserId || (a.isSharedPool && callerIsAdmin))) ||
+            HouseholdPermissions.isHerWifeAccount(a, currentUserId: currentUserId)
         ).toList();
 
         setState(() {
@@ -487,6 +491,13 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         benId = 'household';
         spentBy = _viewerIsWife ? 'partner' : 'me';
       }
+    }
+
+    // Her wife account carries only her personal purchases and her advances
+    // (migration 20261105001300, section 12): say so before the server refuses.
+    if (nafaqahClass == null && _accounts.any((a) => a.id == _selectedAccountId && a.isWifeAccount)) {
+      AppSnackBar.showError(context, context.tr('wife_acc_spend_hint'));
+      return;
     }
 
     final String? rowAccountId = accountForNafaqahClass(

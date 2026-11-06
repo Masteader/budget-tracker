@@ -336,6 +336,10 @@ class ReimbursementRequest {
   final DateTime? createdAt;
   final DateTime? decidedAt;
 
+  /// The wife account she said it went into (the approval credits it unless
+  /// her husband picks another of hers).
+  final String? wifeAccountId;
+
   const ReimbursementRequest({
     required this.id,
     required this.amount,
@@ -344,6 +348,7 @@ class ReimbursementRequest {
     this.reason,
     this.createdAt,
     this.decidedAt,
+    this.wifeAccountId,
   });
 
   bool get isPending => status == kRequestPending;
@@ -356,6 +361,7 @@ class ReimbursementRequest {
         reason: (map['reason'] as String?)?.trim().isEmpty ?? true ? null : (map['reason'] as String).trim(),
         createdAt: _date(map['created_at']),
         decidedAt: _date(map['decided_at']),
+        wifeAccountId: map['wife_account_id']?.toString(),
       );
 
   static List<ReimbursementRequest> listFrom(Object? raw) => (raw is List ? raw : const [])
@@ -752,6 +758,10 @@ class NafaqahLedgerEntry {
   final bool? movedBalance;
   final String? accountId;
 
+  /// The wife account a repayment credited (a reversal: took back from); null
+  /// before the wife account (migration 20261105001300, section 12).
+  final String? wifeAccountId;
+
   /// 'payment' or 'reversal' (a repayment's reversing entry).
   final String kind;
 
@@ -771,6 +781,7 @@ class NafaqahLedgerEntry {
     this.notes,
     this.movedBalance,
     this.accountId,
+    this.wifeAccountId,
     this.kind = 'payment',
     this.reversed = false,
     this.canReverse = false,
@@ -789,6 +800,7 @@ class NafaqahLedgerEntry {
         notes: map['notes'] as String?,
         movedBalance: map['moved_balance'] as bool?,
         accountId: map['account_id']?.toString(),
+        wifeAccountId: map['wife_account_id']?.toString(),
         kind: map['kind']?.toString() ?? 'payment',
         reversed: map['reversed'] == true,
         canReverse: map['can_reverse'] == true,
@@ -860,6 +872,15 @@ const Set<String> kNafaqahErrorCodes = {
   'account_required',
   'request_key_required',
   'invalid_reason',
+  // Section 12: the wife account.
+  'wife_account_required',
+  'wife_account_invalid',
+  'wife_account_insufficient_funds',
+  'wife_account_forbidden',
+  'wife_account_has_history',
+  'not_a_wife',
+  'invalid_name',
+  'account_not_found',
 };
 
 class NafaqahApiException implements Exception {
@@ -899,6 +920,7 @@ class NafaqahApiException implements Exception {
     } else {
       code = 'network';
     }
+    // 'wife_account_insufficient_funds' sends what her account holds as `available`.
     final outstanding = detail is Map ? (detail['outstanding'] ?? detail['available']) : null;
     // `BaseApiClient.networkErrorKey`: a model does not depend on the API layer.
     return NafaqahApiException(

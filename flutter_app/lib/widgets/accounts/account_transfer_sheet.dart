@@ -128,9 +128,12 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
       final isAdmin = widget.isAdmin ?? roles?.isAdmin ?? false;
       final currentUserId = widget.currentUserId ?? roles?.currentUserId;
       final sources = HouseholdPermissions.withdrawableAccounts(list, currentUserId: currentUserId, isAdmin: isAdmin);
+      // Her own wife account is hers to spend, never to top up (its owner or
+      // her ledger's managers fund it: migration 20261105001300, section 12).
+      final destinations = HouseholdPermissions.transferDestinations(list, currentUserId: currentUserId);
       if (mounted) {
         setState(() {
-          _accounts = list;
+          _accounts = destinations;
           _sourceAccounts = sources;
           _sharedPoolsHidden = !isAdmin && list.any(HouseholdPermissions.isSharedPool);
           _isLoadingAccounts = false;

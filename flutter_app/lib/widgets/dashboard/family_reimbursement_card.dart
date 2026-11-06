@@ -19,6 +19,7 @@ import '../card_error_state.dart';
 import '../nafaqah/former_member_debt_panel.dart';
 import '../nafaqah/repayment_account_picker.dart';
 import '../nafaqah/unconfirmed_payments.dart';
+import '../nafaqah/wife_account_picker.dart';
 import '../nafaqah/wife_allowance_card.dart';
 import '../settings/settings_section.dart' show isLargeText;
 
@@ -41,6 +42,7 @@ typedef NafaqahReimbursementRecorder = Future<double> Function({
   required String wifeUserId,
   required String accountId,
   required String requestKey,
+  String? wifeAccountId,
 });
 
 /// Loads one wife's ledger (advances, repayments, reversals and her requests).
@@ -51,6 +53,7 @@ typedef NafaqahRequestCreator = Future<void> Function({
   required double amount,
   required String paymentMethod,
   required String requestKey,
+  String? wifeAccountId,
 });
 
 /// She cancels her own pending request.
@@ -62,6 +65,7 @@ typedef NafaqahRequestApprover = Future<double> Function({
   required String requestId,
   required String accountId,
   required String requestKey,
+  String? wifeAccountId,
 });
 
 /// The husband or an admin declines her request, with an optional reason.
@@ -288,6 +292,8 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
               declineRequest: widget.declineRequest,
               reverse: widget.reverseReimbursement,
               viewerIsWife: summary.callerIsWife,
+              viewerIsHusband: summary.callerUserId != null && summary.callerUserId == summary.husbandId,
+              wifeChoices: wifeChoicesOf(summary),
             ),
             onChanged: onChanged,
           ),
@@ -359,10 +365,19 @@ class _LedgerActions {
   /// R1-01), whatever the server says.
   final bool viewerIsWife;
 
+  /// The viewer is her husband: only he creates her wife account (migration
+  /// 20261105001300, section 12).
+  final bool viewerIsHusband;
+
+  /// The wives he may create a wife account for.
+  final List<WifeChoice> wifeChoices;
+
   const _LedgerActions({
     required this.householdId,
     required this.wifeUserId,
     this.viewerIsWife = false,
+    this.viewerIsHusband = false,
+    this.wifeChoices = const [],
     this.record,
     this.loadLedger,
     this.createRequest,
@@ -377,9 +392,17 @@ class _LedgerActions {
     required String paymentMethod,
     required String accountId,
     required String requestKey,
+    required String wifeAccountId,
   }) =>
       record != null
-          ? record!(amount: amount, paymentMethod: paymentMethod, wifeUserId: wifeUserId, accountId: accountId, requestKey: requestKey)
+          ? record!(
+              amount: amount,
+              paymentMethod: paymentMethod,
+              wifeUserId: wifeUserId,
+              accountId: accountId,
+              requestKey: requestKey,
+              wifeAccountId: wifeAccountId,
+            )
           : ApiService.instance.recordNafaqahReimbursement(
               householdId,
               amount: amount,
@@ -387,27 +410,46 @@ class _LedgerActions {
               wifeUserId: wifeUserId,
               accountId: accountId,
               requestKey: requestKey,
+              wifeAccountId: wifeAccountId,
             );
+
+  /// Opens "Add wife account" for her (her husband only); true once made.
+  Future<bool> createWifeAccount(BuildContext context) => AddWifeAccountDialog.show(
+        context,
+        householdId: householdId,
+        wives: wifeChoices.isEmpty ? [WifeChoice(wifeUserId, '')] : wifeChoices,
+        initialWifeId: wifeUserId,
+      );
 
   Future<NafaqahLedger> ledger() => loadLedger != null
       ? loadLedger!(householdId, wifeUserId)
       : ApiService.instance.getNafaqahLedger(householdId, wifeUserId: wifeUserId);
 
-  Future<void> ask({required double amount, required String paymentMethod, required String requestKey}) =>
+  Future<void> ask({
+    required double amount,
+    required String paymentMethod,
+    required String requestKey,
+    required String wifeAccountId,
+  }) =>
       createRequest != null
-          ? createRequest!(amount: amount, paymentMethod: paymentMethod, requestKey: requestKey)
-          : ApiService.instance
-              .createNafaqahReimbursementRequest(householdId, amount: amount, paymentMethod: paymentMethod, requestKey: requestKey);
+          ? createRequest!(amount: amount, paymentMethod: paymentMethod, requestKey: requestKey, wifeAccountId: wifeAccountId)
+          : ApiService.instance.createNafaqahReimbursementRequest(householdId,
+              amount: amount, paymentMethod: paymentMethod, requestKey: requestKey, wifeAccountId: wifeAccountId);
 
   Future<void> cancel(String requestId) => cancelRequest != null
       ? cancelRequest!(requestId: requestId)
       : ApiService.instance.cancelNafaqahReimbursementRequest(householdId, requestId: requestId);
 
-  Future<double> approve({required String requestId, required String accountId, required String requestKey}) =>
+  Future<double> approve({
+    required String requestId,
+    required String accountId,
+    required String requestKey,
+    required String wifeAccountId,
+  }) =>
       approveRequest != null
-          ? approveRequest!(requestId: requestId, accountId: accountId, requestKey: requestKey)
-          : ApiService.instance
-              .approveNafaqahReimbursementRequest(householdId, requestId: requestId, accountId: accountId, requestKey: requestKey);
+          ? approveRequest!(requestId: requestId, accountId: accountId, requestKey: requestKey, wifeAccountId: wifeAccountId)
+          : ApiService.instance.approveNafaqahReimbursementRequest(householdId,
+              requestId: requestId, accountId: accountId, requestKey: requestKey, wifeAccountId: wifeAccountId);
 
   Future<void> decline({required String requestId, String? reason}) => declineRequest != null
       ? declineRequest!(requestId: requestId, reason: reason)
@@ -1023,7 +1065,10 @@ class _RequestSheetState extends State<_RequestSheet> {
   /// What was sent when the answer was lost (review R1-06): the sheet keeps
   /// it, and its key, and offers to send exactly that again; reopened, it
   /// still does (UnconfirmedPayments).
-  ({double amount, String method})? _held;
+  ({double amount, String method, String? wifeAccount})? _held;
+
+  /// Her wife account it went into (section 12); null until chosen.
+  String? _wifeAccount;
 
   String get _slot => UnconfirmedPayments.requestSlot(widget.actions.householdId, widget.actions.wifeUserId);
 
@@ -1032,7 +1077,10 @@ class _RequestSheetState extends State<_RequestSheet> {
     super.initState();
     final pending = UnconfirmedPayments.of(_slot);
     _requestKey = pending?.requestKey ?? const Uuid().v4();
-    if (pending != null) _held = (amount: pending.amount, method: pending.method);
+    if (pending != null) _held = (amount: pending.amount, method: pending.method, wifeAccount: pending.wifeAccountId);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) RepaymentSources.ensureLoaded(context, widget.actions.householdId);
+    });
     final shown = pending?.amount ?? widget.available;
     _amountCtrl = TextEditingController(text: shown > 0 ? shown.toStringAsFixed(2) : '');
   }
@@ -1047,11 +1095,16 @@ class _RequestSheetState extends State<_RequestSheet> {
     final held = _held;
     final double amt;
     final String method;
+    final String? wifeAccount;
     if (held != null) {
       // The same request again, with the same key: the server keeps it once.
       amt = held.amount;
       method = held.method;
+      wifeAccount = held.wifeAccount;
     } else {
+      final mine = wifeAccountsFor(context,
+          householdId: widget.actions.householdId, wifeUserId: widget.actions.wifeUserId, listen: false);
+      wifeAccount = _wifeAccount ?? defaultWifeAccount(mine);
       final rounded = roundedMoneyTextIfRounded(_amountCtrl.text);
       if (rounded != null) setState(() => _amountCtrl.text = rounded);
       amt = parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0;
@@ -1065,10 +1118,16 @@ class _RequestSheetState extends State<_RequestSheet> {
             title: context.tr('settle_record_failed'));
         return;
       }
+      if (wifeAccount == null) {
+        AppSnackBar.showError(context, context.tr(mine.isEmpty ? 'wife_acc_err_required' : 'wife_acc_choose'),
+            title: context.tr('settle_record_failed'));
+        return;
+      }
     }
+    if (wifeAccount == null) return;
     setState(() => _isSubmitting = true);
     try {
-      await widget.actions.ask(amount: amt, paymentMethod: method, requestKey: _requestKey);
+      await widget.actions.ask(amount: amt, paymentMethod: method, requestKey: _requestKey, wifeAccountId: wifeAccount);
     } catch (e) {
       logFailure('NafaqahRequest.create', e);
       if (!mounted) return;
@@ -1077,8 +1136,9 @@ class _RequestSheetState extends State<_RequestSheet> {
         // It may be stored. The sheet stays open with what was sent and its
         // key; trying again is safe (review R1-06), also after reopening it
         // (review R2-02).
-        UnconfirmedPayments.hold(_slot, UnconfirmedPayment(requestKey: _requestKey, amount: amt, method: method));
-        setState(() => _held = (amount: amt, method: method));
+        UnconfirmedPayments.hold(
+            _slot, UnconfirmedPayment(requestKey: _requestKey, amount: amt, method: method, wifeAccountId: wifeAccount));
+        setState(() => _held = (amount: amt, method: method, wifeAccount: wifeAccount));
         widget.onSent();
         return;
       }
@@ -1131,6 +1191,18 @@ class _RequestSheetState extends State<_RequestSheet> {
             if (_held == null) setState(() => _paymentMethod = m);
           },
         ),
+        const SizedBox(height: 16),
+        Builder(builder: (context) {
+          final mine = wifeAccountsFor(context, householdId: widget.actions.householdId, wifeUserId: widget.actions.wifeUserId);
+          return WifeAccountPicker(
+            key: const ValueKey('req_wife_account'),
+            accounts: mine,
+            selected: _held?.wifeAccount ?? _wifeAccount ?? defaultWifeAccount(mine),
+            receiving: true,
+            locked: _held != null,
+            onChanged: (id) => setState(() => _wifeAccount = id),
+          );
+        }),
         if (_held != null) ...[
           const SizedBox(height: 12),
           const RepaymentUnconfirmedNote(key: ValueKey('req_unconfirmed')),
@@ -1188,6 +1260,11 @@ class _ApproveRequestSheetState extends State<_ApproveRequestSheet> {
   /// also after it is closed and reopened (UnconfirmedPayments).
   Account? _held;
 
+  /// The wife account it credits: hers as she named it, unless he picks
+  /// another of hers (section 12); and the one sent when the answer was lost.
+  String? _wifeAccount;
+  String? _heldWifeAccount;
+
   String get _slot => UnconfirmedPayments.approvalSlot(widget.householdId, widget.request.id);
 
   @override
@@ -1196,6 +1273,7 @@ class _ApproveRequestSheetState extends State<_ApproveRequestSheet> {
     final pending = UnconfirmedPayments.of(_slot);
     _requestKey = pending?.requestKey ?? const Uuid().v4();
     _held = pending?.account;
+    _heldWifeAccount = pending?.wifeAccountId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) RepaymentSources.ensureLoaded(context, widget.householdId);
     });
@@ -1208,10 +1286,20 @@ class _ApproveRequestSheetState extends State<_ApproveRequestSheet> {
     // balance may already show the payment, and the server decides.
     final account = _held ?? _chosenAccount(context, sources, _source, amt, onStale: () => setState(() => _source = null));
     if (account == null) return;
+    final hers = wifeAccountsFor(context, householdId: widget.householdId, wifeUserId: widget.actions.wifeUserId, listen: false);
+    final wifeAccount = _held != null
+        ? _heldWifeAccount
+        : _wifeAccount ?? defaultWifeAccount(hers, preferred: widget.request.wifeAccountId);
+    if (wifeAccount == null) {
+      AppSnackBar.showError(context, context.tr(hers.isEmpty ? 'wife_acc_err_required' : 'wife_acc_choose'),
+          title: context.tr('settle_record_failed'));
+      return;
+    }
 
     setState(() => _isSubmitting = true);
     try {
-      await widget.actions.approve(requestId: widget.request.id, accountId: account.id, requestKey: _requestKey);
+      await widget.actions.approve(
+          requestId: widget.request.id, accountId: account.id, requestKey: _requestKey, wifeAccountId: wifeAccount);
     } catch (e) {
       logFailure('NafaqahRequest.approve', e);
       if (!mounted) return;
@@ -1222,9 +1310,18 @@ class _ApproveRequestSheetState extends State<_ApproveRequestSheet> {
         // card reload (review R1-06).
         UnconfirmedPayments.hold(
           _slot,
-          UnconfirmedPayment(requestKey: _requestKey, amount: amt, method: widget.request.paymentMethod ?? 'cash', account: account),
+          UnconfirmedPayment(
+            requestKey: _requestKey,
+            amount: amt,
+            method: widget.request.paymentMethod ?? 'cash',
+            account: account,
+            wifeAccountId: wifeAccount,
+          ),
         );
-        setState(() => _held = account);
+        setState(() {
+          _held = account;
+          _heldWifeAccount = wifeAccount;
+        });
         sources.provider?.refresh(force: true);
         widget.onDone();
         return;
@@ -1232,7 +1329,9 @@ class _ApproveRequestSheetState extends State<_ApproveRequestSheet> {
       // A definite answer: nothing is pending under this key any more.
       UnconfirmedPayments.settle(_slot);
       setState(() => _held = null);
-      if (e is NafaqahApiException && repaymentAccountErrorKey(e.code) != null) sources.provider?.refresh(force: true);
+      if (e is NafaqahApiException && (repaymentAccountErrorKey(e.code) != null || e.code.startsWith('wife_account'))) {
+        sources.provider?.refresh(force: true);
+      }
       AppSnackBar.showError(
         context,
         repaymentErrorText(context, e, owedNow: widget.totalOwed),
@@ -1286,6 +1385,19 @@ class _ApproveRequestSheetState extends State<_ApproveRequestSheet> {
               if (_held == null) setState(() => _source = id);
             },
           ),
+        const SizedBox(height: 16),
+        Builder(builder: (context) {
+          final hers = wifeAccountsFor(context, householdId: widget.householdId, wifeUserId: widget.actions.wifeUserId);
+          return WifeAccountPicker(
+            key: const ValueKey('req_approve_wife_account'),
+            accounts: hers,
+            selected: _held != null ? _heldWifeAccount : _wifeAccount ?? defaultWifeAccount(hers, preferred: widget.request.wifeAccountId),
+            locked: _held != null,
+            canCreate: widget.actions.viewerIsHusband,
+            onCreate: () => widget.actions.createWifeAccount(context),
+            onChanged: (id) => setState(() => _wifeAccount = id),
+          );
+        }),
         if (_held != null) ...[
           const SizedBox(height: 12),
           const RepaymentUnconfirmedNote(key: ValueKey('req_approve_unconfirmed')),
@@ -1847,7 +1959,11 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
   /// different amount, method or account under the same key would be refused
   /// (request_key_reused), and a new key could pay twice, so closing and
   /// reopening the sheet holds them too (UnconfirmedPayments, review R2-02).
-  ({double amount, String method, Account account})? _held;
+  ({double amount, String method, Account account, String? wifeAccount})? _held;
+
+  /// Her wife account it credits (section 12); null until chosen (her only
+  /// one is chosen for him).
+  String? _wifeAccount;
 
   String get _slot => UnconfirmedPayments.repaymentSlot(widget.householdId, widget.actions.wifeUserId);
 
@@ -1858,7 +1974,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
     final pendingAccount = pending?.account;
     _requestKey = pending?.requestKey ?? const Uuid().v4();
     if (pending != null && pendingAccount != null) {
-      _held = (amount: pending.amount, method: pending.method, account: pendingAccount);
+      _held = (amount: pending.amount, method: pending.method, account: pendingAccount, wifeAccount: pending.wifeAccountId);
     }
     _amountCtrl = TextEditingController(text: (pending?.amount ?? widget.totalOwed).toStringAsFixed(2));
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1878,12 +1994,14 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
     final double amt;
     final String method;
     final Account account;
+    final String? wifeAccount;
     if (held != null) {
       // The same repayment again, with the same key: the server records it
       // once, and the checks below may no longer hold if it went through.
       amt = held.amount;
       method = held.method;
       account = held.account;
+      wifeAccount = held.wifeAccount;
     } else {
       final rounded = roundedMoneyTextIfRounded(_amountCtrl.text);
       if (rounded != null) setState(() => _amountCtrl.text = rounded); // show what is stored
@@ -1906,7 +2024,16 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
       final chosen = _chosenAccount(context, sources, _source, amt, onStale: () => setState(() => _source = null));
       if (chosen == null) return;
       account = chosen;
+      // Where it goes (section 12): one of her wife accounts.
+      final hers = wifeAccountsFor(context, householdId: widget.householdId, wifeUserId: widget.actions.wifeUserId, listen: false);
+      wifeAccount = _wifeAccount ?? defaultWifeAccount(hers);
+      if (wifeAccount == null) {
+        AppSnackBar.showError(context, context.tr(hers.isEmpty ? 'wife_acc_err_required' : 'wife_acc_choose'),
+            title: context.tr('settle_record_failed'));
+        return;
+      }
     }
+    if (wifeAccount == null) return;
 
     setState(() => _isSubmitting = true);
     try {
@@ -1915,6 +2042,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
         paymentMethod: method,
         accountId: account.id,
         requestKey: _requestKey,
+        wifeAccountId: wifeAccount,
       );
     } catch (e) {
       // Never report a repayment as recorded when the server rejected it.
@@ -1931,9 +2059,9 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
         // balances and the card reload to show what is stored (review R1-06).
         UnconfirmedPayments.hold(
           _slot,
-          UnconfirmedPayment(requestKey: _requestKey, amount: amt, method: method, account: account),
+          UnconfirmedPayment(requestKey: _requestKey, amount: amt, method: method, account: account, wifeAccountId: wifeAccount),
         );
-        setState(() => _held = (amount: amt, method: method, account: account));
+        setState(() => _held = (amount: amt, method: method, account: account, wifeAccount: wifeAccount));
         sources.provider?.refresh(force: true);
         widget.onConfirmed();
         return;
@@ -1941,8 +2069,8 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
       // A definite answer: nothing is pending under this key any more.
       UnconfirmedPayments.settle(_slot);
       setState(() => _held = null);
-      if (e is NafaqahApiException && repaymentAccountErrorKey(e.code) != null) {
-        // The balance or the account changed since the sheet opened.
+      if (e is NafaqahApiException && (repaymentAccountErrorKey(e.code) != null || e.code.startsWith('wife_account'))) {
+        // The balance or the account (his, or her wife account) changed since the sheet opened.
         sources.provider?.refresh(force: true);
       }
       final refusal = nafaqahWriteRefusalOf(e);
@@ -2029,6 +2157,19 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
               if (held == null) setState(() => _source = id);
             },
           ),
+        const SizedBox(height: 16),
+        Builder(builder: (context) {
+          final hers = wifeAccountsFor(context, householdId: widget.householdId, wifeUserId: widget.actions.wifeUserId);
+          return WifeAccountPicker(
+            key: const ValueKey('reimburse_wife_account'),
+            accounts: hers,
+            selected: held != null ? held.wifeAccount : _wifeAccount ?? defaultWifeAccount(hers),
+            locked: held != null,
+            canCreate: widget.actions.viewerIsHusband,
+            onCreate: () => widget.actions.createWifeAccount(context),
+            onChanged: (id) => setState(() => _wifeAccount = id),
+          );
+        }),
         if (held != null) ...[
           const SizedBox(height: 12),
           const RepaymentUnconfirmedNote(key: ValueKey('reimburse_unconfirmed')),

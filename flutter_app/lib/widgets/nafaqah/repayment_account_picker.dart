@@ -176,6 +176,23 @@ String? trackedRepaymentErrorText(BuildContext context, Object error, {double? o
       return context.tr('repay_err_update_app');
     case 'invalid_reason':
       return context.tr('req_err_reason_long');
+    // The wife account (migration 20261105001300, section 12).
+    case 'wife_account_required':
+      return context.tr('wife_acc_err_required');
+    case 'wife_account_invalid':
+      return context.tr('wife_acc_err_invalid');
+    case 'wife_account_insufficient_funds':
+      return context.trArgs('wife_acc_err_funds', {'amount': context.sar(error.outstanding ?? 0)});
+    case 'wife_account_forbidden':
+      return context.tr('wife_acc_err_forbidden');
+    case 'wife_account_has_history':
+      return context.tr('wife_acc_err_history');
+    case 'not_a_wife':
+      return context.tr('wife_acc_err_not_wife');
+    case 'invalid_name':
+      return context.tr('wife_acc_err_name');
+    case 'account_not_found':
+      return context.tr('wife_acc_err_not_found');
   }
   final accountKey = repaymentAccountErrorKey(error.code);
   return accountKey == null ? null : context.tr(accountKey);

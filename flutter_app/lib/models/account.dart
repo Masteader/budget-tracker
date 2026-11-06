@@ -8,6 +8,11 @@ enum AccountType {
   cash,
   sharedPool,
   savings,
+
+  /// Her husband's account assigned to one wife (migration 20261105001300,
+  /// section 12): she spends from it, he funds it, every repayment to her
+  /// credits one. Not part of the operating budget pool.
+  wife,
 }
 
 extension AccountTypeExtension on AccountType {
@@ -25,6 +30,8 @@ extension AccountTypeExtension on AccountType {
         return 'shared_pool';
       case AccountType.savings:
         return 'savings';
+      case AccountType.wife:
+        return 'wife';
     }
   }
 
@@ -45,6 +52,8 @@ extension AccountTypeExtension on AccountType {
       case 'savings':
       case 'saving':
         return AccountType.savings;
+      case 'wife':
+        return AccountType.wife;
       default:
         return AccountType.bank;
     }
@@ -64,6 +73,8 @@ extension AccountTypeExtension on AccountType {
         return 'Shared Household Pool';
       case AccountType.savings:
         return 'Savings Vault';
+      case AccountType.wife:
+        return 'Wife Account';
     }
   }
 
@@ -81,6 +92,8 @@ extension AccountTypeExtension on AccountType {
         return 'account_type_pool';
       case AccountType.savings:
         return 'account_type_savings';
+      case AccountType.wife:
+        return 'account_type_wife';
     }
   }
 
@@ -98,6 +111,8 @@ extension AccountTypeExtension on AccountType {
         return Icons.group_rounded;
       case AccountType.savings:
         return Icons.savings_rounded;
+      case AccountType.wife:
+        return Icons.favorite_rounded;
     }
   }
 
@@ -112,6 +127,8 @@ extension AccountTypeExtension on AccountType {
         return true;
       case AccountType.savings:
       case AccountType.crypto:
+      // Hers to spend, not the household's budget money.
+      case AccountType.wife:
         return false;
     }
   }
@@ -140,6 +157,10 @@ class Account {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
+  /// A wife account: the wife it is assigned to (null once she left or her
+  /// account was deleted: a former wife's, archived).
+  final String? assignedWifeId;
+
   const Account({
     required this.id,
     required this.householdId,
@@ -154,7 +175,10 @@ class Account {
     this.isArchived = false,
     this.createdAt,
     this.updatedAt,
+    this.assignedWifeId,
   });
+
+  bool get isWifeAccount => accountType == AccountType.wife;
 
   /// Calculates capacity margin against committed budgets.
   /// Margin = balance - committedBudgets.
@@ -189,6 +213,7 @@ class Account {
       isArchived: map['is_archived'] == true,
       createdAt: map['created_at'] != null ? DateTime.tryParse(map['created_at'].toString()) : null,
       updatedAt: map['updated_at'] != null ? DateTime.tryParse(map['updated_at'].toString()) : null,
+      assignedWifeId: map['assigned_wife_id']?.toString(),
     );
   }
 
@@ -207,6 +232,7 @@ class Account {
       'is_archived': isArchived,
       if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
       if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
+      if (assignedWifeId != null) 'assigned_wife_id': assignedWifeId,
     };
   }
 
@@ -234,6 +260,7 @@ class Account {
       isArchived: isArchived ?? this.isArchived,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
+      assignedWifeId: assignedWifeId,
     );
   }
 }

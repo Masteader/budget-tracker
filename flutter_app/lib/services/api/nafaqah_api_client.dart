@@ -31,15 +31,18 @@ class NafaqahApiClient {
   }
 
   /// The husband (or an admin) records a partial or full repayment, paid from
-  /// [accountId]: that account goes down by the amount, hers never changes
-  /// and no budget moves. Returns the outstanding balance after it.
-  /// [requestKey] is made once per sheet: a retry is recorded once.
+  /// [accountId] into her wife account [wifeAccountId] (migration
+  /// 20261105001300, section 12): his account goes down and hers up by the
+  /// amount, her own accounts never change and no budget moves. Returns the
+  /// outstanding balance after it. [requestKey] is made once per sheet: a
+  /// retry is recorded once.
   Future<double> recordReimbursement({
     required String householdId,
     required double amount,
     required String paymentMethod,
     required String accountId,
     required String requestKey,
+    String? wifeAccountId,
     String? wifeUserId,
     String? notes,
   }) async {
@@ -52,10 +55,26 @@ class NafaqahApiClient {
         if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
         'account_id': accountId,
         'request_key': requestKey,
+        if (wifeAccountId != null && wifeAccountId.isNotEmpty) 'wife_account_id': wifeAccountId,
       },
       shouldSign: false,
     );
     return (_ok(res)['outstanding_after'] as num?)?.toDouble() ?? 0.0;
+  }
+
+  /// Her husband makes her a wife account (his, in SAR, empty, assigned to
+  /// [wifeUserId]); returns its id.
+  Future<String> createWifeAccount({
+    required String householdId,
+    required String wifeUserId,
+    required String name,
+  }) async {
+    final res = await baseClient.post(
+      '/households/$householdId/nafaqah/wife-accounts',
+      {'wife_user_id': wifeUserId, 'name': name.trim()},
+      shouldSign: false,
+    );
+    return _ok(res)['id']?.toString() ?? '';
   }
 
   /// Reverses a tracked repayment in full: the money goes back to the account
@@ -75,17 +94,23 @@ class NafaqahApiClient {
 
   static String _requestsPath(String householdId) => '/households/$householdId/nafaqah/reimbursement-requests';
 
-  /// The wife marks what she received: a pending request. Nothing moves until
-  /// the husband or an admin approves it.
+  /// The wife marks what she received into her wife account [wifeAccountId]:
+  /// a pending request. Nothing moves until the husband or an admin approves it.
   Future<void> createReimbursementRequest({
     required String householdId,
     required double amount,
     required String paymentMethod,
     required String requestKey,
+    String? wifeAccountId,
   }) async {
     _ok(await baseClient.post(
       _requestsPath(householdId),
-      {'amount': double.parse(amount.toStringAsFixed(2)), 'payment_method': paymentMethod, 'request_key': requestKey},
+      {
+        'amount': double.parse(amount.toStringAsFixed(2)),
+        'payment_method': paymentMethod,
+        'request_key': requestKey,
+        if (wifeAccountId != null && wifeAccountId.isNotEmpty) 'wife_account_id': wifeAccountId,
+      },
       shouldSign: false,
     ));
   }
@@ -97,16 +122,22 @@ class NafaqahApiClient {
   }
 
   /// The husband or an admin approves her request from [accountId]: exactly
-  /// the requested amount. Returns what is owed after it.
+  /// the requested amount, into the wife account she named, or
+  /// [wifeAccountId], another of hers. Returns what is owed after it.
   Future<double> approveReimbursementRequest({
     required String householdId,
     required String requestId,
     required String accountId,
     required String requestKey,
+    String? wifeAccountId,
   }) async {
     final res = await baseClient.post(
       '${_requestsPath(householdId)}/${Uri.encodeComponent(requestId)}/approve',
-      {'account_id': accountId, 'request_key': requestKey},
+      {
+        'account_id': accountId,
+        'request_key': requestKey,
+        if (wifeAccountId != null && wifeAccountId.isNotEmpty) 'wife_account_id': wifeAccountId,
+      },
       shouldSign: false,
     );
     return (_ok(res)['outstanding_after'] as num?)?.toDouble() ?? 0.0;
