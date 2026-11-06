@@ -35,8 +35,11 @@ void main() {
         canRecordReimbursement: true,
       ),
       onReimbursed: () => confirmed = true,
+      // A definite refusal. A failure that is not one of the API's answers (an
+      // exception, a timeout) may have been recorded and keeps the sheet's retry
+      // instead (review R2-02, repayment_r2_fixes_test.dart).
       recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId, required String accountId, required String requestKey}) async =>
-          throw Exception('HTTP 500'),
+          throw const NafaqahApiException('overpayment', 'Server response error (409)', statusCode: 409),
     ))));
     await tester.pumpAndSettle();
 

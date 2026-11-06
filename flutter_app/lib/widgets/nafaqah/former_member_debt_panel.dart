@@ -15,6 +15,7 @@ import '../../utils/failure_log.dart';
 import '../app_snackbar.dart';
 import '../settings/settings_section.dart' show isLargeText;
 import 'repayment_account_picker.dart';
+import 'unconfirmed_payments.dart';
 
 /// Records a payment of a former member's record. [requestKey] is the same for
 /// every retry from one sheet, so the server records the payment once.
@@ -655,8 +656,9 @@ class _FormerDebtPaymentSheet extends StatefulWidget {
 class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
   late final TextEditingController _amountCtrl;
 
-  /// One key per opening of the sheet, reused by every retry: a payment whose
-  /// answer was lost is replayed by the server, never recorded twice.
+  /// One key per payment, reused by every retry: a payment whose answer was
+  /// lost is replayed by the server, never recorded twice. Kept past this
+  /// sheet while its answer is unknown (review R2-02).
   late final String _requestKey;
   String _paymentMethod = 'stc_pay';
   bool _isSubmitting = false;
@@ -665,14 +667,22 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
   String? _source;
 
   /// What was sent when the answer was lost (review R1-06): the sheet keeps
-  /// it, and its key, and offers to send exactly that again.
+  /// it, and its key, and offers to send exactly that again; reopened, it
+  /// still does (UnconfirmedPayments).
   ({double amount, String method, Account account})? _held;
+
+  String get _slot => UnconfirmedPayments.formerMemberPaymentSlot(widget.householdId, widget.debtId);
 
   @override
   void initState() {
     super.initState();
-    _amountCtrl = TextEditingController(text: widget.remaining.toStringAsFixed(2));
-    _requestKey = const Uuid().v4();
+    final pending = UnconfirmedPayments.of(_slot);
+    final pendingAccount = pending?.account;
+    _requestKey = pending?.requestKey ?? const Uuid().v4();
+    if (pending != null && pendingAccount != null) {
+      _held = (amount: pending.amount, method: pending.method, account: pendingAccount);
+    }
+    _amountCtrl = TextEditingController(text: (pending?.amount ?? widget.remaining).toStringAsFixed(2));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) RepaymentSources.ensureLoaded(context, widget.householdId);
     });
@@ -822,13 +832,19 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
       setState(() => _isSubmitting = false);
       if (_isUnknownOutcome(e)) {
         // It may be stored. The sheet stays open with what was sent and its
-        // key, which the server records once; the balances and the record
-        // reload (review R1-06).
+        // key, which the server records once, also after closing and reopening
+        // it (review R2-02); the balances and the record reload (review R1-06).
+        UnconfirmedPayments.hold(
+          _slot,
+          UnconfirmedPayment(requestKey: _requestKey, amount: amt, method: sentMethod, account: account),
+        );
         setState(() => _held = (amount: amt, method: sentMethod, account: account));
         sources.provider?.refresh(force: true);
         widget.onRefresh();
         return;
       }
+      // A definite answer: nothing is pending under this key any more.
+      UnconfirmedPayments.settle(_slot);
       setState(() => _held = null);
       if (_isStale(e)) widget.onRefresh();
       // The balance or the account changed since the sheet opened.
@@ -841,6 +857,7 @@ class _FormerDebtPaymentSheetState extends State<_FormerDebtPaymentSheet> {
       return;
     }
 
+    UnconfirmedPayments.settle(_slot);
     // His balance changed on the server: the accounts show it now.
     sources.provider?.refresh(force: true);
     if (!mounted) return;

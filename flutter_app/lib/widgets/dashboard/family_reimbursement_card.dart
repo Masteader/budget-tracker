@@ -18,6 +18,7 @@ import '../app_snackbar.dart';
 import '../card_error_state.dart';
 import '../nafaqah/former_member_debt_panel.dart';
 import '../nafaqah/repayment_account_picker.dart';
+import '../nafaqah/unconfirmed_payments.dart';
 import '../nafaqah/wife_allowance_card.dart';
 import '../settings/settings_section.dart' show isLargeText;
 
@@ -991,20 +992,27 @@ class _RequestSheet extends StatefulWidget {
 class _RequestSheetState extends State<_RequestSheet> {
   late final TextEditingController _amountCtrl;
 
-  /// One key per opening of the sheet: a retry is sent once.
+  /// One key per request: a retry is sent once. Kept past this sheet while
+  /// its answer is unknown (review R2-02).
   late final String _requestKey;
   String _paymentMethod = 'cash';
   bool _isSubmitting = false;
 
   /// What was sent when the answer was lost (review R1-06): the sheet keeps
-  /// it, and its key, and offers to send exactly that again.
+  /// it, and its key, and offers to send exactly that again; reopened, it
+  /// still does (UnconfirmedPayments).
   ({double amount, String method})? _held;
+
+  String get _slot => UnconfirmedPayments.requestSlot(widget.actions.householdId, widget.actions.wifeUserId);
 
   @override
   void initState() {
     super.initState();
-    _amountCtrl = TextEditingController(text: widget.available > 0 ? widget.available.toStringAsFixed(2) : '');
-    _requestKey = const Uuid().v4();
+    final pending = UnconfirmedPayments.of(_slot);
+    _requestKey = pending?.requestKey ?? const Uuid().v4();
+    if (pending != null) _held = (amount: pending.amount, method: pending.method);
+    final shown = pending?.amount ?? widget.available;
+    _amountCtrl = TextEditingController(text: shown > 0 ? shown.toStringAsFixed(2) : '');
   }
 
   @override
@@ -1045,15 +1053,20 @@ class _RequestSheetState extends State<_RequestSheet> {
       setState(() => _isSubmitting = false);
       if (_isUnknownOutcome(e)) {
         // It may be stored. The sheet stays open with what was sent and its
-        // key; trying again is safe (review R1-06).
+        // key; trying again is safe (review R1-06), also after reopening it
+        // (review R2-02).
+        UnconfirmedPayments.hold(_slot, UnconfirmedPayment(requestKey: _requestKey, amount: amt, method: method));
         setState(() => _held = (amount: amt, method: method));
         widget.onSent();
         return;
       }
+      // A definite answer: nothing is pending under this key any more.
+      UnconfirmedPayments.settle(_slot);
       setState(() => _held = null);
       AppSnackBar.showError(context, repaymentErrorText(context, e, owedNow: widget.available), title: context.tr('settle_record_failed'));
       return;
     }
+    UnconfirmedPayments.settle(_slot);
     if (!mounted) return;
     AppSnackBar.showSuccess(context, context.tr('req_sent'), title: context.tr('settle_recorded_title'), icon: Icons.check_circle_outline);
     Navigator.of(context).pop();
@@ -1787,20 +1800,29 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
   /// The account it is paid from; null until chosen.
   String? _source;
 
-  /// One key per opening of the sheet, reused by every retry from it.
+  /// One key per repayment, reused by every retry of it. Kept past this sheet
+  /// while its answer is unknown (review R2-02).
   late final String _requestKey;
 
   /// What was sent when the answer was lost (review R1-06): the sheet stays
   /// open with it and its key, and offers to send exactly that again. A
   /// different amount, method or account under the same key would be refused
-  /// (request_key_reused), and a new key could pay twice.
+  /// (request_key_reused), and a new key could pay twice, so closing and
+  /// reopening the sheet holds them too (UnconfirmedPayments, review R2-02).
   ({double amount, String method, Account account})? _held;
+
+  String get _slot => UnconfirmedPayments.repaymentSlot(widget.householdId, widget.actions.wifeUserId);
 
   @override
   void initState() {
     super.initState();
-    _amountCtrl = TextEditingController(text: widget.totalOwed.toStringAsFixed(2));
-    _requestKey = const Uuid().v4();
+    final pending = UnconfirmedPayments.of(_slot);
+    final pendingAccount = pending?.account;
+    _requestKey = pending?.requestKey ?? const Uuid().v4();
+    if (pending != null && pendingAccount != null) {
+      _held = (amount: pending.amount, method: pending.method, account: pendingAccount);
+    }
+    _amountCtrl = TextEditingController(text: (pending?.amount ?? widget.totalOwed).toStringAsFixed(2));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) RepaymentSources.ensureLoaded(context, widget.householdId);
     });
@@ -1861,17 +1883,25 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
       logFailure('FamilyReimbursement.record', e);
       if (!mounted) return;
       setState(() => _isSubmitting = false);
-      // As before: a failure the API names (or none at all) is unknown only when
-      // no answer came, or the server failed without saying what it stored.
-      if (e is NafaqahApiException && e.outcomeUnknown) {
+      // No answer, the server failed without saying what it stored, or the
+      // call failed outside the API's own errors (a timeout, a lost socket, a
+      // bug): it may have been recorded, as in every sibling sheet (review
+      // R2-02).
+      if (_isUnknownOutcome(e)) {
         // It may be stored. The sheet stays open with what was sent and its
-        // key: trying again is safe. The balances and the card reload to show
-        // what is stored (review R1-06).
+        // key: trying again is safe, also after closing and reopening it. The
+        // balances and the card reload to show what is stored (review R1-06).
+        UnconfirmedPayments.hold(
+          _slot,
+          UnconfirmedPayment(requestKey: _requestKey, amount: amt, method: method, account: account),
+        );
         setState(() => _held = (amount: amt, method: method, account: account));
         sources.provider?.refresh(force: true);
         widget.onConfirmed();
         return;
       }
+      // A definite answer: nothing is pending under this key any more.
+      UnconfirmedPayments.settle(_slot);
       setState(() => _held = null);
       if (e is NafaqahApiException && repaymentAccountErrorKey(e.code) != null) {
         // The balance or the account changed since the sheet opened.
@@ -1885,6 +1915,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
       return;
     }
 
+    UnconfirmedPayments.settle(_slot);
     // His balance changed on the server: the accounts show it now.
     sources.provider?.refresh(force: true);
     if (!mounted) return;
