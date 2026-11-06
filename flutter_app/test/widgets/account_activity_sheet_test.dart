@@ -46,13 +46,13 @@ final _movements = [
       'timestamp': '2026-11-01T10:00:00Z', 'purpose': null}),
 ];
 
-Widget _app(Widget home, {String lang = 'en'}) {
+Widget _app(Widget home, {String lang = 'en', bool dark = false, double scale = 1.0}) {
   final accounts = AccountProvider()..setAccountsForTesting(const [_bank, _cash], householdId: 'hh');
   return ChangeNotifierProvider<AccountProvider>.value(
     value: accounts,
     child: MaterialApp(
       locale: Locale(lang),
-      theme: AppThemes.lightTheme,
+      theme: dark ? AppThemes.darkTheme : AppThemes.lightTheme,
       supportedLocales: const [Locale('en'), Locale('ar'), Locale('ur')],
       localizationsDelegates: const [
         AppLocalizationsDelegate(),
@@ -60,6 +60,10 @@ Widget _app(Widget home, {String lang = 'en'}) {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+      builder: (context, page) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)),
+        child: page!,
+      ),
       home: Scaffold(body: home),
     ),
   );
@@ -136,4 +140,35 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Account activity'), findsOneWidget);
   });
+
+  // Review R2-03: 320 px wide at text scale 2.0, in each language, light and
+  // dark, with large amounts: the amount goes under the label, never past it.
+  for (final amount in [1234.5, 1234567.89, 9999999.99]) {
+    for (final lang in ['ar', 'ur', 'en']) {
+      for (final dark in [false, true]) {
+        testWidgets('320 px, text x2.0, $lang ${dark ? 'dark' : 'light'}, SAR $amount: no overflow', (tester) async {
+          tester.view.physicalSize = const Size(320 * 2, 800 * 2);
+          tester.view.devicePixelRatio = 2;
+          addTearDown(tester.view.reset);
+          final moves = [
+            for (final purpose in ['wife_repayment', 'wife_repayment_reversal', 'former_member_payment', 'former_member_payment_reversal'])
+              AccountMovement.fromMap({'id': purpose, 'from_account_id': purpose.endsWith('reversal') ? null : 'a-bank',
+                  'to_account_id': purpose.endsWith('reversal') ? 'a-bank' : null, 'amount': amount, 'fee': 0,
+                  'timestamp': '2026-11-06T10:00:00Z', 'purpose': purpose}),
+            AccountMovement.fromMap({'id': 'x2', 'from_account_id': 'a-bank', 'to_account_id': 'a-cash', 'amount': amount, 'fee': 12.5,
+                'timestamp': '2026-11-06T10:00:00Z', 'purpose': null}),
+          ];
+          await tester.pumpWidget(_app(
+            AccountActivitySheet(account: _bank, householdId: 'hh', load: (_, __) async => moves),
+            lang: lang,
+            dark: dark,
+            scale: 2.0,
+          ));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          expect(find.byKey(const ValueKey('acct_movement_amount_wife_repayment')), findsOneWidget);
+        });
+      }
+    }
+  }
 }

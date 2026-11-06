@@ -170,19 +170,29 @@ class _AccountActivitySheetState extends State<AccountActivitySheet> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  accountMovementLabel(context, m, account.id, accountName: _accountName),
-                                  style: TextStyle(color: context.textPrimary, fontSize: 13),
+                                // The amount sits at the end of the label's line when both
+                                // fit, and goes under it when not: 320 px wide, text scale
+                                // 2.0, a large amount (review R2-03).
+                                Wrap(
+                                  alignment: WrapAlignment.spaceBetween,
+                                  spacing: 8,
+                                  runSpacing: 2,
+                                  children: [
+                                    Text(
+                                      accountMovementLabel(context, m, account.id, accountName: _accountName),
+                                      style: TextStyle(color: context.textPrimary, fontSize: 13),
+                                    ),
+                                    Text(
+                                      context.money(change, account.currency, signed: true),
+                                      key: ValueKey('acct_movement_amount_${m.id}'),
+                                      style: GoogleFonts.outfit(color: color, fontWeight: FontWeight.w700),
+                                    ),
+                                  ],
                                 ),
                                 if (details.isNotEmpty)
                                   Text(details, style: TextStyle(color: context.textSecondary, fontSize: 11)),
                               ],
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            context.money(change, account.currency, signed: true),
-                            style: GoogleFonts.outfit(color: color, fontWeight: FontWeight.w700),
                           ),
                         ],
                       ),
