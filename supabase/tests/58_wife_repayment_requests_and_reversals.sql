@@ -512,9 +512,9 @@ BEGIN
     PERFORM pg_temp.expect('reversed twice', pg_temp.rev(1, 1, pg_temp.id('p_150'), 21), 'ERR:already_reversed');
     PERFORM pg_temp.expect('a reversal is not reversed', pg_temp.rev(1, 1, pg_temp.id('rev_150'), 22), 'ERR:not_reversible');
     PERFORM pg_temp.expect('the wife does not reverse', pg_temp.rev(2, 1, pg_temp.id('p_r1'), 23), 'ERR:forbidden');
-    -- Who reverses follows the account it left (review R1-07): not his, so refused there.
-    PERFORM pg_temp.expect('a member does not reverse another''s', pg_temp.rev(3, 1, pg_temp.id('p_r1'), 23), 'ERR:account_forbidden');
-    PERFORM pg_temp.expect('a co-admin does not credit his personal account', pg_temp.rev(4, 1, pg_temp.id('p_r1'), 23), 'ERR:account_forbidden');
+    -- Only her ledger's manager reverses (review R3B-06), and then from the account it left.
+    PERFORM pg_temp.expect('a member does not reverse another''s', pg_temp.rev(3, 1, pg_temp.id('p_r1'), 23), 'ERR:forbidden');
+    PERFORM pg_temp.expect('a co-admin does not credit his personal account', pg_temp.rev(4, 1, pg_temp.id('p_r1'), 23), 'ERR:forbidden');
     PERFORM pg_temp.expect('an unknown repayment', pg_temp.rev(1, 1, gen_random_uuid(), 23), 'ERR:reimbursement_not_found');
     PERFORM pg_temp.expect('another household''s repayment', pg_temp.rev(6, 2, pg_temp.id('p_r1'), 23), 'ERR:reimbursement_not_found');
     PERFORM pg_temp.expect('a request key is required',

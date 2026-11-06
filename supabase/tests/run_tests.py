@@ -116,7 +116,9 @@ BEGIN
         AND qual LIKE '%personal_owner_ids%' AND qual LIKE '%nafaqah_caller_hidden_wives%') <> 1
        OR (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'account_transfers') <> 1
        OR (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'installment_plans'
-           AND qual LIKE '%FROM transactions t%' AND qual LIKE '%ARRAY[personal_owner_id] && %') <> 1
+           AND qual NOT LIKE '%transactions%' AND qual LIKE '%ARRAY[personal_owner_id] && %'
+           AND qual LIKE '%former_member_personal%'
+           AND with_check LIKE '%FROM transactions t%') <> 1
        OR (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'installment_plans') <> 1 THEN
         RAISE EXCEPTION 'transfers and plans: a read policy reads household-wide';
     END IF;
@@ -134,6 +136,18 @@ BEGIN
                   AND p.personal_owner_id IS DISTINCT FROM public.nafaqah_purchase_personal_owner(p.original_transaction_id, p.household_id)) THEN
         RAISE EXCEPTION 'plans: a plan does not keep whose personal purchase it is';
     END IF;
+    -- Review R3B: who cannot read a row cannot update or delete it; a repayment's transfer rows are
+    -- her ledger's; reversals are her ledger's managers'; her advance is re-attributed only by them.
+    IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'transactions'
+        AND cmd IN ('UPDATE', 'DELETE') AND qual LIKE '%wife_personal%' AND qual LIKE '%nafaqah_caller_sees_allowances%') <> 2
+       OR NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects'
+                      AND policyname = 'receipts_delete_household' AND qual LIKE '%nafaqah_receipt_hidden%')
+       OR NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'account_transfers'
+                      AND qual LIKE '%purpose IS NOT NULL%' AND qual LIKE '%nafaqah_caller_manages_ledgers%')
+       OR (SELECT count(*) FROM pg_trigger WHERE tgenabled = 'O' AND tgname = 'trg_wife_advance_attribution') <> 1
+       OR position('nafaqah_may_manage_ledgers' IN pg_get_functiondef('public.reverse_spouse_reimbursement(uuid, uuid, uuid, uuid)'::regprocedure)) = 0 THEN
+        RAISE EXCEPTION 'R3B: a write path or a repayment transfer reads household-wide';
+    END IF;
 END $$;
 """,
 }
@@ -146,7 +160,7 @@ REVOKE TRUNCATE ON public.inquiries FROM anon, authenticated;
 DRIFT_MISSING = ("20261026120000",)
 # Tests that do not need what the drifted database lacks (42 and 43 test that migration's objects).
 DRIFT_TESTS = ("36_", "37_", "38_", "39_", "40_", "41_", "44_", "45_", "46_", "47_", "49_", "50_", "51_", "52_", "53_",
-               "54_", "55_", "56_", "57_", "63_", "64_", "65_", "66_")
+               "54_", "55_", "56_", "57_", "63_", "64_", "65_", "66_", "67_")
 
 # Live as measured read-only on 2026-11-05: exactly these two older files never ran, 000500 and
 # REVOKE TRUNCATE on inquiries did, and cost_control_sub_categories holds 50 rows with no

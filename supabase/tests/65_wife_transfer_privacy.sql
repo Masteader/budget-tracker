@@ -242,8 +242,7 @@ BEGIN
         (pg_temp.p(4), pg_temp.h(1), 'pl4 Unlinked', 'Other', 400, 4, 100, 0, '2026-11-05', NULL, 'k'),
         (pg_temp.p(5), pg_temp.h(1), 'pl5 Pharmacy advance', 'Tabby', 600, 4, 150, 1, '2026-11-05', pg_temp.t(4), 'k'),
         (pg_temp.p(6), pg_temp.h(1), 'pl6 Gold WA', 'Tabby', 700, 4, 175, 1, '2026-11-05', pg_temp.t(6), 'k'),
-        -- Linked to a purchase of another household (no client read of it): read by no member of F1.
-        (pg_temp.p(7), pg_temp.h(1), 'pl7 Elsewhere', 'Bank', 500, 5, 100, 1, '2026-11-05', pg_temp.t(11), 'k'),
+        -- (A plan linked to another household's purchase is refused by everyone: test 67, R3B-05.)
         (pg_temp.p(11), pg_temp.h(2), 'pl11 Abaya V', 'Tabby', 800, 4, 200, 1, '2026-11-05', pg_temp.t(11), 'k'),
         (pg_temp.p(12), pg_temp.h(2), 'pl12 Unlinked F2', 'Other', 100, 2, 50, 0, '2026-11-05', NULL, 'k');
 END $$;
@@ -268,8 +267,11 @@ INSERT INTO pg_temp.who VALUES
 CREATE FUNCTION pg_temp.expected_transfers(p_hh int, p_actor int, p_all boolean) RETURNS text LANGUAGE sql AS $$
     SELECT string_agg(l, ',' ORDER BY l) FROM unnest(
         CASE WHEN p_hh = 1 THEN
-            ARRAY['x05 his bank to pool', 'x06 member bank to pool', 'x07 pool to pool 2', 'x10 repayment',
-                  'x12 repayment reversed']
+            ARRAY['x05 his bank to pool', 'x06 member bank to pool', 'x07 pool to pool 2']
+            -- A repayment's rows (review R3B-02): the owner of the account (H's bank) and her
+            -- ledger's managers (the husband; the admins who are not wives once he is gone).
+            || CASE WHEN p_actor = 1 OR public.nafaqah_may_manage_ledgers(pg_temp.h(1), pg_temp.u(p_actor))
+                    THEN ARRAY['x10 repayment', 'x12 repayment reversed'] ELSE '{}' END
             -- W's accounts: hers, and the husband's and the admins'.
             || CASE WHEN p_all OR p_actor = 2 THEN ARRAY['x01 her bank to pool', 'x02 pool to her bank',
                    'x03 her bank to her cash', 'x09 his bank to her bank', 'x11 member bank to her bank',
@@ -397,7 +399,7 @@ BEGIN
     PERFORM pg_temp.check('a member edits every plan he can', pg_temp.write(pg_temp.u(4), 'UPDATE public.installment_plans SET notes = ''K'''), '3');
     PERFORM pg_temp.check('the plans after them',
         (SELECT string_agg(merchant || '=' || notes, ',' ORDER BY merchant) FROM public.installment_plans WHERE household_id = pg_temp.h(1)),
-        'pl1 Boutique W=k,pl2 Salon W2=k,pl3 Electronics=K,pl4 Unlinked=K,pl5 Pharmacy advance=K,pl6 Gold WA=k,pl7 Elsewhere=k');
+        'pl1 Boutique W=k,pl2 Salon W2=k,pl3 Electronics=K,pl4 Unlinked=K,pl5 Pharmacy advance=K,pl6 Gold WA=k');
     -- She, the husband and an admin who is not a wife edit hers.
     PERFORM pg_temp.check('the wife edits her plan', pg_temp.write(pg_temp.u(2), format('UPDATE public.installment_plans SET notes = %L WHERE id = %L', 'W', pg_temp.p(1))), '1');
     PERFORM pg_temp.check('the husband edits her plan', pg_temp.write(pg_temp.u(1), format('UPDATE public.installment_plans SET notes = %L WHERE id = %L', 'H', pg_temp.p(1))), '1');
@@ -420,7 +422,7 @@ BEGIN
         v := v || '|' || (SELECT string_agg(merchant, ',' ORDER BY merchant) FROM public.installment_plans WHERE household_id = pg_temp.h(1));
         RAISE EXCEPTION 'undo %', v;
     EXCEPTION WHEN raise_exception THEN
-        PERFORM pg_temp.check('a member deletes every plan he can', SQLERRM, 'undo 3|pl1 Boutique W,pl2 Salon W2,pl6 Gold WA,pl7 Elsewhere');
+        PERFORM pg_temp.check('a member deletes every plan he can', SQLERRM, 'undo 3|pl1 Boutique W,pl2 Salon W2,pl6 Gold WA');
     END;
 END $$;
 
@@ -552,14 +554,16 @@ BEGIN
         (SELECT string_agg(cmd || '/' || array_to_string(roles, ','), ';') FROM pg_policies
          WHERE schemaname = 'public' AND tablename = 'installment_plans'), 'ALL/authenticated');
     SELECT qual INTO v_qual FROM pg_policies WHERE schemaname = 'public' AND tablename = 'installment_plans';
-    PERFORM pg_temp.check('the plans policy keeps the household and follows the purchase',
+    -- The read test keeps the household and the plan's kept owner, looking nothing up (review
+    -- R3B-03, test 66); a plan is made or linked again only to a purchase the caller reads (R3B-05).
+    PERFORM pg_temp.check('the plans policy keeps the household and her owner',
         (v_qual LIKE '%household_id = ( SELECT get_auth_user_household_id()%'
-         AND v_qual LIKE '%original_transaction_id IS NULL%'
-         AND v_qual LIKE '%FROM transactions t%'
-         AND v_qual LIKE '%t.id = installment_plans.original_transaction_id%')::text, 'true');
-    PERFORM pg_temp.check('the plans write check is the household''s',
-        (SELECT with_check FROM pg_policies WHERE schemaname = 'public' AND tablename = 'installment_plans'),
-        '(household_id = ( SELECT get_auth_user_household_id() AS get_auth_user_household_id))');
+         AND v_qual LIKE '%personal_owner_id%'
+         AND v_qual NOT LIKE '%transactions%')::text, 'true');
+    PERFORM pg_temp.check('the plans write check is the household''s and reads the purchase',
+        (SELECT (with_check LIKE '((household_id = ( SELECT get_auth_user_household_id() AS get_auth_user_household_id)) AND ((original_transaction_id IS NULL) OR (EXISTS ( SELECT 1%'
+                 AND with_check LIKE '%FROM transactions t%WHERE (t.id = installment_plans.original_transaction_id)))))')::text
+         FROM pg_policies WHERE schemaname = 'public' AND tablename = 'installment_plans'), 'true');
     PERFORM pg_temp.check('the transfer helpers are STABLE SECURITY DEFINER with a pinned search_path',
         (SELECT string_agg(p.proname || '=' || (p.provolatile = 's' AND p.prosecdef
                                                  AND p.proconfig::text LIKE '%search_path=public, pg_temp%')::text, ',' ORDER BY p.proname)

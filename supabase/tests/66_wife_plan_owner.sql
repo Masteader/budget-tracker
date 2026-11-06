@@ -21,7 +21,10 @@
 --     linked again to another purchase takes that purchase's owner.
 --   * A deleted person's id leaves the column with them (the BEFORE DELETE ON users path), so the
 --     purge's "nothing names them" holds: through the deletion worker's purge and an out-of-band
---     delete alike. The plans stay, owned by nobody, read as the household's (as her purchases are).
+--     delete alike. A deleted wife's plans stay, owned by nobody and marked a former wife's
+--     (former_member_personal): read only by her husband and the admins who are not wives (owner
+--     decision 2026-11-06, test 67). An out-of-band delete makes her purchases the household's, so
+--     a plan still linked to one follows it; an unlinked one keeps the mark.
 --   * When she is no longer a wife of the household (she left), her plans are read like other rows,
 --     as her purchases are.
 --   * The backfill's helper: a plan made before 001300 (no owner) gets the owner of its purchase.
@@ -184,9 +187,8 @@ BEGIN
         (pg_temp.p(7), pg_temp.h(1), 'pl7 Bag', 'Tabby', 500, 4, 125, 1, '2026-11-05', pg_temp.t(7), 'k'),
         (pg_temp.p(8), pg_temp.h(1), 'pl8 Watch', 'Tabby', 650, 2, 325, 1, '2026-11-05', pg_temp.t(8), 'k'),
         (pg_temp.p(9), pg_temp.h(1), 'pl9 Ring', 'Tabby', 350, 2, 175, 1, '2026-11-05', pg_temp.t(9), 'k'),
-        (pg_temp.p(10), pg_temp.h(1), 'pl10 Unlinked', 'Other', 400, 4, 100, 0, '2026-11-05', NULL, 'k'),
-        -- Linked to a purchase of another household: no owner here, and read by no member of F1 (test 65).
-        (pg_temp.p(11), pg_temp.h(1), 'pl11 Elsewhere', 'Bank', 800, 4, 200, 1, '2026-11-05', pg_temp.t(11), 'k');
+        (pg_temp.p(10), pg_temp.h(1), 'pl10 Unlinked', 'Other', 400, 4, 100, 0, '2026-11-05', NULL, 'k');
+        -- (A plan linked to another household's purchase is refused by everyone: test 67, R3B-05.)
 END $$;
 
 -- ── Whose each plan is, kept when it is made; no client sets it ──────────────────────────────
@@ -204,8 +206,8 @@ BEGIN
             'VALUES (%L, %L, %L, 1200, 4, 300, 0, %L, NULL)', pg_temp.p(21), pg_temp.h(1), 'pl21 Boutique again', pg_temp.t(1))), '1');
 
     PERFORM pg_temp.check('the owners kept on the plans',
-        (SELECT string_agg(n || '=' || pg_temp.owner(n), ',' ORDER BY n) FROM unnest(ARRAY[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 20, 21]) n),
-        '1=W,2=W2,3=-,4=W,5=-,6=W,7=W3,8=W3,9=W,10=-,11=-,20=-,21=W');
+        (SELECT string_agg(n || '=' || pg_temp.owner(n), ',' ORDER BY n) FROM unnest(ARRAY[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 21]) n),
+        '1=W,2=W2,3=-,4=W,5=-,6=W,7=W3,8=W3,9=W,10=-,20=-,21=W');
 
     -- No client changes it: not a member on his own plan, not the husband on hers.
     PERFORM pg_temp.check('a member sets the owner of his plan',
@@ -306,8 +308,6 @@ BEGIN
     PERFORM pg_temp.check('linked to her purchase: hers', pg_temp.owner(10), 'W3');
     PERFORM pg_temp.check('linked to her purchase: who reads it', pg_temp.readers(10), 'H,C,W3');
 
-    -- Another household's purchase never makes an owner here.
-    PERFORM pg_temp.check('another household''s purchase: no owner', pg_temp.owner(11), '-');
 END $$;
 
 -- ── The backfill's helper: a plan made before 001300 gets its purchase's owner ─────────────────
@@ -394,8 +394,13 @@ BEGIN
     PERFORM pg_temp.check('purged: her id nowhere in the plans or the transfers',
         (SELECT count(*)::text FROM public.installment_plans p WHERE p::text LIKE '%' || pg_temp.u(10)::text || '%')
         || '|' || (SELECT count(*)::text FROM public.account_transfers x WHERE x::text LIKE '%' || pg_temp.u(10)::text || '%'), '0|0');
-    -- The plans stay, with no link and no owner: like her purchases, read as the household's now.
+    -- The plans stay, with no link and no owner, marked a former wife's: read only by her husband
+    -- and the admins who are not wives (owner decision 2026-11-06).
     PERFORM pg_temp.check('purged: her plans stay, unlinked and owned by nobody', pg_temp.owner(13) || ',' || pg_temp.owner(14), '-,-');
+    PERFORM pg_temp.check('purged: marked a former wife''s',
+        (SELECT string_agg(former_member_personal::text, ',' ORDER BY id) FROM public.installment_plans WHERE id IN (pg_temp.p(13), pg_temp.p(14))),
+        'true,true');
+    PERFORM pg_temp.check('purged: who reads them', pg_temp.readers(13) || '|' || pg_temp.readers(14), 'H,C|H,C');
 END $$;
 
 -- ── A deleted person's id leaves the plans with them ──────────────────────────────────────────
@@ -413,6 +418,10 @@ BEGIN
     PERFORM pg_temp.check('after: her id nowhere in the plans',
         (SELECT count(*)::text FROM public.installment_plans p WHERE p::text LIKE '%' || pg_temp.u(7)::text || '%'), '0');
     PERFORM pg_temp.check('after: the plans stay', (SELECT count(*)::text FROM public.installment_plans WHERE id IN (pg_temp.p(7), pg_temp.p(8), pg_temp.p(10))), '3');
+    -- Her unlinked plan keeps the former wife's mark; her linked ones follow her purchase, which
+    -- her account's deletion made the household's.
+    PERFORM pg_temp.check('after: her unlinked plan, read as a former wife''s', pg_temp.readers(8), 'H,C');
+    PERFORM pg_temp.check('after: her linked plans follow her purchase', pg_temp.readers(7) || '|' || pg_temp.readers(10), 'H,W,W2,K,C|H,W,W2,K,C');
     -- The others' plans keep their owners.
     PERFORM pg_temp.check('after: the others keep theirs', pg_temp.owner(1) || ',' || pg_temp.owner(5) || ',' || pg_temp.owner(6), 'W,W,W2');
 END $$;
@@ -426,10 +435,16 @@ BEGIN
         (SELECT string_agg(cmd || '/' || array_to_string(roles, ','), ';') FROM pg_policies
          WHERE schemaname = 'public' AND tablename = 'installment_plans'), 'ALL/authenticated');
     SELECT qual INTO v_qual FROM pg_policies WHERE schemaname = 'public' AND tablename = 'installment_plans';
-    PERFORM pg_temp.check('the plans policy follows the purchase and keeps her owner',
+    -- The read test compares what the plan keeps and looks nothing up (review R3B-03); the purchase
+    -- is read only when a plan is made or linked again (review R3B-05).
+    PERFORM pg_temp.check('the plans policy keeps her owner and the former wife''s mark',
         (v_qual LIKE '%household_id = ( SELECT get_auth_user_household_id()%'
-         AND v_qual LIKE '%t.id = installment_plans.original_transaction_id%'
-         AND v_qual LIKE '%ARRAY[personal_owner_id] && ( SELECT nafaqah_caller_hidden_wives()%')::text, 'true');
+         AND v_qual NOT LIKE '%transactions%'
+         AND v_qual LIKE '%ARRAY[personal_owner_id] && ( SELECT nafaqah_caller_hidden_wives()%'
+         AND v_qual LIKE '%former_member_personal%')::text, 'true');
+    PERFORM pg_temp.check('a plan is linked only to a purchase the caller reads',
+        (SELECT (with_check LIKE '%t.id = installment_plans.original_transaction_id%')::text FROM pg_policies
+         WHERE schemaname = 'public' AND tablename = 'installment_plans'), 'true');
     PERFORM pg_temp.check('no client writes the owner',
         pg_temp.call(NULL, 'SELECT string_agg(r || ''='' || has_column_privilege(r, ''public.installment_plans'', ''personal_owner_id'', ''UPDATE'')::text, '','' ORDER BY r) '
                            'FROM unnest(ARRAY[''anon'', ''authenticated'']) r', 'postgres'),

@@ -422,7 +422,12 @@ BEGIN
     PERFORM pg_temp.expect('the provider classifies (admin edit of the son row)', pg_temp.as_user('26000000-0000-0000-0000-0000000000a1',
         $q$UPDATE public.transactions SET nafaqah_class = 'wife_reimbursable', nafaqah_spouse_id = '26000000-0000-0000-0000-0000000000a2'
            WHERE id = '26f00000-0000-0000-0000-0000000000d1'$q$), '00000:');
-    PERFORM pg_temp.expect('a co-admin declassifies', pg_temp.as_user('26000000-0000-0000-0000-0000000000a4',
+    -- Her advance's wife or class: her ledger's managers only (review R3B-08, 20261105001300): a
+    -- co-admin while the husband is there no longer declassifies it; the husband does.
+    PERFORM pg_temp.expect('a co-admin no longer declassifies her advance', pg_temp.as_user('26000000-0000-0000-0000-0000000000a4',
+        $q$UPDATE public.transactions SET nafaqah_class = NULL, nafaqah_spouse_id = NULL WHERE id = '26f00000-0000-0000-0000-0000000000d1'$q$),
+        '42501:forbidden');
+    PERFORM pg_temp.expect('the provider declassifies', pg_temp.as_user('26000000-0000-0000-0000-0000000000a1',
         $q$UPDATE public.transactions SET nafaqah_class = NULL, nafaqah_spouse_id = NULL WHERE id = '26f00000-0000-0000-0000-0000000000d1'$q$),
         '00000:');
     -- Clearing only the spouse (which drops the class) is a change too.

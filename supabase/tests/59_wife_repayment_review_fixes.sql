@@ -17,7 +17,8 @@
 --          still fits stays. Pending total <= owed after every step.
 --   R1-04  The same key with a different amount, account, actor or kind: request_key_reused.
 --   R1-05  A replay answers the stored outstanding_before / outstanding_after.
---   R1-07  A personal-account repayment is reversed by the account's owner while he is a member
+--   R1-07  (superseded by review R3B-06, test 67: only her ledger's manager reverses, a personal
+--          account's repayment as its owner) A personal-account repayment is reversed by the account's owner while he is a member
 --          and not a wife, whatever his role now; a pool repayment by the husband if he is an
 --          admin (an admin who is not a wife when he is gone: review R3-01).
 --   R1-08  The ledger records who actually paid; the purge still anonymises a deleted payer.
@@ -402,35 +403,47 @@ BEGIN
     PERFORM pg_temp.keep('fC', pg_temp.j(v_res, 'event_id'));
 END $$;
 
--- ── R1-07: reversal by the account's owner, whatever his role now; a pool by any admin ────────
+-- ── R1-07, as review R3B-06 left it: the owner of the account reverses, while he manages her ledger
 DO $$
 DECLARE
     v_res text;
 BEGIN
-    -- The husband is back (the provider again): C's own repayments stay his to reverse.
+    -- The husband is back (the provider again) and C a member: C no longer manages her ledger, so
+    -- he does not reverse even his own repayment (review R3B-06, superseding R1-07).
     UPDATE public.households SET nafaqah_provider_user_id = pg_temp.u(1) WHERE id = pg_temp.h(1);
     UPDATE public.household_memberships SET role = 'member' WHERE household_id = pg_temp.h(1) AND user_id = pg_temp.u(4);
-    v_res := pg_temp.rev(4, 1, pg_temp.id('pC'), 120);
+    PERFORM pg_temp.check('R3B-06 a former co-admin does not reverse his own repayment', pg_temp.rev(4, 1, pg_temp.id('pC'), 120), 'ERR:forbidden');
+    PERFORM pg_temp.check('R3B-06 nor his former-member payment', pg_temp.frev(4, 1, pg_temp.id('fC'), 121), 'ERR:forbidden');
+    PERFORM pg_temp.check('R3B-06 his account unchanged', pg_temp.bal(5), '955.00');
+    -- Managing it again (the husband gone, C an admin), he reverses his own.
+    UPDATE public.households SET nafaqah_provider_user_id = NULL WHERE id = pg_temp.h(1);
+    UPDATE public.household_memberships SET role = 'admin' WHERE household_id = pg_temp.h(1) AND user_id = pg_temp.u(4);
+    v_res := pg_temp.rev(4, 1, pg_temp.id('pC'), 128);
     PERFORM pg_temp.check('R1-07 a former co-admin reverses his own repayment', pg_temp.j(v_res, 'kind'), 'reversal');
     PERFORM pg_temp.check('R1-07 his account is credited back', pg_temp.bal(5), '965.00');
     PERFORM pg_temp.check('R1-08 the reversal names the original payer',
         pg_temp.payer(CASE WHEN v_res LIKE 'ERR:%' THEN NULL ELSE pg_temp.uid(pg_temp.j(v_res, 'reimbursement_id')) END), pg_temp.u(4)::text);
-    v_res := pg_temp.frev(4, 1, pg_temp.id('fC'), 121);
+    v_res := pg_temp.frev(4, 1, pg_temp.id('fC'), 129);
     PERFORM pg_temp.check('R1-07 a former co-admin reverses his former-member payment', pg_temp.j(v_res, 'success'), 'true');
     PERFORM pg_temp.check('R1-07 the record is whole again', pg_temp.state(1), '300.00/0.00/open/true');
     PERFORM pg_temp.check('R1-07 and his account too', pg_temp.bal(5), '985.00');
-
-    -- The husband, once someone else is the provider and he is not an admin.
-    UPDATE public.households SET nafaqah_provider_user_id = pg_temp.u(6) WHERE id = pg_temp.h(1);
-    v_res := pg_temp.rev(1, 1, pg_temp.id('pH'), 122);
-    PERFORM pg_temp.check('R1-07 a former husband reverses his own repayment', pg_temp.j(v_res, 'kind'), 'reversal');
-    PERFORM pg_temp.check('R1-07 his account is credited back', pg_temp.bal(2), '1000.00');
     UPDATE public.households SET nafaqah_provider_user_id = pg_temp.u(1) WHERE id = pg_temp.h(1);
+    UPDATE public.household_memberships SET role = 'member' WHERE household_id = pg_temp.h(1) AND user_id = pg_temp.u(4);
+
+    -- The husband, once someone else is the provider: not even his own (review R3B-06); as the
+    -- provider again, he reverses it.
+    UPDATE public.households SET nafaqah_provider_user_id = pg_temp.u(6) WHERE id = pg_temp.h(1);
+    PERFORM pg_temp.check('R3B-06 a former husband does not reverse his own repayment', pg_temp.rev(1, 1, pg_temp.id('pH'), 122), 'ERR:forbidden');
+    PERFORM pg_temp.check('R3B-06 his account unchanged', pg_temp.bal(2), '990.00');
+    UPDATE public.households SET nafaqah_provider_user_id = pg_temp.u(1) WHERE id = pg_temp.h(1);
+    v_res := pg_temp.rev(1, 1, pg_temp.id('pH'), 130);
+    PERFORM pg_temp.check('R1-07 the husband reverses his own repayment', pg_temp.j(v_res, 'kind'), 'reversal');
+    PERFORM pg_temp.check('R1-07 his account is credited back', pg_temp.bal(2), '1000.00');
 
     -- A pool repayment: the husband if he is an admin (review R3-01); never a member, never
     -- another's account, and no other admin while he is there.
     PERFORM pg_temp.check('R1-07 a non-admin husband cannot reverse a pool repayment', pg_temp.rev(1, 1, pg_temp.id('pA'), 123), 'ERR:account_forbidden');
-    PERFORM pg_temp.check('R1-07 an admin cannot reverse another''s personal repayment', pg_temp.rev(5, 1, pg_temp.id('apC'), 124), 'ERR:account_forbidden');
+    PERFORM pg_temp.check('R3B-06 an admin cannot reverse another''s personal repayment', pg_temp.rev(5, 1, pg_temp.id('apC'), 124), 'ERR:forbidden');
     UPDATE public.household_memberships SET role = 'admin' WHERE household_id = pg_temp.h(1) AND user_id = pg_temp.u(6);
     PERFORM pg_temp.check('R3-01 another admin, while the husband is there', pg_temp.rev(6, 1, pg_temp.id('pA'), 125), 'ERR:forbidden');
     UPDATE public.household_memberships SET role = 'admin' WHERE household_id = pg_temp.h(1) AND user_id = pg_temp.u(1);

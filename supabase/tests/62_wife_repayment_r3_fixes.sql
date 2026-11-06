@@ -16,7 +16,8 @@
 --            Husband gone: an admin who is not a wife sees and acts (approves her pending request,
 --            records a repayment, reverses one from a pool, pays and waives the record).
 --            Always: a wife never sees or acts for a co-wife, even as an admin; a personal
---            account's repayment is reversed by its owner while a member and not a wife.
+--            account's repayment is reversed by its owner while he manages her ledger (review
+--            R3B-06, test 67; R1-07 superseded).
 --   R3-03  The 6-argument (amount-only) former member payment stays the service role's only.
 --   R3-04  The second pass of reverse_former_member_debt_payment reads the record of the household.
 --   R3-05  A client cannot delete an account a repayment or a reversal used (archive it instead);
@@ -445,12 +446,12 @@ BEGIN
     PERFORM pg_temp.check('present: a wife-admin declines', pg_temp.decline(6, 1, pg_temp.id('r_pend'), 'no'), 'ERR:forbidden');
     PERFORM pg_temp.check('present: a co-wife cancels her request', pg_temp.cancel(3, 1, pg_temp.id('r_pend')), 'ERR:forbidden');
     PERFORM pg_temp.check('present: an admin who is not a wife reverses the pool repayment', pg_temp.rev(5, 1, pg_temp.id('p_pool'), 110), 'ERR:forbidden');
-    PERFORM pg_temp.check('present: an admin reverses the husband''s own repayment', pg_temp.rev(5, 1, pg_temp.id('p_h'), 111), 'ERR:account_forbidden');
+    PERFORM pg_temp.check('present: an admin reverses the husband''s own repayment', pg_temp.rev(5, 1, pg_temp.id('p_h'), 111), 'ERR:forbidden');
     PERFORM pg_temp.check('present: an admin who is not a wife pays the record', pg_temp.fpay(5, 1, '10', 3, 112), 'ERR:forbidden');
     PERFORM pg_temp.check('present: an admin who is not a wife waives the record', pg_temp.waive(5, 1, 113), 'ERR:forbidden');
     PERFORM pg_temp.check('present: a member pays the record', pg_temp.fpay(4, 1, '10', 4, 114), 'ERR:forbidden');
     PERFORM pg_temp.check('present: a wife-admin waives the record', pg_temp.waive(6, 1, 115), 'ERR:forbidden');
-    PERFORM pg_temp.check('present: an admin reverses the husband''s record payment', pg_temp.frev(5, 1, pg_temp.id('e_h'), 116), 'ERR:account_forbidden');
+    PERFORM pg_temp.check('present: an admin reverses the husband''s record payment', pg_temp.frev(5, 1, pg_temp.id('e_h'), 116), 'ERR:forbidden');
     PERFORM pg_temp.check('present: nothing moved', pg_temp.bal(1) || '/' || pg_temp.bal(3) || '/' || pg_temp.bal(4) || '/' || pg_temp.bal(6),
                           '4980.00/5000.00/1000.00/1000.00');
     PERFORM pg_temp.check('present: still owed', pg_temp.owed_api(1, 1, 2), '880.00');
@@ -534,8 +535,12 @@ BEGIN
     PERFORM pg_temp.check('back: the new husband reads her ledger', pg_temp.led(4, 2), pg_temp.led_all(2));
     PERFORM pg_temp.check('back: the new husband reads the record', pg_temp.fmd(4, 1), pg_temp.fmd_all(1));
     PERFORM pg_temp.check('back: the admin repays', pg_temp.repay(5, 1, 2, '1', 3, 32), 'ERR:forbidden');
-    PERFORM pg_temp.check('back: the admin still reverses his own personal repayment (R1-07)',
-        pg_temp.j(pg_temp.rev(5, 1, pg_temp.id('p_c2'), 33), 'kind'), 'reversal');
+    -- Review R3B-06 (superseding R1-07): no longer managing her ledger, he does not reverse even
+    -- his own personal repayment; nobody does.
+    PERFORM pg_temp.check('back: the admin no longer reverses his own personal repayment',
+        pg_temp.rev(5, 1, pg_temp.id('p_c2'), 33), 'ERR:forbidden');
+    PERFORM pg_temp.check('back: nor the new husband (not his account)',
+        pg_temp.rev(4, 1, pg_temp.id('p_c2'), 36), 'ERR:account_forbidden');
     PERFORM pg_temp.check('back: the new husband repays from his account', pg_temp.j(pg_temp.repay(4, 1, 2, '5', 4, 34), 'success'), 'true');
     PERFORM pg_temp.check('back: the new husband is no admin: never the pool', pg_temp.rev(4, 1, pg_temp.id('ap_c'), 35), 'ERR:account_forbidden');
 EXCEPTION WHEN OTHERS THEN

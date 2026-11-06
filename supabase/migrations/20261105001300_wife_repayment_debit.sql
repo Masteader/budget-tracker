@@ -4,7 +4,8 @@
 --              58_wife_repayment_requests_and_reversals.sql, 59_wife_repayment_review_fixes.sql,
 --              60_wife_repayment_r2_fixes.sql, 61_wife_repayment_r2_concurrency.sql,
 --              62_wife_repayment_r3_fixes.sql, 63_wife_allowance_access.sql,
---              64_wife_personal_privacy.sql, 65_wife_transfer_privacy.sql, 66_wife_plan_owner.sql
+--              64_wife_personal_privacy.sql, 65_wife_transfer_privacy.sql, 66_wife_plan_owner.sql,
+--              67_wife_privacy_write_paths.sql
 -- Rule: .agents/rules/02-saudi-fintech-and-islamic-compliance.md, family mode rules 2 and 3
 --
 -- Owner decisions 2026-11-06. Repaying the wife for shared things she paid (wife_reimbursable):
@@ -40,10 +41,12 @@
 --      'reversal', reverses_event_id unique), which reopens a settled record. Refused for a legacy
 --      row without a transfer (reversal_not_tracked), an archived or deleted account
 --      (reversal_account_unavailable), a record waived after the payment (reversal_after_waiver),
---      and a second time (already_reversed). Who reverses follows the account it left: a personal
---      account's owner, while he is a member and not a wife, whatever his role now (he may no
---      longer be an admin or the husband); a shared pool's repayment, the husband if he is an
---      admin, or an admin who is not a wife when the husband is gone (review R3-01).
+--      and a second time (already_reversed). Who reverses: her ledger's manager only (her husband;
+--      an admin who is not a wife when he is gone; for a former member's record, its manager), from
+--      the account it left as the account rules say: a personal account as its owner, a pool as an
+--      admin (review R3B-06, owner decision 2026-11-06, superseding R1-07). A replaced husband or
+--      a demoted admin no longer reverses, even from his own account; such a repayment is then
+--      reversed by nobody.
 --   5. Who sees and who acts (owner decisions 2026-11-06, reviews R1-01 and R3-01). Her husband is
 --      the household's Nafaqah provider while he is a current member who is not a wife
 --      (001200's nafaqah_ledger_husband_id); he is gone when there is none (he left, his account
@@ -70,7 +73,12 @@
 --      husband, an admin who is not a wife), and so is the receipt photo of one; never by a
 --      co-wife, even an admin, nor an ordinary member (the read policy of transactions through
 --      nafaqah_caller_sees_allowances, the receipts read policy through nafaqah_receipt_hidden).
---      Every other transaction keeps its household-wide read. Who writes them is unchanged.
+--      Every other transaction keeps its household-wide read. Who writes them is unchanged, but a
+--      caller who cannot read a row cannot update or delete it, also by a statement that names no
+--      row (review R3B-01: the UPDATE and DELETE policies of transactions and the receipts DELETE
+--      policy carry the read test). nafaqah_receipt_hidden answers alike for a path of nothing and
+--      a photo the caller does not read (review R3B-04). Her advance's wife or class is changed by
+--      a client only by her ledger's managers, or by her clearing her own (review R3B-08).
 --   9. Transfers of her personal account and plans of her personal purchases (owner decision
 --      2026-11-06, section 10e) are read by the same people: an account_transfers row with either
 --      side a personal account of a wife of the household (her own rows by her, a transfer between
@@ -80,8 +88,15 @@
 --      purchase stays hers after the purchase is deleted or unlinked. Never by a co-wife, even an
 --      admin, nor an ordinary member (the read policy of account_transfers through
 --      personal_owner_ids and nafaqah_caller_hidden_wives, the installment_plans policy through the
---      transactions read policy and the plan's personal_owner_id).
+--      plan's kept personal_owner_id, which looks nothing up per plan: review R3B-03). A plan is
+--      created or linked again only to a purchase the caller reads (review R3B-05). A repayment's
+--      own transfer rows (a repayment, its reversal, a former member's payment, its reversal) are
+--      read only by the wife whose ledger it is, its managers and the owner of the personal account
+--      on the row (review R3B-02): a pool's lines too, whose balance every member still reads.
 --      Balances are unchanged; a repayment's transfer never involves her account.
+--  10. A deleted wife's personal plans stay hidden (owner decision 2026-11-06): the purge clears
+--      her id from them and marks them a former wife's (installment_plans.former_member_personal,
+--      which names nobody); they are read only by her husband and the admins who are not wives.
 --
 -- What is owed is advances less repayments plus reversals (nafaqah_net_repaid); pending requests
 -- never count. get_spouse_reimbursement_balance, former_member_debt_outstanding (the purge's
@@ -124,6 +139,8 @@
 -- member_allowances_select_household (20261020300000),
 -- the read policies transactions_select_household, storage's receipts_select_household,
 -- transfers_select_household (account_transfers) and the installment_plans policy (20261020100000),
+-- the write policies transactions_update_household and transactions_delete_household
+-- (20261020400000) and storage's receipts_delete_household (20261020100000),
 -- guard_wife_reimbursable_ledger and remove_nafaqah_ledger_on_membership_end (20261020900000),
 -- former_member_debt_outstanding and prepare_account_purge (20261105001200). Re-running 001200 after
 -- this file puts its own versions back (an amount-only 6-argument payment among them, which both
@@ -152,9 +169,36 @@
 --   CREATE POLICY transactions_select_household ON public.transactions
 --       FOR SELECT TO authenticated
 --       USING (household_id = (SELECT public.get_auth_user_household_id()));
+--   DROP POLICY transactions_update_household ON public.transactions;
+--   CREATE POLICY transactions_update_household ON public.transactions
+--       FOR UPDATE TO authenticated
+--       USING (household_id = (SELECT public.get_auth_user_household_id()))
+--       WITH CHECK (
+--           household_id = (SELECT public.get_auth_user_household_id())
+--           AND (user_id = (SELECT auth.uid()) OR (SELECT public.get_auth_user_role()) = 'admin')
+--           AND (
+--               account_id IS NULL
+--               OR public.transaction_account_matches(account_id, household_id, user_id)
+--           )
+--       );
+--   DROP POLICY transactions_delete_household ON public.transactions;
+--   CREATE POLICY transactions_delete_household ON public.transactions
+--       FOR DELETE TO authenticated
+--       USING (household_id = (SELECT public.get_auth_user_household_id()));
+--   DROP TRIGGER trg_wife_advance_attribution ON public.transactions;
 --   DROP POLICY receipts_select_household ON storage.objects;
 --   CREATE POLICY receipts_select_household ON storage.objects
 --       FOR SELECT TO authenticated
+--       USING (bucket_id = 'receipts'
+--           AND (SELECT auth.uid()) IS NOT NULL
+--           AND (storage.foldername(name))[1] IN (
+--               SELECT m.household_id::text
+--               FROM public.household_memberships m
+--               WHERE m.user_id = (SELECT auth.uid())
+--           ));
+--   DROP POLICY receipts_delete_household ON storage.objects;
+--   CREATE POLICY receipts_delete_household ON storage.objects
+--       FOR DELETE TO authenticated
 --       USING (bucket_id = 'receipts'
 --           AND (SELECT auth.uid()) IS NOT NULL
 --           AND (storage.foldername(name))[1] IN (
@@ -177,7 +221,7 @@
 --   DROP TRIGGER trg_installment_plans_personal_owner ON public.installment_plans;
 --   DROP TRIGGER trg_transactions_plan_owner ON public.transactions;
 --   ALTER TABLE public.account_transfers DROP COLUMN personal_owner_ids;
---   ALTER TABLE public.installment_plans DROP COLUMN personal_owner_id;
+--   ALTER TABLE public.installment_plans DROP COLUMN personal_owner_id, DROP COLUMN former_member_personal;
 --   DROP FUNCTION public.nafaqah_transfer_personal_owners(), public.nafaqah_personal_owners_of(uuid, uuid),
 --     public.nafaqah_forget_transfer_owner(), public.nafaqah_plan_personal_owner(),
 --     public.nafaqah_transaction_plan_owner(), public.nafaqah_purchase_personal_owner(uuid, uuid);
@@ -198,6 +242,7 @@
 --     public.nafaqah_close_unfit_requests(uuid, uuid, numeric),
 --     public.nafaqah_may_repay(uuid, uuid),
 --     public.nafaqah_refuse_account_delete(),
+--     public.nafaqah_guard_advance_attribution(),
 --     public.nafaqah_receipt_hidden(text),
 --     public.nafaqah_caller_hidden_wives(),
 --     public.nafaqah_caller_sees_allowances(),
@@ -222,7 +267,8 @@
 --   account; the transfers stay in account_transfers as ordinary history. Data lost: requests and
 --   their outcomes, the ledger's links to the transfers, its request keys and stored outstanding
 --   figures, the transfers' labels and who owned their personal sides (personal_owner_ids), and
---   whose personal purchase each installment plan was (personal_owner_id).
+--   whose personal purchase each installment plan was (personal_owner_id), and which were a
+--   deleted wife's (former_member_personal: those plans become household-wide).
 --   paid_by_user_id keeps whoever paid (a co-admin, say), where
 --   the old record_spouse_reimbursement wrote the husband. The keys this file's calls claimed stay
 --   in 001200's nafaqah_request_keys (ids only): 001200's own calls keep refusing them.
@@ -1242,11 +1288,18 @@ BEGIN
     IF v_orig.id IS NULL THEN
         RAISE EXCEPTION 'No such repayment in this household' USING ERRCODE = 'P0002', HINT = 'reimbursement_not_found';
     END IF;
-    -- Never a wife (review R1-01). Otherwise who reverses follows the account it left (review
-    -- R1-07), checked under the locks below: a personal account's owner, while he is a member,
-    -- whatever his role now; a shared pool, the husband if he is an admin (an admin who is not a wife when he is gone).
+    -- Never a wife (review R1-01). Only her ledger's manager now: her husband, or an admin who is
+    -- not a wife when he is gone (review R3B-06, owner decision 2026-11-06, superseding R1-07): a
+    -- replaced husband or a demoted admin no longer reverses, even from his own account. Within
+    -- that, the account it left decides (the account helper below, under the locks): a personal
+    -- account only by its owner, a pool only by an admin. So a personal account's repayment whose
+    -- owner no longer manages her ledger is reversed by nobody.
     IF public.nafaqah_is_spouse_member(p_household_id, v_actor) THEN
         RAISE EXCEPTION 'Forbidden: a wife does not reverse a repayment'
+            USING ERRCODE = '42501', HINT = 'forbidden';
+    END IF;
+    IF NOT public.nafaqah_may_manage_ledgers(p_household_id, v_actor) THEN
+        RAISE EXCEPTION 'Forbidden: a repayment is reversed by the husband, or by an admin who is not a wife when he is gone'
             USING ERRCODE = '42501', HINT = 'forbidden';
     END IF;
 
@@ -1279,14 +1332,9 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'The account it was paid from is archived or gone' USING ERRCODE = '22023', HINT = 'reversal_account_unavailable';
     END IF;
-    -- A pool's repayment: the husband if he is an admin, or an admin who is not a wife when he is
-    -- gone (review R3-01; the helper below checks the admin role under the locks). A personal
-    -- account's: its owner, whatever his role now (review R1-07).
-    IF (SELECT a.is_shared_pool FROM public.accounts a WHERE a.id = v_account) IS TRUE
-       AND NOT public.nafaqah_may_manage_ledgers(p_household_id, v_actor) THEN
-        RAISE EXCEPTION 'Forbidden: a pool''s repayment is reversed by the husband, or by an admin who is not a wife when he is gone'
-            USING ERRCODE = '42501', HINT = 'forbidden';
-    END IF;
+    -- The manager (checked above) reverses from the account it left as the account rules say: a
+    -- pool's only as an admin, a personal account's only as its owner (the helper below, under the
+    -- locks).
     BEGIN
         v_account := public.nafaqah_repayment_lock_account(p_household_id, v_actor, v_account);
     EXCEPTION WHEN SQLSTATE 'P0002' THEN
@@ -1493,14 +1541,16 @@ DECLARE
     v_pass int;
     v_transfer uuid;
 BEGIN
-    -- Never a wife (review R1-01). Otherwise who reverses follows the account the payment left
-    -- (review R1-07), checked under the locks below: a personal account's owner, while he is a
-    -- member, whatever his role now; a shared pool, the husband if he is an admin (an admin who is not a wife when he is gone).
+    -- Never a wife (review R1-01). Only the record's manager now: the husband it is owed by, or an
+    -- admin who is not a wife when he is gone (review R3B-06, owner decision 2026-11-06, superseding
+    -- R1-07); within that, the account it left decides (the account helper below, under the locks):
+    -- a personal account only by its owner, a pool only by an admin.
     PERFORM public.nafaqah_require_member(p_household_id, v_actor);
     IF public.nafaqah_is_spouse_member(p_household_id, v_actor) THEN
         RAISE EXCEPTION 'Forbidden: a wife does not reverse a payment of this record'
             USING ERRCODE = '42501', HINT = 'forbidden';
     END IF;
+    PERFORM public.former_member_debt_require_manager(p_household_id, v_actor);
     IF p_request_key IS NULL THEN
         RAISE EXCEPTION 'A request key is required' USING ERRCODE = '22023', HINT = 'request_key_required';
     END IF;
@@ -1559,13 +1609,6 @@ BEGIN
             WHERE a.id = v_account AND a.household_id = p_household_id AND a.is_archived IS NOT TRUE AND a.currency = 'SAR'
         ) THEN
             RAISE EXCEPTION 'The account it was paid from is archived or gone' USING ERRCODE = '22023', HINT = 'reversal_account_unavailable';
-        END IF;
-        -- A pool's payment: the husband if he is an admin, or an admin who is not a wife when he is
-        -- gone (review R3-01). A personal account's: its owner, whatever his role now (R1-07).
-        IF (SELECT a.is_shared_pool FROM public.accounts a WHERE a.id = v_account) IS TRUE
-           AND NOT public.nafaqah_may_manage_ledgers(p_household_id, v_actor) THEN
-            RAISE EXCEPTION 'Forbidden: a pool''s payment is reversed by the husband, or by an admin who is not a wife when he is gone'
-                USING ERRCODE = '42501', HINT = 'forbidden';
         END IF;
     END LOOP;
 
@@ -1945,6 +1988,16 @@ BEGIN
     -- The real name stays on a linked dependent row, and its targeted invites cascade.
     DELETE FROM public.household_dependents WHERE linked_user_id = v_uid;
 
+    -- Her personal plans in the households she leaves as a wife stay hidden as a former wife's
+    -- (section 10e, owner decision 2026-11-06): her id goes from them now, before the leave below
+    -- would make her no wife of the household, and the mark keeps them read only by her husband and
+    -- the admins who are not wives. Her personal purchases were deleted above, so none is linked.
+    UPDATE public.installment_plans p
+    SET personal_owner_id = NULL,
+        former_member_personal = true
+    WHERE p.personal_owner_id = v_uid
+      AND public.nafaqah_is_spouse_member(p.household_id, v_uid);
+
     -- The leave itself. Fires the Nafaqah, provider, primary admin and mark triggers.
     DELETE FROM public.household_memberships WHERE user_id = v_uid;
 
@@ -2187,8 +2240,14 @@ $$;
 -- rows, and so nothing derived from them through RLS: no amount, merchant, note, receipt photo,
 -- nafaqah_spouse_id link or sum. Every other transaction keeps the household-wide read of
 -- 20261020100000 (her wife_reimbursable advances among them). Who creates, edits or voids is
--- unchanged (the write triggers and policies); a caller who cannot read a row cannot pick it.
--- Replaces 20261020100000's transactions_select_household and receipts_select_household.
+-- unchanged (the write triggers), and a caller who cannot read a row cannot update or delete it
+-- (review R3B-01, owner decision 2026-11-06): the UPDATE and DELETE policies carry the same test,
+-- so a statement that reads no column (UPDATE ... WHERE true, a DELETE with no WHERE, which
+-- PostgreSQL does not filter by the read policy) reaches no row the caller does not read, and an
+-- update never leaves a row the caller could not read (WITH CHECK).
+-- Replaces 20261020100000's transactions_select_household and receipts_select_household, and
+-- 20261020400000's transactions_update_household and transactions_delete_household (and
+-- 20261020100000's receipts_delete_household).
 --
 -- The policy is on the hottest read path. The class is tested first, on the row itself; the
 -- caller's half (nafaqah_caller_sees_allowances: one membership row and the provider) runs once per
@@ -2202,11 +2261,47 @@ CREATE POLICY transactions_select_household ON public.transactions
                 OR nafaqah_spouse_id = (SELECT auth.uid())
                 OR (SELECT public.nafaqah_caller_sees_allowances())));
 
+-- 20261020400000's rules (the creator or an admin; a personal account only on its owner's rows),
+-- with the read test above on the row it picks and on the row it leaves.
+DROP POLICY IF EXISTS transactions_update_household ON public.transactions;
+CREATE POLICY transactions_update_household ON public.transactions
+    FOR UPDATE TO authenticated
+    USING (household_id = (SELECT public.get_auth_user_household_id())
+           AND (nafaqah_class IS DISTINCT FROM 'wife_personal'
+                OR nafaqah_spouse_id = (SELECT auth.uid())
+                OR (SELECT public.nafaqah_caller_sees_allowances())))
+    WITH CHECK (
+        household_id = (SELECT public.get_auth_user_household_id())
+        AND (user_id = (SELECT auth.uid()) OR (SELECT public.get_auth_user_role()) = 'admin')
+        AND (
+            account_id IS NULL
+            OR public.transaction_account_matches(account_id, household_id, user_id)
+        )
+        AND (nafaqah_class IS DISTINCT FROM 'wife_personal'
+             OR nafaqah_spouse_id = (SELECT auth.uid())
+             OR (SELECT public.nafaqah_caller_sees_allowances()))
+    );
+
+DROP POLICY IF EXISTS transactions_delete_household ON public.transactions;
+CREATE POLICY transactions_delete_household ON public.transactions
+    FOR DELETE TO authenticated
+    USING (household_id = (SELECT public.get_auth_user_household_id())
+           AND (nafaqah_class IS DISTINCT FROM 'wife_personal'
+                OR nafaqah_spouse_id = (SELECT auth.uid())
+                OR (SELECT public.nafaqah_caller_sees_allowances())));
+
 -- Her receipt photo follows her purchase. Receipts are stored under the household's folder
 -- (<household id>/<file>); transactions.receipt_url holds that path, or a legacy URL ending in
--- /receipts/<path>?..., read the same way as the purge reads it. True when the object is the
--- photo of a personal purchase in a household of the caller that the caller does not read. It
--- answers only about a path the caller names, inside a household the caller belongs to.
+-- /receipts/<path>?..., read the same way as the purge reads it. True when the caller does not
+-- read the object named: the photo of a personal purchase of the household that the caller does
+-- not read. It is no oracle for a guessed path (review R3B-04): membership of the folder's
+-- household is checked first, and a path that names no photo is answered as one the caller does
+-- not read, so "nothing there" and "there, not yours" are the same answer (true). Only those who
+-- read every personal purchase of the household (10c) get false for every path. Each step is one
+-- index probe (the membership, the object by bucket and name, the purchase by its path below), so
+-- a listing costs the same per object whatever the household holds. The read and the delete
+-- policies of the receipts bucket run it per object, as the caller (live postgres owns it and
+-- bypasses RLS, so its look at storage.objects is not filtered).
 CREATE OR REPLACE FUNCTION public.nafaqah_receipt_hidden(p_name text)
 RETURNS boolean
 LANGUAGE plpgsql
@@ -2219,31 +2314,47 @@ DECLARE
     v_folder text := split_part(COALESCE(p_name, ''), '/', 1);
     v_household uuid;
 BEGIN
-    IF v_uid IS NULL
-       OR v_folder !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+    -- The server's own read (no JWT subject): RLS does not apply to it.
+    IF v_uid IS NULL THEN
         RETURN false;
     END IF;
+    IF v_folder !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+        RETURN true;
+    END IF;
     v_household := v_folder::uuid;
-    IF NOT EXISTS (
+    IF NOT EXISTS (SELECT 1 FROM public.household_memberships m
+                   WHERE m.household_id = v_household AND m.user_id = v_uid) THEN
+        RETURN true;
+    END IF;
+    IF public.nafaqah_may_see_allowances(v_household, v_uid) THEN
+        RETURN false;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM storage.objects o WHERE o.bucket_id = 'receipts' AND o.name = p_name) THEN
+        RETURN true;
+    END IF;
+    RETURN EXISTS (
         SELECT 1
         FROM public.transactions t
         WHERE t.household_id = v_household
           AND t.nafaqah_class = 'wife_personal'
           AND t.receipt_url IS NOT NULL
-          AND t.nafaqah_spouse_id IS DISTINCT FROM v_uid
           AND split_part(regexp_replace(t.receipt_url, '^.*/receipts/', ''), '?', 1) = p_name
-    ) THEN
-        RETURN false;
-    END IF;
-    RETURN EXISTS (SELECT 1 FROM public.household_memberships m
-                   WHERE m.household_id = v_household AND m.user_id = v_uid)
-       AND NOT public.nafaqah_may_see_allowances(v_household, v_uid);
+          AND t.nafaqah_spouse_id IS DISTINCT FROM v_uid
+    );
 END;
 $$;
 
--- The lookup above reads only the household's personal purchases that carry a photo.
+-- The lookup above finds the household's personal purchases by the path of their photo. A first
+-- version of this file indexed the household only; it is rebuilt on the path once.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'idx_transactions_wife_personal_receipt'
+               AND indexdef NOT LIKE '%regexp_replace%') THEN
+        DROP INDEX public.idx_transactions_wife_personal_receipt;
+    END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_transactions_wife_personal_receipt
-    ON public.transactions (household_id)
+    ON public.transactions (household_id, (split_part(regexp_replace(receipt_url, '^.*/receipts/', ''), '?', 1)))
     WHERE nafaqah_class = 'wife_personal' AND receipt_url IS NOT NULL;
 
 DROP POLICY IF EXISTS receipts_select_household ON storage.objects;
@@ -2258,6 +2369,61 @@ CREATE POLICY receipts_select_household ON storage.objects
         )
         AND NOT public.nafaqah_receipt_hidden(name));
 
+-- Her photo is no target of a delete by someone who does not read it (review R3B-01). No client
+-- updates a receipt at all: the bucket has no UPDATE policy.
+DROP POLICY IF EXISTS receipts_delete_household ON storage.objects;
+CREATE POLICY receipts_delete_household ON storage.objects
+    FOR DELETE TO authenticated
+    USING (bucket_id = 'receipts'
+        AND (SELECT auth.uid()) IS NOT NULL
+        AND (storage.foldername(name))[1] IN (
+            SELECT m.household_id::text
+            FROM public.household_memberships m
+            WHERE m.user_id = (SELECT auth.uid())
+        )
+        AND NOT public.nafaqah_receipt_hidden(name));
+
+-- Her advance (wife_reimbursable) is her ledger's (review R3B-08, owner decision 2026-11-06): its
+-- wife or its class is changed by a client only by her ledger's managers (her husband; an admin
+-- who is not a wife when he is gone), or by her clearing or keeping her own. Not by a wife-admin,
+-- and not by another admin while the husband is there, though both may still edit its other
+-- columns as before. The server (no JWT subject: the API checks its own callers) and the system's
+-- own cascades (her leaving, an account deletion) are not clients. It fires after
+-- trg_validate_transaction_nafaqah_class (trigger names order them), so a member who may not
+-- classify at all keeps that answer (nafaqah_class_not_allowed).
+CREATE OR REPLACE FUNCTION public.nafaqah_guard_advance_attribution()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_uid uuid := auth.uid();
+BEGIN
+    IF v_uid IS NULL OR pg_trigger_depth() > 1 OR OLD.nafaqah_class IS DISTINCT FROM 'wife_reimbursable' THEN
+        RETURN NEW;
+    END IF;
+    IF NEW.nafaqah_class IS NOT DISTINCT FROM OLD.nafaqah_class
+       AND NEW.nafaqah_spouse_id IS NOT DISTINCT FROM OLD.nafaqah_spouse_id THEN
+        RETURN NEW;
+    END IF;
+    IF v_uid = OLD.nafaqah_spouse_id
+       AND (NEW.nafaqah_spouse_id IS NULL OR NEW.nafaqah_spouse_id = OLD.nafaqah_spouse_id) THEN
+        RETURN NEW;
+    END IF;
+    IF public.nafaqah_may_manage_ledgers(OLD.household_id, v_uid) THEN
+        RETURN NEW;
+    END IF;
+    RAISE EXCEPTION 'Forbidden: her advance is changed by her husband, or by an admin who is not a wife when he is gone'
+        USING ERRCODE = '42501', HINT = 'forbidden';
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_wife_advance_attribution ON public.transactions;
+CREATE TRIGGER trg_wife_advance_attribution
+    BEFORE UPDATE OF nafaqah_class, nafaqah_spouse_id ON public.transactions
+    FOR EACH ROW EXECUTE FUNCTION public.nafaqah_guard_advance_attribution();
+
 -- 10e. Transfers of her personal account, plans of her personal purchases (owner decision 2026-11-06)
 -- Read by the same people as her personal purchases (10d): she herself, her husband, and an admin
 -- of the household who is not a wife. A co-wife (even an admin) and an ordinary member read none.
@@ -2269,17 +2435,34 @@ CREATE POLICY receipts_select_household ON storage.objects
 --     balance shows it. A shared pool is the household's, so its owner_user_id reads nothing more:
 --     a pool's history is as before. The other side's balance is unchanged and read as before (a
 --     pool's by every member); only the row leaves its history for the others.
---     A repayment (his account or a pool to no account) never involves her account: unchanged.
+--     A repayment (his account or a pool to no account) never involves her account.
+--     A repayment's own rows (purpose set: a repayment to the wife, its reversal, a former
+--     member's payment, its reversal) are her ledger's (review R3B-02, owner decision 2026-11-06):
+--     read by the wife whose ledger it is (a repayment to her or its reversal), her ledger's
+--     managers (her husband; the admins who are not wives when he is gone; for a former member's
+--     record, its managers), and the owner of the personal account the money left or returned to,
+--     his own account's rows only. Nobody else, a pool's lines included: the other members see the
+--     pool's balance move, not the line (a co-wife, an ordinary member, an admin who is not a wife
+--     while the husband is there). The ledger's managers are evaluated once per statement; her own
+--     rows are found through her ledger's link (spouse_reimbursements.transfer_id, read under its
+--     own policy), only for a repayment row the caller neither manages nor owns.
 --     Replaces 20261020100000's transfers_select_household.
---   * installment_plans: a plan linked to a purchase (original_transaction_id) is read by whoever
---     reads that purchase under transactions_select_household (10d), so a plan of her personal
---     purchase follows it: its shop, amounts, dates, schedule (next_due_at) and payments
---     (paid_installments) are columns of the plan. It stays hers after the link is cleared (owner
---     decision 2026-11-06): her purchase deleted (ON DELETE SET NULL) or the plan unlinked, it is
---     read by the same people (personal_owner_id, below). An unlinked plan with no owner, and one of
---     any other purchase, stay household-wide. A caller who does not read a plan cannot pick it to
---     edit or delete it; the insert check is unchanged. Replaces the USING half of
---     20261020100000's policy (its name is kept for the rollback; it covers every command, as before).
+--   * installment_plans: a plan linked to her personal purchase (original_transaction_id) is read
+--     by whoever reads that purchase under transactions_select_household (10d): its shop, amounts,
+--     dates, schedule (next_due_at) and payments (paid_installments) are columns of the plan. The
+--     database keeps whose it is on the plan itself (personal_owner_id, below), so the read test
+--     compares the kept owner and looks nothing up per plan (review R3B-03: a plan list costs the
+--     same whatever the household's transactions). It stays hers after the link is cleared (owner
+--     decision 2026-11-06): her purchase deleted (ON DELETE SET NULL) or the plan unlinked. When her
+--     account is deleted, her plans stay hidden as a former wife's (former_member_personal, below):
+--     read only by her husband and the admins who are not wives. An unlinked plan with no owner, and
+--     one of any other purchase, stay household-wide. A caller who does not read a plan cannot pick
+--     it to edit or delete it (the policy covers every command). A plan is created or linked again
+--     only to a purchase the caller reads (review R3B-05: the insert and update check reads the
+--     purchase under the caller's own RLS, so a purchase she does not read, an id of nothing and
+--     another household's purchase are the same refusal), and never by anyone to another household's
+--     purchase (the plan's trigger, for the server). Replaces 20261020100000's policy (its name is
+--     kept for the rollback).
 --
 -- Whose accounts a transfer touched is kept on the row (personal_owner_ids: the owners of its
 -- personal sides when it was made), so the read policy compares two small arrays per row and looks
@@ -2296,6 +2479,17 @@ CREATE POLICY receipts_select_household ON storage.objects
 -- expense or to her advance, the plan becomes household-wide (and stays so after the purchase is
 -- deleted); made hers, the plan becomes hers. When the link is cleared it keeps the last owner. A
 -- deleted person's id leaves it, as it leaves personal_owner_ids.
+--
+-- A deleted wife's personal plans (owner decision 2026-11-06, item 4 of review R3B) keep a mark
+-- instead of her id: former_member_personal, a boolean that names nobody. The purge sets it (and
+-- clears her id) on her plans in the households she leaves as a wife, before the leave, so they
+-- are never household-wide, not even between the purge and her Auth delete; a delete of her
+-- account by any other path does the same through the users trigger. A marked plan is read only
+-- by those who read every personal purchase of the household (10c: her husband and the admins who
+-- are not wives). It is the former member record's pattern (001200: one anonymised record, no
+-- name, id or email of hers) applied to the plan: the mark says "a former wife's", never which.
+-- A client never sets it (no column privilege; a new plan is never marked); linked again to a
+-- purchase, the plan follows that purchase as any other.
 
 ALTER TABLE public.account_transfers ADD COLUMN IF NOT EXISTS personal_owner_ids uuid[];
 COMMENT ON COLUMN public.account_transfers.personal_owner_ids IS
@@ -2341,8 +2535,11 @@ ALTER TABLE public.account_transfers ALTER COLUMN personal_owner_ids SET DEFAULT
 ALTER TABLE public.account_transfers ALTER COLUMN personal_owner_ids SET NOT NULL;
 
 -- The plan's owner: the wife whose personal purchase of the plan's household it is linked to.
--- Another household's purchase, an ordinary one or her advance give none.
+-- An ordinary purchase or her advance give none; another household's purchase is never linked.
 ALTER TABLE public.installment_plans ADD COLUMN IF NOT EXISTS personal_owner_id uuid;
+ALTER TABLE public.installment_plans ADD COLUMN IF NOT EXISTS former_member_personal boolean NOT NULL DEFAULT false;
+COMMENT ON COLUMN public.installment_plans.former_member_personal IS
+    'A plan of a personal purchase of a wife whose account was deleted (20261105001300, 10e): she is no longer named on it. Read only by her husband and the admins who are not wives. Set by the purge and trg_users_forget_transfer_owner, never by a client.';
 COMMENT ON COLUMN public.installment_plans.personal_owner_id IS
     'The wife whose personal (wife_personal) purchase the plan is or was linked to (20261105001300, 10e). Kept by trg_installment_plans_personal_owner and trg_transactions_plan_owner, never by a client; it stays when the link is cleared, and the read policy hides the plan from a co-wife and an ordinary member.';
 
@@ -2360,8 +2557,12 @@ AS $$
       AND t.nafaqah_class = 'wife_personal';
 $$;
 
--- On insert and on a change of the link: the linked purchase decides; a cleared link keeps the last
--- owner (her purchase deleted, or the plan unlinked by hand). A client's value is never kept.
+-- On insert and on a change of the link: the linked purchase decides (and a linked plan is no
+-- former wife's); a cleared link keeps the last owner and mark (her purchase deleted, or the plan
+-- unlinked by hand). A client's values are never kept: a new plan is never marked. The server (no
+-- JWT subject) never links a plan to a purchase outside the plan's household (review R3B-05); a
+-- client is refused that by the policy's check first, with the same answer as for any purchase
+-- it does not read, so this trigger raises nothing a client could tell apart.
 CREATE OR REPLACE FUNCTION public.nafaqah_plan_personal_owner()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -2370,11 +2571,20 @@ SET search_path = public, pg_temp
 AS $$
 BEGIN
     IF NEW.original_transaction_id IS NOT NULL THEN
+        IF auth.uid() IS NULL AND NOT EXISTS (
+            SELECT 1 FROM public.transactions t
+            WHERE t.id = NEW.original_transaction_id AND t.household_id = NEW.household_id
+        ) THEN
+            RAISE EXCEPTION 'No such purchase in this household' USING ERRCODE = 'P0002', HINT = 'purchase_not_found';
+        END IF;
         NEW.personal_owner_id := public.nafaqah_purchase_personal_owner(NEW.original_transaction_id, NEW.household_id);
+        NEW.former_member_personal := false;
     ELSIF TG_OP = 'INSERT' THEN
         NEW.personal_owner_id := NULL;
+        NEW.former_member_personal := false;
     ELSE
         NEW.personal_owner_id := OLD.personal_owner_id;
+        NEW.former_member_personal := OLD.former_member_personal;
     END IF;
     RETURN NEW;
 END;
@@ -2394,9 +2604,11 @@ SET search_path = public, pg_temp
 AS $$
 BEGIN
     UPDATE public.installment_plans p
-    SET personal_owner_id = public.nafaqah_purchase_personal_owner(NEW.id, p.household_id)
+    SET personal_owner_id = public.nafaqah_purchase_personal_owner(NEW.id, p.household_id),
+        former_member_personal = false
     WHERE p.original_transaction_id = NEW.id
-      AND p.personal_owner_id IS DISTINCT FROM public.nafaqah_purchase_personal_owner(NEW.id, p.household_id);
+      AND (p.personal_owner_id IS DISTINCT FROM public.nafaqah_purchase_personal_owner(NEW.id, p.household_id)
+           OR p.former_member_personal);
     RETURN NULL;
 END;
 $$;
@@ -2426,8 +2638,10 @@ CREATE INDEX IF NOT EXISTS idx_installment_plans_personal_owner
 -- A deleted person's id leaves both columns with them, as user_id does (ON DELETE SET NULL): the
 -- purge's "nothing names them" holds, and an out-of-band delete leaves no id behind either. It runs
 -- before their row goes, while their accounts (which cascade from it) still exist, so the rows it
--- rewrites still satisfy their account keys. Once they are gone they are no wife of the household,
--- so no read changes. (Setting personal_owner_id alone does not wake the plan's trigger.)
+-- rewrites still satisfy their account keys. A plan of a wife still a wife of its household (an
+-- out-of-band delete; the purge marked hers already) keeps the former wife's mark, so it stays
+-- hidden; a linked one then follows its purchase, which her leaving makes the household's.
+-- (Setting these two columns alone does not wake the plan's trigger.)
 CREATE OR REPLACE FUNCTION public.nafaqah_forget_transfer_owner()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -2439,7 +2653,8 @@ BEGIN
     SET personal_owner_ids = array_remove(t.personal_owner_ids, OLD.id)
     WHERE OLD.id = ANY (t.personal_owner_ids);
     UPDATE public.installment_plans p
-    SET personal_owner_id = NULL
+    SET personal_owner_id = NULL,
+        former_member_personal = p.former_member_personal OR public.nafaqah_is_spouse_member(p.household_id, OLD.id)
     WHERE p.personal_owner_id = OLD.id;
     RETURN OLD;
 END;
@@ -2470,31 +2685,43 @@ AS $$
     END;
 $$;
 
--- A row hidden from the caller by a wife's side is still read when one of its personal sides is the
--- caller's own (she reads her own accounts' rows; a member who sent her money or got some from her
--- reads that row). Both halves of the caller run once per statement (InitPlans); per row, two array
--- tests.
+-- A row whose personal side is the caller's own is read (she reads her own accounts' rows; a member
+-- who sent her money or got some from her reads that row; the owner of the account a repayment left
+-- or returned to reads that row). Otherwise a transfer between accounts (no purpose) is read unless
+-- a wife's account the caller does not read is on it, and a repayment's row (a purpose) only by her
+-- ledger's managers and by the wife whose repayment it is (review R3B-02). The caller's halves run
+-- once per statement (InitPlans); per row, array tests, and the ledger link only for a repayment's
+-- row the caller neither manages nor owns.
 DROP POLICY IF EXISTS transfers_select_household ON public.account_transfers;
 CREATE POLICY transfers_select_household ON public.account_transfers
     FOR SELECT TO authenticated
     USING (household_id = (SELECT public.get_auth_user_household_id())
-           AND (NOT (personal_owner_ids && (SELECT public.nafaqah_caller_hidden_wives()))
-                OR (SELECT auth.uid()) = ANY (personal_owner_ids)));
+           AND ((SELECT auth.uid()) = ANY (personal_owner_ids)
+                OR (purpose IS NULL
+                    AND NOT (personal_owner_ids && (SELECT public.nafaqah_caller_hidden_wives())))
+                OR (purpose IS NOT NULL
+                    AND ((SELECT public.nafaqah_caller_manages_ledgers())
+                         OR (purpose IN ('wife_repayment', 'wife_repayment_reversal')
+                             AND EXISTS (SELECT 1 FROM public.spouse_reimbursements r
+                                         WHERE r.transfer_id = account_transfers.id
+                                           AND r.wife_user_id = (SELECT auth.uid())))))));
 -- The first version of 10e named a wife's own rows with this helper; the caller's own id covers them.
 DROP FUNCTION IF EXISTS public.nafaqah_caller_wife_id();
 
--- The plan follows its purchase while linked: the transactions read policy (10d) decides, under the
--- caller's own RLS, so there is one rule for both and no helper that names a hidden row. Its kept
--- owner hides it as her purchase would, linked or not (one InitPlan, one array test per row).
+-- The kept owner hides the plan as her purchase would, linked or not, and the former wife's mark as
+-- a deleted wife's purchase would be (two InitPlans, an array test and a boolean per row: nothing
+-- looked up, review R3B-03). A new or linked-again plan's purchase is read under the caller's own
+-- RLS (one primary key probe per written row, review R3B-05).
 DROP POLICY IF EXISTS "Allow household members full access to installment_plans" ON public.installment_plans;
 CREATE POLICY "Allow household members full access to installment_plans" ON public.installment_plans
     FOR ALL TO authenticated
     USING (household_id = (SELECT public.get_auth_user_household_id())
-           AND (original_transaction_id IS NULL
-                OR EXISTS (SELECT 1 FROM public.transactions t WHERE t.id = installment_plans.original_transaction_id))
            AND (personal_owner_id IS NULL
-                OR NOT (ARRAY[personal_owner_id] && (SELECT public.nafaqah_caller_hidden_wives()))))
-    WITH CHECK (household_id = (SELECT public.get_auth_user_household_id()));
+                OR NOT (ARRAY[personal_owner_id] && (SELECT public.nafaqah_caller_hidden_wives())))
+           AND (NOT former_member_personal OR (SELECT public.nafaqah_caller_sees_allowances())))
+    WITH CHECK (household_id = (SELECT public.get_auth_user_household_id())
+                AND (original_transaction_id IS NULL
+                     OR EXISTS (SELECT 1 FROM public.transactions t WHERE t.id = installment_plans.original_transaction_id)));
 
 -- 11. Privileges ---------------------------------------------------------------------------------
 -- Her transfers and plans: the read policies run the caller's helper as the caller; the others are
@@ -2509,6 +2736,8 @@ REVOKE ALL ON FUNCTION public.nafaqah_transfer_personal_owners() FROM PUBLIC, an
 REVOKE ALL ON FUNCTION public.nafaqah_plan_personal_owner() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.nafaqah_transaction_plan_owner() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.nafaqah_forget_transfer_owner() FROM PUBLIC, anon, authenticated;
+-- Her advance's guard (10d) is a trigger: nobody executes it.
+REVOKE ALL ON FUNCTION public.nafaqah_guard_advance_attribution() FROM PUBLIC, anon, authenticated;
 -- Her receipt photo: the storage policy runs the helper as the caller.
 REVOKE ALL ON FUNCTION public.nafaqah_receipt_hidden(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.nafaqah_receipt_hidden(text) TO authenticated, service_role;
