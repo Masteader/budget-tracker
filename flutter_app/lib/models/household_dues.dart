@@ -36,7 +36,8 @@ class DueLine {
 List<DueLine> nafaqahDueLines(NafaqahSummary summary) {
   if (!summary.isFamily) return const [];
   final lines = <DueLine>[];
-  for (final wife in summary.wives) {
+  // Only the ledgers the caller reads (review R3-01): a wife her own.
+  for (final wife in summary.visibleWives) {
     final owed = wife.reimbursement.outstanding;
     if (owed < 0.005) continue;
     if (summary.callerIsWife) {

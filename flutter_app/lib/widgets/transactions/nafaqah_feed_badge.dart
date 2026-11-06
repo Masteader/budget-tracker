@@ -38,15 +38,16 @@ class FeedFamilyContext {
         isFamily: summary.isFamily,
         viewerIsWife: summary.callerIsWife,
         wifeNames: {
-          for (final w in summary.wives)
+          for (final w in summary.wifeRoster)
             if ((w.displayName ?? '').trim().isNotEmpty) w.id.toLowerCase(): w.displayName!.trim(),
         },
       );
 
-  /// The wife [tx] names (or the only wife), or null.
+  /// The wife [tx] names, or the only wife when it names none; null for a wife
+  /// the viewer may not name (a co-wife, review R3-01), never another's name.
   String? wifeNameFor(Transaction tx) {
     final id = tx.nafaqahSpouseId?.toLowerCase();
-    if (id != null && wifeNames.containsKey(id)) return wifeNames[id];
+    if (id != null) return wifeNames[id];
     return wifeNames.length == 1 ? wifeNames.values.first : null;
   }
 }

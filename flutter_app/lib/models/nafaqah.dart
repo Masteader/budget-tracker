@@ -183,7 +183,8 @@ class NafaqahPreview {
       isFamily: true,
       recorderRole: role,
       suggestedClass: role == 'wife' ? kWifeReimbursable : null,
-      wives: summary.wives,
+      // The wives the caller may name (review R3-01: a wife herself only).
+      wives: summary.wifeRoster,
       // `can_set_provider` is true for household admins.
       callerIsAdmin: summary.canSetProvider,
       husbandName: summary.husbandName,
@@ -588,7 +589,13 @@ class NafaqahSummary {
   /// 'family' | 'roommates' (`household_type`), when the server sends it.
   final String? householdType;
 
-  /// What deleted wives were still owed, newest first, visible to every member.
+  /// Wives whose allowance the caller sets but whose repayment ledger the
+  /// caller does not read (an admin while the husband is there, review
+  /// R3-01): only their allowance.
+  final List<NafaqahWife> allowanceWives;
+
+  /// What deleted wives were still owed, newest first: sent only to whoever
+  /// manages them (her husband; an admin who is not a wife once he is gone).
   final List<FormerMemberDebt> formerMemberDebts;
 
   /// The caller (the husband/provider or an admin who is not a wife) may
@@ -610,12 +617,23 @@ class NafaqahSummary {
     this.needsProvider = false,
     this.canSetProvider = false,
     this.householdType,
+    this.allowanceWives = const [],
     this.formerMemberDebts = const [],
     this.canManageFormerMemberDebts = false,
   });
 
   bool get isFamily => mode == 'family_nafaqah' || householdType == 'family' || wives.isNotEmpty;
   bool get callerIsWife => callerRole == 'wife';
+
+  /// Whether the caller reads [wife]'s repayment ledger (review R3-01): she
+  /// herself, or whoever settles it (her husband; an admin who is not a wife
+  /// once he is gone). The server sends no other entry; the app shows none,
+  /// whatever a server sends.
+  bool canSeeLedgerOf(NafaqahWife wife) =>
+      callerIsWife ? wife.id == callerUserId : (callerRole == 'husband' || canDecideFor(wife));
+
+  /// The wives whose ledger the card shows: a wife her own entry only.
+  List<NafaqahWife> get visibleWives => wives.where(canSeeLedgerOf).toList();
 
   /// The viewer is [wife] herself: she marks what she received (a request).
   bool canRequestFor(NafaqahWife wife) => wife.canRequest ?? (callerIsWife && callerUserId == wife.id);
@@ -625,13 +643,26 @@ class NafaqahSummary {
   /// co-wife who is an admin, whatever the server says (review R1-01).
   bool canDecideFor(NafaqahWife wife) => !callerIsWife && (wife.canDecide ?? canRecordReimbursement);
 
-  /// The wife the caller is concerned with: herself, or the first wife.
+  /// Every wife the caller may name (classifying an expense, her allowance):
+  /// the wives the server sent, in either list. Who a wife is is not her
+  /// ledger; a wife still names only herself (review R3-01).
+  List<NafaqahWife> get wifeRoster {
+    if (callerIsWife) return wives.where((w) => w.id == callerUserId).toList();
+    final ids = {for (final w in wives) w.id};
+    return [...wives, for (final w in allowanceWives) if (!ids.contains(w.id)) w];
+  }
+
+  /// The wife the caller is concerned with: herself (never a co-wife), or the
+  /// first wife the caller may name.
   NafaqahWife? get primaryWife {
-    if (wives.isEmpty) return null;
+    final roster = wifeRoster;
     if (callerIsWife) {
-      return wives.firstWhere((w) => w.id == callerUserId, orElse: () => wives.first);
+      for (final w in roster) {
+        if (w.id == callerUserId) return w;
+      }
+      return null;
     }
-    return wives.first;
+    return roster.isEmpty ? null : roster.first;
   }
 
   factory NafaqahSummary.fromMap(Map<String, dynamic> map) {
@@ -653,6 +684,11 @@ class NafaqahSummary {
       needsProvider: map['needs_provider'] as bool? ?? false,
       canSetProvider: map['can_set_provider'] as bool? ?? false,
       householdType: map['household_type'] as String?,
+      allowanceWives: (map['allowance_wives'] as List? ?? const [])
+          .whereType<Map>()
+          .map((w) => NafaqahWife.fromMap(Map<String, dynamic>.from(w)))
+          .where((w) => w.id.isNotEmpty)
+          .toList(),
       formerMemberDebts: (map['former_member_debts'] is List ? map['former_member_debts'] as List : const [])
           .whereType<Map>()
           .map((d) => FormerMemberDebt.fromMap(Map<String, dynamic>.from(d)))

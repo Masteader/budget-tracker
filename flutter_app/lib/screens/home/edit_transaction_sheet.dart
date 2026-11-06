@@ -279,7 +279,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     final summary = _nafaqah;
     return HouseholdRelations(
       husbandId: summary?.husbandId ?? summary?.providerUserId,
-      wifeIds: summary?.wives.map((w) => w.id).toList() ?? const [],
+      wifeIds: summary?.wifeRoster.map((w) => w.id).toList() ?? const [],
     );
   }
 
@@ -535,7 +535,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   /// The wife the Nafaqah choice names, by display name (UX-03).
   String? get _classWifeName {
     final id = _classSpouseId?.toLowerCase();
-    for (final w in _nafaqah?.wives ?? const <NafaqahWife>[]) {
+    for (final w in _nafaqah?.wifeRoster ?? const <NafaqahWife>[]) {
       if (w.id.toLowerCase() == id) {
         final n = (w.displayName ?? '').trim();
         return n.isEmpty ? null : n;

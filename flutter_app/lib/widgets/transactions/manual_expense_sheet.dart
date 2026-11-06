@@ -379,7 +379,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         }
         _isRoommateMode = false;
         _wives = [
-          for (final w in summary.wives) {'id': w.id, 'display_name': w.displayName},
+          for (final w in summary.wifeRoster) {'id': w.id, 'display_name': w.displayName},
         ];
         _viewerIsWife = summary.callerIsWife;
         _husbandName = summary.husbandName;
@@ -393,7 +393,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         _adminClassifier = _canClassifyNafaqah && !isSpouse;
         if (!_canClassifyNafaqah) _familyPayer = 'me';
         final uid = summary.callerUserId ?? _currentUserId;
-        _selectedWifeId = _viewerIsWife ? uid : summary.wives.first.id;
+        _selectedWifeId = _viewerIsWife ? uid : summary.primaryWife?.id;
         if (_viewerIsWife && _familyPayer == 'me') _familyPayer = kWifeReimbursable;
       });
     } catch (e) {

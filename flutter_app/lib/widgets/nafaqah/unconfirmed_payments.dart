@@ -10,8 +10,9 @@ import '../../models/account.dart';
 /// key once and answers a retry as the first time. Closing the sheet must not
 /// forget them. Reopened with a fresh key, the same payment could be recorded a
 /// second time if the first did go through. So they stay here, one entry per
-/// slot (a wife's repayment, her request, one former member's record), until a
-/// definite answer, and the sheet reopens holding them. Kept for the app
+/// slot (a wife's repayment, her request, the approval of one request, one
+/// former member's record), until a definite answer, and the sheet reopens
+/// holding them. Kept for the app
 /// session: after a restart the card shows what the server stored.
 class UnconfirmedPayments {
   UnconfirmedPayments._();
@@ -23,6 +24,9 @@ class UnconfirmedPayments {
 
   /// [wifeUserId]'s own request ("I received X") in [householdId].
   static String requestSlot(String householdId, String wifeUserId) => 'ask|$householdId|$wifeUserId';
+
+  /// The approval of her request [requestId] in [householdId] (review R3-02).
+  static String approvalSlot(String householdId, String requestId) => 'approve|$householdId|$requestId';
 
   /// A payment of the former member's record [debtId] in [householdId].
   static String formerMemberPaymentSlot(String householdId, String debtId) => 'fmd|$householdId|$debtId';

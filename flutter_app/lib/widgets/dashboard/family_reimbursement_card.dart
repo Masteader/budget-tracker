@@ -229,13 +229,17 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
     }
     if (summary == null || !summary.isFamily) return widget.emptyPlaceholder ?? const SizedBox.shrink();
 
-    final wives = summary.callerIsWife && summary.primaryWife != null
-        ? [summary.primaryWife!]
-        : summary.wives;
-    final showNames = wives.length > 1;
-    final debts = summary.formerMemberDebts;
+    // A wife's ledger only for her and those who settle it (review R3-01): a
+    // wife sees her own entry, never a co-wife's, whatever a server sends.
+    final wives = summary.visibleWives;
+    // An admin who reads no ledger (the husband is there) still sets each
+    // wife's allowance (rule 04): her allowance alone, nothing of her ledger.
+    final allowanceOnly = summary.callerIsWife ? const <NafaqahWife>[] : summary.allowanceWives;
+    final showNames = wives.length + allowanceOnly.length > 1;
+    // A former member's record only for whoever manages it (review R3-01).
+    final debts = summary.canManageFormerMemberDebts ? summary.formerMemberDebts : const <FormerMemberDebt>[];
 
-    if (wives.isEmpty && !summary.needsProvider && debts.isEmpty && !_failed) {
+    if (wives.isEmpty && allowanceOnly.isEmpty && !summary.needsProvider && debts.isEmpty && !_failed) {
       return widget.emptyPlaceholder ?? const SizedBox.shrink();
     }
 
@@ -295,14 +299,26 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
             onChanged: _loadSummary,
           ),
         ],
+        for (var i = 0; i < allowanceOnly.length; i++) ...[
+          if (i > 0 || wives.isNotEmpty) const SizedBox(height: 12),
+          WifeAllowanceCard(
+            householdId: widget.householdId,
+            wife: allowanceOnly[i],
+            cycleKey: summary.cycleKey,
+            canSet: summary.canSetAllowance,
+            showWifeName: showNames,
+            setAllowance: widget.setAllowance,
+            onChanged: _loadSummary,
+          ),
+        ],
         // A deleted wife's record outlives her membership: shown even when no
         // wife remains (the settings placeholder still explains the missing role).
-        if (debts.isNotEmpty && wives.isEmpty && !summary.needsProvider && widget.emptyPlaceholder != null) ...[
+        if (debts.isNotEmpty && wives.isEmpty && allowanceOnly.isEmpty && !summary.needsProvider && widget.emptyPlaceholder != null) ...[
           widget.emptyPlaceholder!,
           const SizedBox(height: 12),
         ],
         for (var i = 0; i < debts.length; i++) ...[
-          if (i > 0 || wives.isNotEmpty) const SizedBox(height: 12),
+          if (i > 0 || wives.isNotEmpty || allowanceOnly.isNotEmpty) const SizedBox(height: 12),
           FormerMemberDebtPanel(
             key: ValueKey('fmd_panel_${debts[i].id}'),
             debt: debts[i],
@@ -1154,18 +1170,26 @@ class _ApproveRequestSheet extends StatefulWidget {
 }
 
 class _ApproveRequestSheetState extends State<_ApproveRequestSheet> {
+  /// One key per approval, reused by every retry of it. Kept past this sheet
+  /// while its answer is unknown (review R3-02), as the sibling sheets keep
+  /// theirs: reopened with a new key, the approval could pay twice.
   late final String _requestKey;
   String? _source;
   bool _isSubmitting = false;
 
   /// The account it was sent with when the answer was lost (review R1-06):
-  /// the sheet keeps it, and its key, and offers to send exactly that again.
+  /// the sheet keeps it, and its key, and offers to send exactly that again,
+  /// also after it is closed and reopened (UnconfirmedPayments).
   Account? _held;
+
+  String get _slot => UnconfirmedPayments.approvalSlot(widget.householdId, widget.request.id);
 
   @override
   void initState() {
     super.initState();
-    _requestKey = const Uuid().v4();
+    final pending = UnconfirmedPayments.of(_slot);
+    _requestKey = pending?.requestKey ?? const Uuid().v4();
+    _held = pending?.account;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) RepaymentSources.ensureLoaded(context, widget.householdId);
     });
@@ -1187,13 +1211,20 @@ class _ApproveRequestSheetState extends State<_ApproveRequestSheet> {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
       if (_isUnknownOutcome(e)) {
-        // It may be stored. The sheet stays open with the account and the key;
-        // the balances and the card reload (review R1-06).
+        // It may be stored. The sheet stays open with the account and the key,
+        // and holds them past closing (review R3-02); the balances and the
+        // card reload (review R1-06).
+        UnconfirmedPayments.hold(
+          _slot,
+          UnconfirmedPayment(requestKey: _requestKey, amount: amt, method: widget.request.paymentMethod ?? 'cash', account: account),
+        );
         setState(() => _held = account);
         sources.provider?.refresh(force: true);
         widget.onDone();
         return;
       }
+      // A definite answer: nothing is pending under this key any more.
+      UnconfirmedPayments.settle(_slot);
       setState(() => _held = null);
       if (e is NafaqahApiException && repaymentAccountErrorKey(e.code) != null) sources.provider?.refresh(force: true);
       AppSnackBar.showError(
@@ -1207,6 +1238,7 @@ class _ApproveRequestSheetState extends State<_ApproveRequestSheet> {
       }
       return;
     }
+    UnconfirmedPayments.settle(_slot);
     // His balance changed on the server: the accounts show it now.
     sources.provider?.refresh(force: true);
     if (!mounted) return;

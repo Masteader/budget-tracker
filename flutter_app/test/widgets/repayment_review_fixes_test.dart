@@ -319,11 +319,9 @@ void main() {
       expect(find.byKey(const ValueKey('req_decline_q-1')), findsNothing);
       expect(find.byKey(const ValueKey('fmd_pay_d-open')), findsNothing);
       expect(find.byKey(const ValueKey('fmd_waive_d-open')), findsNothing);
-
-      await _tapKey(tester, 'fmd_history_d-open');
-      expect(find.byKey(const ValueKey('fmd_reverse_e-bank')), findsNothing);
-      Navigator.of(tester.element(find.byKey(const ValueKey('fmd_event_e-bank')))).pop();
-      await tester.pumpAndSettle();
+      // A former member's record is not hers to see at all (review R3-01).
+      expect(find.byKey(const ValueKey('fmd_panel_d-open')), findsNothing);
+      expect(find.byKey(const ValueKey('fmd_history_d-open')), findsNothing);
 
       await tester.tap(find.text('History').first);
       await tester.pumpAndSettle();

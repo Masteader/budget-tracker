@@ -264,10 +264,11 @@ void main() {
         summary: _summary(debts: [_openDebt(), _settledDebt], canManage: false, role: 'member'),
       )));
       await tester.pumpAndSettle();
-      expect(_k('fmd_panel_d-open'), findsOneWidget, reason: 'every member sees the record');
+      // Only whoever manages it sees it (review R3-01), whatever a server sends.
+      expect(_k('fmd_panel_d-open'), findsNothing, reason: 'the record is not for a member');
       expect(_k('fmd_pay_d-open'), findsNothing);
       expect(_k('fmd_waive_d-open'), findsNothing);
-      expect(_k('fmd_history_d-open'), findsOneWidget);
+      expect(_k('fmd_history_d-open'), findsNothing);
     });
 
     testWidgets('the records show when no wife remains', (tester) async {
