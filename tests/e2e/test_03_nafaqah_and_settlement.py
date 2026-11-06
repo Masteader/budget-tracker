@@ -1,6 +1,6 @@
 """
 Scenario 3: Islamic Nafaqah end to end. A wife-paid shared expense is a debt the husband owes her;
-partial and full reimbursement, each from the husband's account; overpayment → 409 (API and database);
+partial and full reimbursement, each from the husband's account into her wife account; overpayment → 409 (API and database);
 an app without an account → 426; the wife's personal spend is
 charged to her allowance (spent/remaining); she cannot set her own allowance; the settlement
 endpoints in family mode reflect the ledger and never split 50/50. Also the roommate settlement
@@ -36,9 +36,17 @@ def _payer_account(user, hh, amount=10000):
     return account
 
 
-def _paid(account, **body):
-    """A repayment body from ``account`` with a fresh request key."""
-    return {"account_id": account, "request_key": str(uuid.uuid4()), **body}
+def _paid(account, wife_account=None, **body):
+    """A repayment body from ``account`` into her wife account, with a fresh request key."""
+    return {"account_id": account, "request_key": str(uuid.uuid4()),
+            **({"wife_account_id": wife_account} if wife_account else {}), **body}
+
+
+def _wife_account(husband, hh, wife):
+    """Her wife account (20261105001300, section 12), made by her husband: every repayment credits it."""
+    res = husband.api.post(f"/households/{hh.id}/nafaqah/wife-accounts", json={"wife_user_id": wife.id, "name": "Her card"})
+    assert res.status_code == 200, res.text
+    return res.json()["id"]
 
 
 def test_wife_advance_partial_full_and_overpayment(world, db, llm):
@@ -63,31 +71,36 @@ def test_wife_advance_partial_full_and_overpayment(world, db, llm):
 
     # Every repayment leaves an account of his; an app that sends none is told to update.
     account = _payer_account(husband, hh)
+    # Her wife account: nothing can be repaid before it exists.
+    none_yet = husband.api.post(f"/households/{hh.id}/nafaqah/reimbursements", json=_paid(account, amount=1))
+    assert none_yet.status_code == 409 and none_yet.json()["detail"]["code"] == "wife_account_required", none_yet.text
+    wa = _wife_account(husband, hh, wife)
     old_app = husband.api.post(f"/households/{hh.id}/nafaqah/reimbursements", json={"amount": 10})
     assert old_app.status_code == 426 and old_app.json()["detail"]["code"] == "app_update_required", old_app.text
 
     # Partial repayment by the husband.
     part = husband.api.post(f"/households/{hh.id}/nafaqah/reimbursements",
-                            json=_paid(account, amount=100.25, payment_method="stc_pay", notes="part 1"))
+                            json=_paid(account, wa, amount=100.25, payment_method="stc_pay", notes="part 1"))
     assert part.status_code == 200, part.text
     assert part.json()["outstanding_before"] == 345.5 and part.json()["outstanding_after"] == 245.25
     assert float(db.scalar("SELECT balance FROM public.accounts WHERE id = %s", (account,))) == 10000 - 100.25
+    assert float(db.scalar("SELECT balance FROM public.accounts WHERE id = %s", (wa,))) == 100.25, "her wife account is credited"
 
     # Overpayment is refused with 409 and the outstanding amount, and nothing is recorded.
-    over = husband.api.post(f"/households/{hh.id}/nafaqah/reimbursements", json=_paid(account, amount=245.26))
+    over = husband.api.post(f"/households/{hh.id}/nafaqah/reimbursements", json=_paid(account, wa, amount=245.26))
     assert over.status_code == 409, over.text
     assert over.json()["detail"]["code"] == "overpayment" and over.json()["detail"]["outstanding"] == 245.25
     # The database re-checks overpayment independently of the API (direct PostgREST RPC).
     direct = husband.rpc("record_spouse_reimbursement", {
         "p_household_id": hh.id, "p_wife_user_id": wife.id, "p_amount": "245.26",
         "p_payment_method": "cash", "p_notes": None, "p_actor_user_id": husband.id,
-        "p_account_id": account, "p_request_key": str(uuid.uuid4()),
+        "p_account_id": account, "p_request_key": str(uuid.uuid4()), "p_wife_account_id": wa,
     })
     assert direct.status_code >= 400 and "outstanding" in direct.text.lower(), direct.text
     assert db.scalar("SELECT count(*) FROM public.spouse_reimbursements WHERE household_id = %s", (hh.id,)) == 1
 
     # The generic reimbursement endpoint routes family repayments to the same ledger.
-    full = husband.api.post(f"/households/{hh.id}/reimbursements", json=_paid(account, **{
+    full = husband.api.post(f"/households/{hh.id}/reimbursements", json=_paid(account, wa, **{
         "household_id": hh.id, "payer_id": husband.id, "recipient_id": wife.id, "amount": 245.25,
         "payment_method": "cash",
     }))
@@ -96,8 +109,9 @@ def test_wife_advance_partial_full_and_overpayment(world, db, llm):
     assert {k: v for k, v in _ledger(wife, hh)["balance"].items() if not k.startswith("pending")} == {
         "gross_advanced": 345.5, "reimbursed": 345.5, "outstanding": 0.0, "overpaid": 0.0}
     assert float(db.scalar("SELECT balance FROM public.accounts WHERE id = %s", (account,))) == 10000 - 345.5
+    assert float(db.scalar("SELECT balance FROM public.accounts WHERE id = %s", (wa,))) == 345.5
     # Settled: any further repayment is an overpayment, also through the generic endpoint.
-    again = husband.api.post(f"/households/{hh.id}/reimbursements", json=_paid(account, **{
+    again = husband.api.post(f"/households/{hh.id}/reimbursements", json=_paid(account, wa, **{
         "household_id": hh.id, "payer_id": husband.id, "recipient_id": wife.id, "amount": 0.01}))
     assert again.status_code == 409
     # A "wife pays husband" settlement does not exist in a family.
@@ -157,7 +171,8 @@ def test_family_settlement_reflects_ledger_never_fifty_fifty(world, db, llm):
     husband, wife = hh.admin, hh.members[0]
     world.chat_commit(wife, hh, llm, merchant="Othaim", amount=200, category_code="OPEX-GROCERY")
     world.chat_commit(husband, hh, llm, merchant="Panda", amount=1000, category_code="OPEX-GROCERY")
-    paid = husband.api.post(f"/households/{hh.id}/nafaqah/reimbursements", json=_paid(_payer_account(husband, hh), amount=50))
+    paid = husband.api.post(f"/households/{hh.id}/nafaqah/reimbursements",
+                            json=_paid(_payer_account(husband, hh), _wife_account(husband, hh, wife), amount=50))
     assert paid.status_code == 200, paid.text
 
     # ?split_ratio is ignored for families; the debt is exactly the ledger outstanding (150).

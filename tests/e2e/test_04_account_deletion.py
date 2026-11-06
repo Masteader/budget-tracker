@@ -549,8 +549,11 @@ def test_what_a_leaving_wife_is_owed_reaches_her_husband_and_stays_as_one_anonym
     # 20261105001300: every repayment and payment leaves an account of his.
     his = _account(husband, hh, "His bank")
     _income(husband, hh, his, 1000)
+    # Her wife account (section 12): every repayment credits it.
+    wa = husband.api.post(f"/households/{hh.id}/nafaqah/wife-accounts", json={"wife_user_id": wife.id, "name": "Her card"}).json()["id"]
     paid = husband.api.post(f"/households/{hh.id}/nafaqah/reimbursements",
-                            json={"amount": 20, "payment_method": "cash", "account_id": his, "request_key": str(uuid.uuid4())})
+                            json={"amount": 20, "payment_method": "cash", "account_id": his, "request_key": str(uuid.uuid4()),
+                                  "wife_account_id": wa})
     assert paid.status_code == 200, paid.text
 
     assert _request(_session_client(world, db, wife), "delete").status_code == 200

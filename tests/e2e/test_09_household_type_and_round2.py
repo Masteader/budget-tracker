@@ -164,8 +164,10 @@ def test_wife_leaves_and_her_ledger_goes_with_her(world, db, llm):
     personal = world.chat_commit(wife, family, llm, merchant="Abaya R9d", amount=250, category_code="OPEX-SHOPPING",
                                  paid_by="me", beneficiary="me")
     assert personal.json()["nafaqah_class"] == "wife_personal", personal.text
+    wa = husband.api.post(f"/households/{family.id}/nafaqah/wife-accounts",
+                          json={"wife_user_id": wife.id, "name": "Her card"}).json()["id"]
     assert husband.api.post(f"/households/{family.id}/nafaqah/reimbursements",
-                            json=_paid(_payer_account(husband, family), amount=100)).status_code == 200
+                            json=_paid(_payer_account(husband, family), amount=100, wife_account_id=wa)).status_code == 200
     assert husband.api.put(f"/households/{family.id}/nafaqah/allowance",
                            json={"amount": 500}).status_code == 200
     spent = db.scalar("SELECT spent_amount FROM public.budgets WHERE household_id = %s AND category_code = 'OPEX-SHOPPING'",

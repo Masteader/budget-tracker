@@ -113,8 +113,10 @@ def test_editing_a_repaid_advance_is_refused(world, db, llm):
                             paid_by="me", beneficiary="both")
     assert res.status_code == 200 and res.json()["nafaqah_class"] == "wife_reimbursable", res.text
     tx_id = res.json()["transaction_id"]
+    wa = husband.api.post(f"/households/{family.id}/nafaqah/wife-accounts",
+                          json={"wife_user_id": wife.id, "name": "Her card"}).json()["id"]
     paid = husband.api.post(f"/households/{family.id}/nafaqah/reimbursements",
-                            json=_paid(_payer_account(husband, family), amount=200))
+                            json=_paid(_payer_account(husband, family), amount=200, wife_account_id=wa))
     assert paid.status_code == 200, paid.text
 
     for user, call in (
