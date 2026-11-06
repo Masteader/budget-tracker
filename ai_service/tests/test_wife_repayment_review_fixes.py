@@ -37,6 +37,7 @@ from test_wife_repayment_debit import (  # noqa: F401  (pytest fixture)
     Q_PENDING,
     R_NEW,
     WIFE,
+    husband_leaves,
     _calls,
     bearer,
     client,
@@ -159,7 +160,9 @@ def test_r1_01_the_summary_offers_a_wife_admin_nothing_to_decide(co_wife):
     assert body["can_manage_former_member_debts"] is False
     assert all(w["can_decide"] is False for w in body["wives"])
     assert not any(e["can_reverse"] for d in body["former_member_debts"] for e in d["events"])
-    history = client.get(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(WIFE2), params={"wife_user_id": WIFE}).json()["history"]
+    # Her co-wife's ledger is not hers to read at all (review R3-01); her own offers no reversal.
+    assert client.get(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(WIFE2), params={"wife_user_id": WIFE}).status_code == 403
+    history = client.get(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(WIFE2)).json()["history"]
     assert not any(h.get("can_reverse") for h in history)
 
 
@@ -251,19 +254,25 @@ def test_r1_07_a_former_co_admin_reverses_his_own_repayment(demoted):
     resp = _reverse(COADMIN, R_COADMIN)
     assert resp.status_code == 200, resp.text
     assert [p["p_actor_user_id"] for p in _calls(demoted, "reverse_spouse_reimbursement")] == [COADMIN]
-    history = client.get(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(COADMIN)).json()["history"]
-    rows = {h["id"]: h for h in history if h["type"] == "reimbursement"}
-    assert rows[R_COADMIN]["can_reverse"] is True
-    assert rows[R_NEW]["can_reverse"] is False, "the husband's account is his"
+    # He reads none of her ledger while the husband is there (review R3-01); the reversal of his
+    # own account's repayment stays his (R1-07), the husband's account stays the husband's.
+    assert client.get(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(COADMIN)).status_code == 403
+    ctx = ns.load_family_context(HH)
+    accounts = {a["id"]: a for a in demoted.tables["accounts"]}
+    own = next(a for a in demoted.tables["accounts"] if a.get("owner_user_id") == COADMIN and not a.get("is_shared_pool"))
+    assert ns.can_reverse_repayment(ctx, COADMIN, own) is True
+    assert ns.can_reverse_repayment(ctx, COADMIN, accounts[ACCOUNT]) is False, "the husband's account is his"
 
 
 def test_r1_07_a_former_co_admin_reverses_his_own_former_member_payment(demoted):
     resp = _fmd(f"{DEBT}/payments/{E_COADMIN}/reversal", COADMIN, request_key=KEY)
     assert resp.status_code == 200, resp.text
-    debts = {d["id"]: d for d in client.get(f"/households/{HH}/nafaqah", headers=bearer(COADMIN)).json()["former_member_debts"]}
+    # The record is the husband's to read (review R3-01); the husband sees which he may reverse.
+    assert client.get(f"/households/{HH}/nafaqah", headers=bearer(COADMIN)).json()["former_member_debts"] == []
+    debts = {d["id"]: d for d in client.get(f"/households/{HH}/nafaqah", headers=bearer(HUSBAND)).json()["former_member_debts"]}
     events = {e["id"]: e for e in debts[DEBT]["events"]}
-    assert events[E_COADMIN]["can_reverse"] is True
-    assert events[E_TRACKED]["can_reverse"] is False
+    assert events[E_COADMIN]["can_reverse"] is False, "C's account is C's"
+    assert events[E_TRACKED]["can_reverse"] is True
 
 
 def test_r1_07_a_former_husband_reverses_his_own_repayment(family):
@@ -281,8 +290,13 @@ def test_r1_07_a_member_cannot_reverse_another_members_account(family):
     assert _calls(family, "reverse_spouse_reimbursement") == []
 
 
-def test_r1_07_any_admin_who_is_not_a_wife_reverses_a_pool_repayment(family):
+def test_r1_07_an_admin_who_is_not_a_wife_reverses_a_pool_repayment_once_the_husband_is_gone(family):
+    """Review R3-01: a pool's repayment is the husband's (an admin) to reverse; an admin's once he
+    is gone."""
     _pool_repayment(family)
+    assert _reverse(COADMIN, R_POOL2).status_code == 403
+    assert _calls(family, "reverse_spouse_reimbursement") == []
+    husband_leaves(family)
     history = client.get(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(COADMIN)).json()["history"]
     assert {h["id"]: h for h in history if h["type"] == "reimbursement"}[R_POOL2]["can_reverse"] is True
     assert _reverse(COADMIN, R_POOL2).status_code == 200
@@ -298,6 +312,7 @@ def test_r1_08_the_history_names_who_paid(demoted):
 
 
 def test_r1_08_the_answer_names_who_paid_never_assumes_the_husband(family):
+    husband_leaves(family)  # an admin pays once the husband is gone (review R3-01)
     family.rpc_handlers["record_spouse_reimbursement"] = lambda p: {
         "success": True, "replayed": False, "reimbursement_id": "r-x", "amount": 20.0, "payment_method": "cash",
         "account_id": POOL, "paid_by_user_id": COADMIN, "outstanding_before": 225.0, "outstanding_after": 205.0}

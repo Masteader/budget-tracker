@@ -12,7 +12,13 @@ from typing import Dict, Any, List, Optional, Tuple
 
 from supabase_client import get_client, get_household_payday
 from salary_cycle import get_salary_cycle_dates
-from nafaqah_service import FamilyContext, all_rows, get_reimbursement_ledger, load_family_context
+from nafaqah_service import (
+    FamilyContext,
+    all_rows,
+    can_view_wife_ledger,
+    get_reimbursement_ledger,
+    load_family_context,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -336,6 +342,12 @@ def _nafaqah_balance(ctx: FamilyContext, wife_ids: List[str]) -> Dict[str, Any]:
     return {"gross_advanced": _to_sar(gross), "reimbursed": _to_sar(paid), "outstanding": _to_sar(outstanding)}
 
 
+def _visible_wives(ctx: FamilyContext, caller_user_id: Optional[str]) -> List[str]:
+    """The wives whose Nafaqah ledger the caller reads (review R3-01): a wife herself, her husband
+    (an admin who is not a wife when he is gone) every wife; anyone else none."""
+    return [w["id"] for w in ctx.wives if can_view_wife_ledger(ctx, caller_user_id, w["id"])]
+
+
 def calculate_partner_settlement(
     household_id: str,
     cycle_start: Optional[str] = None,
@@ -355,8 +367,10 @@ def calculate_partner_settlement(
     wife expenses in full, so nothing he pays creates a debt for the wife. What he owes is the
     Nafaqah ledger: ``wife_reimbursable`` advances minus the repayments recorded in
     ``spouse_reimbursements`` (all time, to the halala), the same balance as the Nafaqah card.
-    ``caller_user_id`` identifies which spouse "me" refers to; a wife sees her own balance,
-    anyone else the husband's total across wives.
+    ``caller_user_id`` identifies which spouse "me" refers to. The Nafaqah figures are only those
+    of the wives whose ledger the caller reads (review R3-01): a wife her own, her husband (an admin
+    who is not a wife when he is gone) every wife's; anyone else gets none (``nafaqah`` None, owed
+    nothing either way).
     """
     if not (0.0 <= float(split_ratio) <= 1.0):
         raise ValueError("split_ratio must be between 0 and 1")
@@ -459,9 +473,14 @@ def calculate_partner_settlement(
     if is_family:
         # Nafaqah: husband carries 100% of shared family expenses; no spousal 50/50 split.
         # The debt is the ledger balance, so recorded repayments reduce it.
-        wife_ids = [str(caller_user_id)] if caller_is_wife else [w["id"] for w in ctx.wives]
-        nafaqah_balance = _nafaqah_balance(ctx, wife_ids)
-        if caller_is_wife:
+        wife_ids = _visible_wives(ctx, caller_user_id)
+        nafaqah_balance = _nafaqah_balance(ctx, wife_ids) if wife_ids else None
+        if nafaqah_balance is None:
+            # No wife's ledger is the caller's to read (review R3-01): no Nafaqah total at all.
+            fair_share_me, fair_share_partner = round(total_shared, 2), 0.0
+            total_owed_to_me = 0.0
+            total_owed_to_partner = 0.0
+        elif caller_is_wife:
             fair_share_me, fair_share_partner = 0.0, round(total_shared, 2)
             total_owed_to_me = nafaqah_balance["outstanding"]
             total_owed_to_partner = 0.0
@@ -770,6 +789,7 @@ def simplify_debts(debts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def calculate_settlement_v2(
     household_id: str,
     cycle_start: Optional[str] = None,
+    caller_user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Computes unified role-aware settlement:
@@ -781,6 +801,9 @@ def calculate_settlement_v2(
     (``wife_reimbursement_owed``, ``gross_wife_advances``, ``reimbursed_total``, ``status``) are
     the Nafaqah ledger balance, so repayments recorded in ``spouse_reimbursements`` reduce them;
     the spending breakdown (``spent_on_*``, ``family_general_total``) covers the cycle.
+    With ``caller_user_id`` (every API call) those figures are of the wives whose ledger the caller
+    reads only (review R3-01), and None when that is none; without one (the server's own use) they
+    cover every wife.
     """
     client = get_client()
     dates = _cycle_dates(household_id)
@@ -844,13 +867,23 @@ def calculate_settlement_v2(
     wife_id = ctx.wives[0]["id"] if ctx.wives else "spouse"
     family_summary = calculate_family_nafaqah(txs, husband_id=husband_id, wife_id=wife_id)
     if has_spouse:
-        balance = _nafaqah_balance(ctx, [w["id"] for w in ctx.wives])
-        family_summary.update({
-            "wife_reimbursement_owed": balance["outstanding"],
-            "gross_wife_advances": balance["gross_advanced"],
-            "reimbursed_total": balance["reimbursed"],
-            "status": "settled" if _to_halalas(balance["outstanding"]) == 0 else "reimbursement_pending",
-        })
+        wife_ids = [w["id"] for w in ctx.wives] if caller_user_id is None else _visible_wives(ctx, caller_user_id)
+        if wife_ids:
+            balance = _nafaqah_balance(ctx, wife_ids)
+            family_summary.update({
+                "wife_reimbursement_owed": balance["outstanding"],
+                "gross_wife_advances": balance["gross_advanced"],
+                "reimbursed_total": balance["reimbursed"],
+                "status": "settled" if _to_halalas(balance["outstanding"]) == 0 else "reimbursement_pending",
+            })
+        else:
+            # No wife's ledger is the caller's to read (review R3-01): no total of it.
+            family_summary.update({
+                "wife_reimbursement_owed": None,
+                "gross_wife_advances": None,
+                "reimbursed_total": None,
+                "status": None,
+            })
     return {
         "mode": "family_nafaqah",
         "cycle_start": start_iso,

@@ -131,6 +131,14 @@ def _calls(fake, name):
     return [p for n, p in fake.rpc_calls if n == name]
 
 
+def _husband_leaves(fake):
+    """He left the household: his membership ends and the provider is cleared (review R3-01: an
+    admin who is not a wife then sees and closes the record)."""
+    fake.tables["household_memberships"] = [m for m in fake.tables["household_memberships"] if m["user_id"] != HUSBAND]
+    fake.tables["households"][0]["nafaqah_provider_user_id"] = None
+    fake.tables["households"][0]["owner_user_id"] = COADMIN
+
+
 def _pay(user, debt=DEBT, **body):
     payload = {"amount": 30, "payment_method": "bank_transfer", "request_key": KEY, "account_id": ACCOUNT, **body}
     return client.post(f"/households/{HH}/nafaqah/former-member-debts/{debt}/payments", headers=bearer(user), json=payload)
@@ -143,8 +151,11 @@ def _waive(user, debt=DEBT, **body):
 
 # ─── The summary ─────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("caller", [HUSBAND, WIFE, CHILD, COADMIN])
-def test_every_member_sees_the_households_records_with_their_history(household, caller):
+@pytest.mark.parametrize("caller, gone", [(HUSBAND, False), (COADMIN, True)])
+def test_the_husband_sees_the_households_records_with_their_history(household, caller, gone):
+    """Her husband; once he is gone, an admin who is not a wife (review R3-01)."""
+    if gone:
+        _husband_leaves(household)
     resp = client.get(f"/households/{HH}/nafaqah", headers=bearer(caller))
     assert resp.status_code == 200, resp.text
     debts = resp.json()["former_member_debts"]
@@ -157,8 +168,15 @@ def test_every_member_sees_the_households_records_with_their_history(household, 
     assert all("recorded_by" not in e and "request_key" not in e for d in debts for e in d["events"])
 
 
-@pytest.mark.parametrize("caller, allowed", [(HUSBAND, True), (COADMIN, True), (CHILD, False), (WIFE, False)])
-def test_only_the_husband_or_an_admin_may_close_a_record(household, caller, allowed):
+@pytest.mark.parametrize("caller", [WIFE, CHILD, COADMIN])
+def test_nobody_else_sees_the_records_while_the_husband_is_there(household, caller):
+    """Review R3-01: a wife, a member and an admin read none of them while he is there."""
+    body = client.get(f"/households/{HH}/nafaqah", headers=bearer(caller)).json()
+    assert body["former_member_debts"] == [] and body["can_manage_former_member_debts"] is False
+
+
+@pytest.mark.parametrize("caller, allowed", [(HUSBAND, True), (COADMIN, False), (CHILD, False), (WIFE, False)])
+def test_only_the_husband_may_close_a_record_while_he_is_there(household, caller, allowed):
     body = client.get(f"/households/{HH}/nafaqah", headers=bearer(caller)).json()
     assert body["can_manage_former_member_debts"] is allowed
 
@@ -178,9 +196,11 @@ def test_the_husband_manages_the_record_even_when_he_is_not_an_admin(household):
 
 def test_a_family_with_no_wife_left_still_shows_its_records(household):
     household.tables["household_memberships"] = [m for m in household.tables["household_memberships"] if m["user_id"] != WIFE]
-    body = client.get(f"/households/{HH}/nafaqah", headers=bearer(CHILD)).json()
+    body = client.get(f"/households/{HH}/nafaqah", headers=bearer(HUSBAND)).json()
     assert body["mode"] == "family_nafaqah" and body["wives"] == []
     assert [d["id"] for d in body["former_member_debts"]] == [DEBT, DEBT_CLOSED]
+    # He is still her husband with no wife left: a member still reads nothing (review R3-01).
+    assert client.get(f"/households/{HH}/nafaqah", headers=bearer(CHILD)).json()["former_member_debts"] == []
 
 
 def test_the_husband_sees_her_pending_deletion_with_what_he_owes(household):
@@ -193,7 +213,11 @@ def test_the_husband_sees_her_pending_deletion_with_what_he_owes(household):
 @pytest.mark.parametrize("caller", [CHILD, COADMIN, WIFE])
 def test_nobody_else_sees_the_pending_deletion(household, caller):
     body = client.get(f"/households/{HH}/nafaqah", headers=bearer(caller)).json()
-    assert body["wives"][0]["pending_deletion"] is None
+    if caller == WIFE:
+        assert body["wives"][0]["pending_deletion"] is None
+    else:
+        # No entry for her at all (review R3-01).
+        assert body["wives"] == []
 
 
 def test_a_failed_notice_lookup_is_an_error_never_no_notice(household):
@@ -206,8 +230,10 @@ def test_a_failed_notice_lookup_is_an_error_never_no_notice(household):
 
 # ─── Recording a payment ─────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("caller", [HUSBAND, COADMIN])
-def test_a_payment_goes_to_the_rpc_with_the_verified_caller_and_exact_amount(household, caller):
+@pytest.mark.parametrize("caller, gone", [(HUSBAND, False), (COADMIN, True)])
+def test_a_payment_goes_to_the_rpc_with_the_verified_caller_and_exact_amount(household, caller, gone):
+    if gone:
+        _husband_leaves(household)
     resp = _pay(caller, amount=30.4)
     assert resp.status_code == 200, resp.text
     assert _calls(household, "record_former_member_debt_payment") == [{
@@ -313,13 +339,22 @@ def test_a_replay_is_answered_as_success(household):
 
 # ─── The waiver ──────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("caller", [HUSBAND, COADMIN])
-def test_a_waiver_goes_to_the_rpc_with_the_verified_caller(household, caller):
+@pytest.mark.parametrize("caller, gone", [(HUSBAND, False), (COADMIN, True)])
+def test_a_waiver_goes_to_the_rpc_with_the_verified_caller(household, caller, gone):
+    if gone:
+        _husband_leaves(household)
     resp = _waive(caller)
     assert resp.status_code == 200, resp.text
     assert _calls(household, "waive_former_member_debt") == [
         {"p_household_id": HH, "p_debt_id": DEBT, "p_request_key": KEY, "p_actor_user_id": caller}]
     assert (resp.json()["status"], resp.json()["waived_amount"]) == ("waived", 100.0)
+
+
+def test_an_admin_does_not_close_it_while_the_husband_is_there(household):
+    """Review R3-01: no payment or waiver by an admin while he is there."""
+    assert _pay(COADMIN).status_code == 403
+    assert _waive(COADMIN).status_code == 403
+    assert _calls(household, "record_former_member_debt_payment") == _calls(household, "waive_former_member_debt") == []
 
 
 @pytest.mark.parametrize("caller", [CHILD, WIFE, OUTSIDER])

@@ -393,6 +393,24 @@ class FamilyContext:
         """
         return self.is_family and bool(self.wives) and not self.husband_id
 
+    @property
+    def ledger_husband_id(self) -> Optional[str]:
+        """Her husband, for her repayment ledger and a former member's record (review R3-01; mirrors
+        public.nafaqah_ledger_husband_id): the household's provider while he is a current member who
+        is not a wife. Unlike ``husband_id`` it does not need a wife in the household: a former
+        member's record outlives the last wife. None: the husband is gone."""
+        provider = self.provider_user_id
+        if not provider or not self.is_member(provider):
+            return None
+        if self.members[provider].get("financial_role") == "spouse":
+            return None
+        return provider
+
+    @property
+    def husband_gone(self) -> bool:
+        """He left, his account was deleted (both clear the provider), or nobody was named."""
+        return self.ledger_husband_id is None
+
     def is_member(self, user_id: Optional[str]) -> bool:
         return bool(user_id) and str(user_id) in self.members
 
@@ -621,9 +639,16 @@ def resolve_expense_nafaqah(
     return result
 
 
-def resolve_wife_id(ctx: FamilyContext, requested: Optional[str]) -> str:
-    """The wife a request refers to: an explicit member id, an alias, or the only wife."""
+def resolve_wife_id(ctx: FamilyContext, requested: Optional[str], caller_id: Optional[str] = None) -> str:
+    """The wife a request refers to: an explicit member id, an alias, or the only wife.
+
+    A wife calling resolves herself only (review R3-01): no id, or an alias, is her; naming a co-wife
+    is refused (NafaqahForbidden), for her ledger and her allowance alike."""
     req = _norm(requested)
+    if caller_id and ctx.is_wife(caller_id):
+        if req and req not in _WIFE_ALIASES and req != _norm(caller_id):
+            raise NafaqahForbidden("A wife reads and asks for herself only.")
+        return str(caller_id)
     if req and req not in _WIFE_ALIASES:
         if not ctx.is_wife(req):
             raise InvalidNafaqahRequest("wife_user_id is not a spouse member of this household.")
@@ -659,23 +684,58 @@ def can_set_allowance(ctx: FamilyContext, actor_id: str, wife_id: Optional[str] 
     return str(actor_id) == ctx.husband_id or ctx.is_admin(actor_id)
 
 
-def can_record_reimbursement(ctx: FamilyContext, actor_id: str, wife_id: Optional[str] = None) -> bool:
-    """The husband, or a household admin who is not a wife (owner decisions 2026-11-06, review
-    R1-01): never the wife the repayment is for, who asks instead (``can_request_reimbursement``),
-    and never a co-wife, even an admin. The same people approve and decline. Who reverses follows
-    the account (``can_reverse_repayment``). Mirrors ``public.nafaqah_may_repay``."""
-    if not ctx.is_member(actor_id) or ctx.is_wife(actor_id):
+def can_manage_wife_ledgers(ctx: FamilyContext, actor_id: Optional[str]) -> bool:
+    """Who sees and settles every wife's repayment ledger and the former member records (review
+    R3-01, owner decision 2026-11-06; mirrors ``public.nafaqah_may_manage_ledgers``): her husband;
+    when he is gone, an admin of the household who is not a wife. Never a wife (a co-wife, even an
+    admin) and never an ordinary member; no admin while the husband is there."""
+    if not ctx.is_member(actor_id):
         return False
+    if ctx.members[str(actor_id)].get("financial_role") == "spouse" or ctx.is_wife(actor_id):
+        return False
+    husband = ctx.ledger_husband_id
+    if husband is None:
+        return ctx.is_admin(actor_id)
+    return str(actor_id) == husband
+
+
+def can_view_wife_ledger(ctx: FamilyContext, actor_id: Optional[str], wife_id: Optional[str]) -> bool:
+    """Her ledger (what is owed, advances, repayments, reversals, her requests, their outcomes,
+    decline reasons and notes) is read by her and by those who manage it (review R3-01)."""
+    if not actor_id or not wife_id or not ctx.is_member(actor_id):
+        return False
+    return str(actor_id) == str(wife_id) or can_manage_wife_ledgers(ctx, actor_id)
+
+
+def require_ledger_reader(ctx: FamilyContext, actor_id: Optional[str]) -> None:
+    """A caller who may read some wife's ledger: a wife (her own) or its managers; anyone else is
+    refused before any wife is named or looked up (review R3-01)."""
+    _require_member(ctx, actor_id)
+    if not ctx.is_wife(actor_id) and not can_manage_wife_ledgers(ctx, actor_id):
+        raise NafaqahForbidden("Only she, her husband, or an admin when he is gone, reads her ledger.")
+
+
+def can_record_reimbursement(ctx: FamilyContext, actor_id: str, wife_id: Optional[str] = None) -> bool:
+    """Her husband; when he is gone, a household admin who is not a wife (owner decisions
+    2026-11-06, reviews R1-01 and R3-01): never the wife the repayment is for, who asks instead
+    (``can_request_reimbursement``), never a co-wife, even an admin, and no admin while the husband
+    is there. The same people approve and decline. Who reverses follows the account
+    (``can_reverse_repayment``). Mirrors ``public.nafaqah_may_repay``."""
     if wife_id is not None and str(actor_id) == str(wife_id):
         return False
-    return str(actor_id) == ctx.husband_id or ctx.is_admin(actor_id)
+    return can_manage_wife_ledgers(ctx, actor_id)
 
 
 def can_reverse_repayment(ctx: FamilyContext, actor_id: Optional[str], account: Optional[Dict[str, Any]]) -> bool:
     """Who reverses a repayment (or a former member's payment) follows the account it left (review
     R1-07): its owner while he is a member and not a wife, whatever his role now; a shared pool's,
-    any admin who is not a wife. The database checks the same under its locks."""
-    return ctx.is_member(actor_id) and not ctx.is_wife(actor_id) and _account_usable_by(ctx, account, actor_id)
+    the husband if he is an admin, or an admin who is not a wife when he is gone (review R3-01).
+    The database checks the same under its locks."""
+    if not ctx.is_member(actor_id) or ctx.is_wife(actor_id) or not _account_usable_by(ctx, account, actor_id):
+        return False
+    if (account or {}).get("is_shared_pool"):
+        return can_manage_wife_ledgers(ctx, actor_id)
+    return True
 
 
 def can_request_reimbursement(ctx: FamilyContext, actor_id: str, wife_id: Optional[str] = None) -> bool:
@@ -938,9 +998,13 @@ def _pending_totals(requests: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 def get_reimbursement_ledger(ctx: FamilyContext, wife_id: str, caller_id: Optional[str] = None) -> Dict[str, Any]:
     """Outstanding balance, the history of advances, repayments and reversals (newest first), and
-    her requests. ``caller_id`` decides ``can_reverse`` on each repayment (who may reverse it)."""
+    her requests. ``caller_id`` is who asks: only she or a manager of the ledgers reads it (review
+    R3-01: NafaqahForbidden otherwise), and it decides ``can_reverse`` on each repayment. Without a
+    caller it is the server's own read (the settlement totals, an answer's stand-in figures)."""
     _require_family(ctx)
     _require_wife(ctx, wife_id)
+    if caller_id is not None and not can_view_wife_ledger(ctx, caller_id, wife_id):
+        raise NafaqahForbidden("Only she, her husband, or an admin when he is gone, reads her ledger.")
     client = get_client()
     # Every row, page by page: what is owed is their sum (PostgREST caps each answer).
     advances = all_rows(lambda: (
@@ -1030,13 +1094,13 @@ def get_reimbursement_ledger(ctx: FamilyContext, wife_id: str, caller_id: Option
 
 
 def _require_payer(ctx: FamilyContext, actor_id: str, wife_id: str) -> None:
-    """The husband or a household admin who is not a wife; the wife herself is told to ask instead,
-    and a co-wife is refused (review R1-01)."""
+    """Her husband, or an admin who is not a wife when he is gone; the wife herself is told to ask
+    instead, and a co-wife is refused (reviews R1-01, R3-01)."""
     _require_member(ctx, actor_id)
     if str(actor_id) == str(wife_id):
-        raise WifeMustRequest("The wife asks for a repayment; the husband or an admin records it.")
+        raise WifeMustRequest("The wife asks for a repayment; her husband records it.")
     if not can_record_reimbursement(ctx, actor_id, wife_id):
-        raise NafaqahForbidden("Only the husband or a household admin can do this.")
+        raise NafaqahForbidden("Only her husband, or an admin who is not a wife when he is gone, can do this.")
 
 
 def _require_key(request_key: Optional[str]) -> None:
@@ -1292,11 +1356,10 @@ def reverse_reimbursement(ctx: FamilyContext, actor_id: str, reimbursement_id: s
 
 
 def can_manage_former_member_debts(ctx: FamilyContext, actor_id: Optional[str]) -> bool:
-    """The household's Nafaqah provider (the husband) or any admin, co-admins included, never a wife
-    (review R1-01: no wife acts on a former member's record, even as an admin)."""
-    if not ctx.is_member(actor_id) or ctx.is_wife(actor_id):
-        return False
-    return ctx.is_admin(actor_id) or (bool(ctx.provider_user_id) and str(actor_id) == ctx.provider_user_id)
+    """Who sees and closes a former member's record (review R3-01): the husband it is owed by; when
+    he is gone, an admin who is not a wife. Never a wife (review R1-01), even an admin, nor an
+    ordinary member, nor an admin while he is there."""
+    return can_manage_wife_ledgers(ctx, actor_id)
 
 
 def _debt_view(row: Dict[str, Any], events: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1337,7 +1400,10 @@ def _debt_view(row: Dict[str, Any], events: List[Dict[str, Any]]) -> Dict[str, A
 
 def list_former_member_debts(ctx: FamilyContext, caller_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """The household's records, newest first, each with its payments, reversals and waiver, oldest
-    first. ``caller_id`` decides ``can_reverse`` on each payment."""
+    first. ``caller_id`` is who asks: only the managers read them (review R3-01; anyone else gets
+    none), and it decides ``can_reverse`` on each payment."""
+    if caller_id is not None and not can_manage_former_member_debts(ctx, caller_id):
+        return []
     client = get_client()
     rows = all_rows(lambda: (
         client.table("former_member_debts")
@@ -1412,7 +1478,7 @@ def _former_member_debt(ctx: FamilyContext, debt_id: str) -> Dict[str, Any]:
 def _require_debt_manager(ctx: FamilyContext, actor_id: str) -> None:
     _require_member(ctx, actor_id)
     if not can_manage_former_member_debts(ctx, actor_id):
-        raise NafaqahForbidden("Only the husband or a household admin can close this record.")
+        raise NafaqahForbidden("Only the husband, or an admin who is not a wife when he is gone, can close this record.")
 
 
 def record_former_member_debt_payment(
@@ -1631,6 +1697,7 @@ def build_summary(ctx: FamilyContext, caller_id: str, cycle_key: Optional[str] =
             "can_set_allowance": False,
             "can_record_reimbursement": False,
             "can_request_reimbursement": False,
+            "allowance_wives": [],
             "former_member_debts": [],
             "can_manage_former_member_debts": False,
             **provider_fields,
@@ -1638,16 +1705,30 @@ def build_summary(ctx: FamilyContext, caller_id: str, cycle_key: Optional[str] =
     cycle = _resolve_cycle(ctx, cycle_key)
     pending = get_deletion_notices(ctx, caller_id) if ctx.wives else {}
     wives = []
+    # Her allowance is not her repayment ledger: the husband or any admin sets it (rule 04). An
+    # admin who reads no wife's ledger (the husband is there) still gets each wife's allowance,
+    # with nothing of her ledger (review R3-01).
+    allowance_wives = []
     for wife in ctx.wives:
-        ledger = get_reimbursement_ledger(ctx, wife["id"])
+        # Only the wives whose ledger the caller reads (review R3-01): a wife her own entry, the
+        # husband (an admin who is not a wife when he is gone) every wife's, anyone else none.
+        if not can_view_wife_ledger(ctx, caller_id, wife["id"]):
+            if can_set_allowance(ctx, caller_id, wife["id"]) and not ctx.is_wife(caller_id):
+                allowance_wives.append({
+                    "id": wife["id"],
+                    "display_name": wife["display_name"],
+                    "allowance": get_allowance(ctx, wife["id"], cycle),
+                })
+            continue
+        ledger = get_reimbursement_ledger(ctx, wife["id"], caller_id)
         wives.append({
             "id": wife["id"],
             "display_name": wife["display_name"],
             "reimbursement": ledger["balance"],
             # Her requests (pending first in the app) and their outcomes, newest first.
             "requests": ledger["requests"],
-            # Who may act on this wife's ledger: she asks; the husband or an admin records,
-            # approves, declines and reverses.
+            # Who may act on this wife's ledger: she asks; her husband (an admin who is not a wife
+            # when he is gone) records, approves, declines and reverses.
             "can_request": can_request_reimbursement(ctx, caller_id, wife["id"]),
             "can_decide": can_record_reimbursement(ctx, caller_id, wife["id"]),
             "allowance": get_allowance(ctx, wife["id"], cycle),
@@ -1665,9 +1746,11 @@ def build_summary(ctx: FamilyContext, caller_id: str, cycle_key: Optional[str] =
             {"id": ctx.husband_id, "display_name": ctx.display_name(ctx.husband_id)} if ctx.husband_id else None
         ),
         "wives": wives,
+        "allowance_wives": allowance_wives,
         "can_set_allowance": can_set_allowance(ctx, caller_id),
         "can_record_reimbursement": can_record_reimbursement(ctx, caller_id),
         "can_request_reimbursement": can_request_reimbursement(ctx, caller_id),
+        # Only for those who manage them (review R3-01); empty for anyone else.
         "former_member_debts": list_former_member_debts(ctx, caller_id),
         "can_manage_former_member_debts": can_manage_former_member_debts(ctx, caller_id),
         **provider_fields,

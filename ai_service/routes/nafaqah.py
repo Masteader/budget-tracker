@@ -67,6 +67,7 @@ from nafaqah_service import (
     load_family_context,
     record_former_member_debt_payment,
     record_reimbursement,
+    require_ledger_reader,
     resolve_wife_id,
     waive_former_member_debt,
     set_allowance,
@@ -204,7 +205,10 @@ async def nafaqah_reimbursement_ledger(
         ctx = load_family_context(household_id)
         if not ctx.is_family:
             raise NotFamilyHousehold("Nafaqah ledgers apply to family households with a spouse member.")
-        return get_reimbursement_ledger(ctx, resolve_wife_id(ctx, wife_user_id), caller)
+        # She reads hers; her husband (an admin who is not a wife when he is gone) any wife's;
+        # nobody else, not even by naming her (review R3-01).
+        require_ledger_reader(ctx, caller)
+        return get_reimbursement_ledger(ctx, resolve_wife_id(ctx, wife_user_id, caller), caller)
 
     return await _run(work, public_message="Failed to load the reimbursement ledger.")
 
@@ -229,7 +233,7 @@ async def nafaqah_record_reimbursement(
             raise NotFamilyHousehold("Nafaqah ledgers apply to family households with a spouse member.")
         if not ctx.is_member(caller):
             raise NafaqahForbidden("Not a member of this household.")
-        wife_id = resolve_wife_id(ctx, payload.wife_user_id)
+        wife_id = resolve_wife_id(ctx, payload.wife_user_id, caller)
         return record_reimbursement(
             ctx, caller, wife_id, str(payload.amount), payload.payment_method, payload.notes,
             account_id=payload.account_id, request_key=payload.request_key,
@@ -275,16 +279,20 @@ async def nafaqah_reverse_reimbursement(
 )
 async def nafaqah_list_repayment_requests(
     household_id: str,
+    request: Request,
     wife_user_id: Optional[str] = Query(None),
     _auth: str = Depends(verify_household_access),
 ):
     validate_uuid(household_id)
+    caller = get_current_user_id(request)
 
     def work():
         ctx = load_family_context(household_id)
         if not ctx.is_family:
             raise NotFamilyHousehold("Nafaqah ledgers apply to family households with a spouse member.")
-        ledger = get_reimbursement_ledger(ctx, resolve_wife_id(ctx, wife_user_id))
+        # Her requests, outcomes and decline reasons are her ledger (review R3-01).
+        require_ledger_reader(ctx, caller)
+        ledger = get_reimbursement_ledger(ctx, resolve_wife_id(ctx, wife_user_id, caller), caller)
         return {"requests": ledger["requests"], "balance": ledger["balance"]}
 
     return await _run(work, public_message="Failed to load the requests.")
@@ -386,17 +394,20 @@ async def nafaqah_decline_repayment_request(
 )
 async def nafaqah_get_allowance(
     household_id: str,
+    request: Request,
     wife_user_id: Optional[str] = Query(None),
     cycle_key: Optional[str] = Query(None, pattern=_CYCLE_KEY_PATTERN),
     _auth: str = Depends(verify_household_access),
 ):
     validate_uuid(household_id)
+    caller = get_current_user_id(request)
 
     def work():
         ctx = load_family_context(household_id)
         if not ctx.is_family:
             raise NotFamilyHousehold("Nafaqah ledgers apply to family households with a spouse member.")
-        return get_allowance(ctx, resolve_wife_id(ctx, wife_user_id), cycle_key)
+        # A wife reads her own allowance, never a co-wife's (review R3-01).
+        return get_allowance(ctx, resolve_wife_id(ctx, wife_user_id, caller), cycle_key)
 
     return await _run(work, public_message="Failed to load the allowance.")
 
@@ -419,7 +430,7 @@ async def nafaqah_set_allowance(
         ctx = load_family_context(household_id)
         if not ctx.is_family:
             raise NotFamilyHousehold("Nafaqah ledgers apply to family households with a spouse member.")
-        wife_id = resolve_wife_id(ctx, payload.wife_user_id)
+        wife_id = resolve_wife_id(ctx, payload.wife_user_id, caller)
         return set_allowance(ctx, caller, wife_id, str(payload.amount), payload.cycle_key)
 
     return await _run(work, public_message="Failed to set the allowance.")
@@ -447,8 +458,9 @@ async def nafaqah_set_provider(
 
 
 # ─── A former member's record (migration 20261105001200) ────────────────────────
-# What the husband still owed a wife who deleted her account. The husband or any admin who is not a
-# wife closes it (review R1-01), in a family household only, as the ledger routes (review R1-10):
+# What the husband still owed a wife who deleted her account. The husband closes it; when he is
+# gone, an admin who is not a wife (reviews R1-01, R3-01), in a family household only, as the
+# ledger routes (review R1-10):
 # a payment (amount, payment method and the account it is paid from, required, as an ordinary
 # reimbursement: his account goes down, no budget moves) or her waiver (إبراء). A tracked payment
 # is corrected by a reversal. request_key makes a retried tap record once.

@@ -529,14 +529,19 @@ async def household_settlement(
 )
 async def household_settlement_v2(
     household_id: str,
+    request: Request,
     cycle_start: Optional[str] = None,
     _auth: str = Depends(verify_household_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
+    # The Nafaqah totals are those of the wives whose ledger the caller reads (review R3-01).
+    caller_user_id = get_current_user_id(request)
     try:
-        return await asyncio.to_thread(calculate_settlement_v2, household_id, cycle_start=cycle_start)
+        return await asyncio.to_thread(
+            calculate_settlement_v2, household_id, cycle_start=cycle_start, caller_user_id=caller_user_id
+        )
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to compute settlement v2.")
 

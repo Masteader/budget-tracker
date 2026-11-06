@@ -198,6 +198,16 @@ def _calls(fake, name):
     return [p for n, p in fake.rpc_calls if n == name]
 
 
+def husband_leaves(fake):
+    """He left the household: his membership ends and the provider is cleared. An admin who is not a
+    wife then sees and settles her ledger (review R3-01)."""
+    fake.tables["household_memberships"][:] = [m for m in fake.tables["household_memberships"] if m["user_id"] != HUSBAND]
+    for h in fake.tables["households"]:
+        if h["id"] == HH:
+            h["nafaqah_provider_user_id"] = None
+            h["owner_user_id"] = COADMIN
+
+
 def _repay(user, **body):
     payload = {"amount": 20, "payment_method": "bank_transfer", **body}
     return client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(user), json=payload)
@@ -377,6 +387,9 @@ def test_an_unknown_request_is_not_found(family):
 
 @pytest.mark.parametrize("caller", [HUSBAND, COADMIN])
 def test_the_husband_or_an_admin_approves_from_an_account(family, caller):
+    """The husband; an admin who is not a wife once he is gone (review R3-01)."""
+    if caller == COADMIN:
+        husband_leaves(family)
     account = ACCOUNT if caller == HUSBAND else POOL
     resp = client.post(_q(f"/{Q_PENDING}/approve"), headers=bearer(caller), json={"account_id": account, "request_key": KEY})
     assert resp.status_code == 200, resp.text
@@ -427,12 +440,12 @@ def test_the_husband_declines_with_a_reason(family):
 
 
 def test_a_decline_without_a_reason(family):
-    assert client.post(_q(f"/{Q_PENDING}/decline"), headers=bearer(COADMIN), json={}).status_code == 200
+    assert client.post(_q(f"/{Q_PENDING}/decline"), headers=bearer(HUSBAND), json={}).status_code == 200
     assert _calls(family, "decline_spouse_reimbursement_request")[0]["p_reason"] is None
 
 
 @pytest.mark.parametrize("caller, body, status_code", [
-    (WIFE, {}, 403), (CHILD, {}, 403), (HUSBAND, {"reason": "x" * 201}, 422),
+    (WIFE, {}, 403), (CHILD, {}, 403), (COADMIN, {}, 403), (HUSBAND, {"reason": "x" * 201}, 422),
 ])
 def test_decline_refusals(family, caller, body, status_code):
     assert client.post(_q(f"/{Q_PENDING}/decline"), headers=bearer(caller), json=body).status_code == status_code
@@ -501,6 +514,10 @@ def test_the_history_marks_reversals_and_who_may_reverse(family):
 
 
 def test_a_co_admin_may_not_reverse_his_personal_account_payment(family):
+    """While the husband is there the admin reads none of her ledger (review R3-01); once he is
+    gone the admin reads it, and still may not reverse what left the husband's own account."""
+    assert client.get(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(COADMIN)).status_code == 403
+    husband_leaves(family)
     resp = client.get(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(COADMIN))
     repayments = {h["id"]: h for h in resp.json()["history"] if h["type"] == "reimbursement"}
     assert repayments[R_NEW]["can_reverse"] is False
@@ -525,7 +542,7 @@ def test_the_requests_route_lists_them_too(family):
     assert [q["status"] for q in resp.json()["requests"]] == ["pending", "declined", "approved"]
 
 
-@pytest.mark.parametrize("caller, can_request, can_decide", [(WIFE, True, False), (HUSBAND, False, True), (COADMIN, False, True), (CHILD, False, False)])
+@pytest.mark.parametrize("caller, can_request, can_decide", [(WIFE, True, False), (HUSBAND, False, True)])
 def test_the_summary_says_who_asks_and_who_decides(family, caller, can_request, can_decide):
     body = client.get(f"/households/{HH}/nafaqah", headers=bearer(caller)).json()
     wife = body["wives"][0]
@@ -534,6 +551,14 @@ def test_the_summary_says_who_asks_and_who_decides(family, caller, can_request, 
     assert body["can_record_reimbursement"] is can_decide
     assert [q["status"] for q in wife["requests"]][0] == "pending"
     assert wife["reimbursement"]["outstanding"] == 225.0 and wife["reimbursement"]["pending_requested"] == 30.0
+
+
+@pytest.mark.parametrize("caller", [COADMIN, CHILD])
+def test_the_summary_gives_anyone_else_no_entry_for_her(family, caller):
+    """Review R3-01: no entry for her, no total, nothing to decide."""
+    body = client.get(f"/households/{HH}/nafaqah", headers=bearer(caller)).json()
+    assert body["wives"] == []
+    assert body["can_record_reimbursement"] is False and body["can_request_reimbursement"] is False
 
 
 def test_a_wife_who_is_an_admin_still_asks_and_decides_nothing_of_her_own(family):
