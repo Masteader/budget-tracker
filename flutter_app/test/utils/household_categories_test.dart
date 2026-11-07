@@ -160,6 +160,20 @@ void main() {
       expect(findExistingCategory('OPEX-CUSTOMABC', 'الوقود', cats, trCat)?.category.code, 'OPEX-FUEL');
     });
 
+    test('Arabic names match without the article, hamza forms, taa marbuta or diacritics', () {
+      const arabic = {
+        'active': [CategoryItem(code: 'CUSTOM-HEALTH', name: 'الصحة والأدوية')],
+        'inactive': <CategoryItem>[],
+      };
+      String same(String s) => s.trim();
+      expect(findExistingCategory('OPEX-CUSTOMA', 'صحه وادوية', arabic, same)?.category.code, 'CUSTOM-HEALTH');
+      expect(findExistingCategory('OPEX-CUSTOMB', 'الصِّحة والأدوية', arabic, same)?.category.code, 'CUSTOM-HEALTH');
+      expect(findExistingCategory('OPEX-CUSTOMC', 'الرياضة', arabic, same), isNull);
+      // App in Arabic: the system category shows as "الوقود".
+      String trCatAr(String s) => s.trim() == 'OPEX-FUEL' ? 'الوقود' : s.trim();
+      expect(findExistingCategory('OPEX-CUSTOMD', 'وقود', cats, trCatAr)?.category.code, 'OPEX-FUEL');
+    });
+
     test('a new name finds nothing, and nothing is found without categories', () {
       expect(findExistingCategory('OPEX-GYM', 'Gym', cats, trCat), isNull);
       expect(findExistingCategory('OPEX-FUEL', 'Fuel', null, trCat), isNull);

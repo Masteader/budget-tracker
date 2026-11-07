@@ -77,7 +77,29 @@ String _humanizeCustomCode(String code) {
 }
 
 /// Names compare trimmed, case-insensitively and with runs of spaces collapsed.
-String _nameKey(String name) => name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+/// Arabic spelling variants compare equal: diacritics and tatweel are dropped,
+/// hamza forms of alif read as alif, taa marbuta as haa, alif maqsura as yaa,
+/// and the article is dropped from each word, also after "و" ("الوقود" is
+/// "وقود", "والأدوية" is "وادويه").
+String _nameKey(String name) => name
+    .trim()
+    .toLowerCase()
+    .replaceAll(RegExp('[ً-ْـ]'), '')
+    .replaceAll(RegExp('[أإآ]'), 'ا')
+    .replaceAll('ة', 'ه')
+    .replaceAll('ى', 'ي')
+    .split(RegExp(r'\s+'))
+    .where((w) => w.isNotEmpty)
+    .map(_dropArabicArticle)
+    .join(' ');
+
+String _dropArabicArticle(String word) {
+  const article = 'ال'; // ال
+  const and = 'و'; // و
+  if (word.length > 3 && word.startsWith(article)) return word.substring(2);
+  if (word.length > 4 && word.startsWith('$and$article')) return and + word.substring(3);
+  return word;
+}
 
 /// Codes of the categories the household has deactivated.
 /// Codes are normalized (trimmed, upper case); compare with [isEmptyInactiveCategoryBudget].

@@ -883,17 +883,25 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         var code = 'OPEX-$slug';
                         var category = name;
                         var keywords = [name.toLowerCase(), code.toLowerCase()];
+                        var flexible = isFlexible;
                         var label = name;
 
                         // The generated code or the typed name can be a category the household
                         // already has ("Fuel" is the system OPEX-FUEL). An active one is never
                         // overwritten; a switched-off one is offered back with this budget.
-                        Map<String, List<CategoryItem>>? householdCategories;
+                        // The list is fetched fresh: a category switched on or off elsewhere
+                        // (chat, another admin's device) must not be judged from the cache, and
+                        // without the list nothing is written.
+                        Map<String, List<CategoryItem>> householdCategories;
                         try {
-                          householdCategories =
-                              await context.read<BudgetProvider>().getHouseholdCategories(staticData.householdId);
+                          householdCategories = await context
+                              .read<BudgetProvider>()
+                              .getHouseholdCategories(staticData.householdId, forceRefresh: true);
                         } catch (e) {
-                          debugPrint('Add category: categories not loaded, skipping duplicate check: $e');
+                          debugPrint('Add category: categories not loaded: $e');
+                          if (ctx.mounted) setDialogState(() => isSubmitting = false);
+                          if (mounted) AppSnackBar.showError(context, context.tr('bm_add_failed'));
+                          return;
                         }
                         if (!mounted || !ctx.mounted) return;
                         final existing = findExistingCategory(code, name, householdCategories, context.trCat);
@@ -914,10 +922,14 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                           final confirmed = await _confirmReactivateCategory(label, amount);
                           if (!mounted || !ctx.mounted || confirmed != true) return;
                           setDialogState(() => isSubmitting = true);
-                          // The existing definition is kept: same code, name and keywords.
+                          // The existing definition is kept: same code, name, keywords and
+                          // flexible flag (the backend rewrites them on the household's own row).
                           code = existing.category.code;
                           category = existing.category.name;
-                          if (existing.category.keywords.isNotEmpty) keywords = existing.category.keywords;
+                          keywords = existing.category.keywords.isNotEmpty
+                              ? existing.category.keywords
+                              : [existing.category.name.toLowerCase()];
+                          flexible = existing.category.isFlexible ?? isFlexible;
                         }
 
                         try {
@@ -926,7 +938,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                             code: code,
                             category: category,
                             allocatedAmount: amount,
-                            isFlexible: isFlexible,
+                            isFlexible: flexible,
                             keywords: keywords,
                           );
                           if (res['status'] == 'success') {

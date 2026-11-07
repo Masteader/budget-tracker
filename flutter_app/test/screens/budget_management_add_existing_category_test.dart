@@ -18,18 +18,29 @@ import 'package:budget_tracker/services/api_service.dart';
 import 'package:budget_tracker/services/salary_cycle_service.dart';
 import '../support/localized_app.dart';
 
+const _grocery = CategoryItem(code: 'OPEX-GROCERY', name: 'Groceries & Supermarkets', isSystem: true);
+const _fuel = CategoryItem(
+  code: 'OPEX-FUEL',
+  name: 'Fuel & Transport',
+  isSystem: true,
+  isActive: false,
+  isFlexible: false,
+  keywords: ['fuel', 'petrol'],
+);
+
 class _FakeApi extends ApiService {
   final List<Map<String, dynamic>> added = [];
+  bool fuelActive = false;
+  bool failFetch = false;
 
   @override
-  Future<Map<String, List<CategoryItem>>> fetchHouseholdCategories(String householdId) async => {
-        'active': const [
-          CategoryItem(code: 'OPEX-GROCERY', name: 'Groceries & Supermarkets', isSystem: true),
-        ],
-        'inactive': const [
-          CategoryItem(code: 'OPEX-FUEL', name: 'Fuel & Transport', isSystem: true, isActive: false),
-        ],
-      };
+  Future<Map<String, List<CategoryItem>>> fetchHouseholdCategories(String householdId) async {
+    if (failFetch) throw Exception('offline');
+    return {
+      'active': [_grocery, if (fuelActive) _fuel],
+      'inactive': [if (!fuelActive) _fuel],
+    };
+  }
 
   @override
   Future<Map<String, dynamic>> addBudgetCategory({
@@ -40,7 +51,13 @@ class _FakeApi extends ApiService {
     bool isFlexible = true,
     List<String> keywords = const [],
   }) async {
-    added.add({'code': code, 'category': category, 'amount': allocatedAmount});
+    added.add({
+      'code': code,
+      'category': category,
+      'amount': allocatedAmount,
+      'flexible': isFlexible,
+      'keywords': keywords,
+    });
     return {'status': 'success', 'category_code': code};
   }
 }
@@ -73,6 +90,7 @@ Future<void> _pumpScreen(
   WidgetTester tester,
   _FakeApi api, {
   List<Map<String, dynamic>> budgets = const [],
+  BudgetProvider? budgetProvider,
 }) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 1.0;
@@ -84,7 +102,7 @@ Future<void> _pumpScreen(
         ChangeNotifierProvider<AccountProvider>(create: (_) => AccountProvider()),
         ChangeNotifierProvider<TransactionProvider>(create: (_) => TransactionProvider()),
         ChangeNotifierProvider<RecurringBillsProvider>(create: (_) => RecurringBillsProvider()),
-        ChangeNotifierProvider<BudgetProvider>(create: (_) => BudgetProvider(api: api)),
+        ChangeNotifierProvider<BudgetProvider>.value(value: budgetProvider ?? BudgetProvider(api: api)),
         ChangeNotifierProvider<InstallmentProvider>(create: (_) => InstallmentProvider()),
         ChangeNotifierProvider<HouseholdRoleProvider>(create: (_) => HouseholdRoleProvider()),
       ],
@@ -148,8 +166,15 @@ void main() {
     await tester.tap(find.widgetWithText(ElevatedButton, 'Activate'));
     await tester.pumpAndSettle();
 
+    // The existing definition goes back unchanged: its name, keywords and flexible flag.
     expect(api.added, [
-      {'code': 'OPEX-FUEL', 'category': 'Fuel & Transport', 'amount': 300.0},
+      {
+        'code': 'OPEX-FUEL',
+        'category': 'Fuel & Transport',
+        'amount': 300.0,
+        'flexible': false,
+        'keywords': ['fuel', 'petrol'],
+      },
     ]);
     expect(find.text('Category Activated'), findsOneWidget);
   });
@@ -169,8 +194,39 @@ void main() {
 
     expect(find.text('Category already exists'), findsNothing);
     expect(api.added, [
-      {'code': 'OPEX-GYM', 'category': 'Gym', 'amount': 200.0},
+      {'code': 'OPEX-GYM', 'category': 'Gym', 'amount': 200.0, 'flexible': true, 'keywords': ['gym', 'opex-gym']},
     ]);
+  });
+
+  testWidgets('an active category reached by its generated code is refused', (tester) async {
+    await _pumpScreen(tester, api);
+    await _submitNewCategory(tester, 'Grocery', '50'); // OPEX-GROCERY
+
+    expect(api.added, isEmpty);
+    expect(find.textContaining('is already in your budget'), findsOneWidget);
+  });
+
+  testWidgets('the check reads fresh categories, not a list cached before a change', (tester) async {
+    final provider = BudgetProvider(api: api);
+    await provider.getHouseholdCategories('hh-1'); // cached: Fuel inactive
+    api.fuelActive = true; // switched on elsewhere (chat, another device)
+
+    await _pumpScreen(tester, api, budgetProvider: provider);
+    await _submitNewCategory(tester, 'Fuel', '300');
+
+    expect(api.added, isEmpty, reason: 'the active Fuel budget must not be overwritten');
+    expect(find.textContaining('is already in your budget'), findsOneWidget);
+  });
+
+  testWidgets('when categories cannot be loaded nothing is added', (tester) async {
+    api.failFetch = true;
+    await _pumpScreen(tester, api);
+    await _submitNewCategory(tester, 'Fuel', '300');
+
+    expect(api.added, isEmpty);
+    expect(find.text('Add Failed'), findsOneWidget);
+    expect(find.widgetWithText(ElevatedButton, 'Create Category'), findsOneWidget,
+        reason: 'the dialog stays open to try again');
   });
 
   testWidgets('the set counter ignores a budget row of a category the screen does not list', (tester) async {

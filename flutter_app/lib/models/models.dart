@@ -847,6 +847,9 @@ class CategoryItem {
   final List<String> keywords;
   final Map<String, double> subAllocations;
 
+  /// cost_control_codes.is_flexible; null when the source did not send it.
+  final bool? isFlexible;
+
   const CategoryItem({
     required this.code,
     required this.name,
@@ -855,6 +858,7 @@ class CategoryItem {
     this.householdId,
     this.keywords = const [],
     this.subAllocations = const {},
+    this.isFlexible,
   });
 
   String get categoryName => name;
@@ -883,6 +887,7 @@ class CategoryItem {
               .toList() ??
           const [],
       subAllocations: subAllocs,
+      isFlexible: json['is_flexible'] as bool?,
     );
   }
 
@@ -893,6 +898,7 @@ class CategoryItem {
         'is_active': isActive,
         if (householdId != null) 'household_id': householdId,
         'keywords': keywords,
+        if (isFlexible != null) 'is_flexible': isFlexible,
       };
 }
 
