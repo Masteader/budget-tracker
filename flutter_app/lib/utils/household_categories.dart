@@ -50,6 +50,35 @@ String _humanizeCustomCode(String code) {
   return label.isEmpty ? code : label;
 }
 
+/// The household category a new category would duplicate: the one with the
+/// same [code] (Add Category builds the code from the typed name, so "Fuel"
+/// is `OPEX-FUEL`), or the one whose stored or shown name is the typed [name].
+/// [localize] is `trCat`; it maps a system category name typed in any app
+/// language to the shown label. Active categories are checked first. Null
+/// when nothing matches or [categories] has not loaded.
+({CategoryItem category, bool isActive})? findExistingCategory(
+  String code,
+  String name,
+  Map<String, List<CategoryItem>>? categories,
+  String Function(String code) localize,
+) {
+  if (categories == null) return null;
+  final key = _codeKey(code);
+  final typed = {_nameKey(name), _nameKey(localize(name))}..remove('');
+  for (final isActive in const [true, false]) {
+    for (final c in categories[isActive ? 'active' : 'inactive'] ?? const <CategoryItem>[]) {
+      final names = {_nameKey(c.name), _nameKey(resolveCategoryLabel(c.code, [c], localize))};
+      if (_codeKey(c.code) == key || typed.any(names.contains)) {
+        return (category: c, isActive: isActive);
+      }
+    }
+  }
+  return null;
+}
+
+/// Names compare trimmed, case-insensitively and with runs of spaces collapsed.
+String _nameKey(String name) => name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
 /// Codes of the categories the household has deactivated.
 /// Codes are normalized (trimmed, upper case); compare with [isEmptyInactiveCategoryBudget].
 Set<String> inactiveCategoryCodes(Map<String, List<CategoryItem>>? categories) =>

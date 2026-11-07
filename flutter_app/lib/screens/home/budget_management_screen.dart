@@ -33,6 +33,7 @@ import '../../models/money.dart';
 import '../../models/manual_expense_row.dart';
 import '../../providers/account_provider.dart';
 import '../../providers/budget_provider.dart';
+import '../../utils/household_categories.dart';
 import '../../providers/transaction_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
@@ -879,16 +880,54 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         final slug = asciiSlug.isNotEmpty
                             ? asciiSlug
                             : 'CUSTOM${DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase()}';
-                        final code = 'OPEX-$slug';
+                        var code = 'OPEX-$slug';
+                        var category = name;
+                        var keywords = [name.toLowerCase(), code.toLowerCase()];
+                        var label = name;
+
+                        // The generated code or the typed name can be a category the household
+                        // already has ("Fuel" is the system OPEX-FUEL). An active one is never
+                        // overwritten; a switched-off one is offered back with this budget.
+                        Map<String, List<CategoryItem>>? householdCategories;
+                        try {
+                          householdCategories =
+                              await context.read<BudgetProvider>().getHouseholdCategories(staticData.householdId);
+                        } catch (e) {
+                          debugPrint('Add category: categories not loaded, skipping duplicate check: $e');
+                        }
+                        if (!mounted || !ctx.mounted) return;
+                        final existing = findExistingCategory(code, name, householdCategories, context.trCat);
+                        final reactivating = existing != null && !existing.isActive;
+                        if (existing != null) {
+                          label = resolveCategoryLabel(existing.category.code, [existing.category], context.trCat);
+                          if (existing.isActive) {
+                            setDialogState(() => isSubmitting = false);
+                            AppSnackBar.showError(
+                              context,
+                              context.trArgs('bm_category_exists_active_msg', {'name': label}),
+                              title: context.tr('bm_category_exists_title'),
+                            );
+                            return;
+                          }
+                          // No spinner behind the question; the question itself blocks a second tap.
+                          setDialogState(() => isSubmitting = false);
+                          final confirmed = await _confirmReactivateCategory(label, amount);
+                          if (!mounted || !ctx.mounted || confirmed != true) return;
+                          setDialogState(() => isSubmitting = true);
+                          // The existing definition is kept: same code, name and keywords.
+                          code = existing.category.code;
+                          category = existing.category.name;
+                          if (existing.category.keywords.isNotEmpty) keywords = existing.category.keywords;
+                        }
 
                         try {
                           final res = await ApiService.instance.addBudgetCategory(
                             householdId: staticData.householdId,
                             code: code,
-                            category: name,
+                            category: category,
                             allocatedAmount: amount,
                             isFlexible: isFlexible,
-                            keywords: [name.toLowerCase(), code.toLowerCase()],
+                            keywords: keywords,
                           );
                           if (res['status'] == 'success') {
                             if (ctx.mounted) Navigator.pop(ctx);
@@ -899,8 +938,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                               });
                               AppSnackBar.showSuccess(
                                 context,
-                                context.trArgs('bm_category_added_msg', {'name': name, 'amount': context.sar(amount)}),
-                                title: context.tr('bm_category_created'),
+                                reactivating
+                                    ? context.trArgs('bm_category_reactivated_msg', {'name': label, 'amount': context.sar(amount)})
+                                    : context.trArgs('bm_category_added_msg', {'name': name, 'amount': context.sar(amount)}),
+                                title: context.tr(reactivating ? 'bm_category_reactivated_title' : 'bm_category_created'),
                               );
                             }
                           } else {
@@ -979,6 +1020,37 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       ),
     );
   }
+
+  /// Asks whether to activate the switched-off category [label] with a budget of [amount].
+  Future<bool?> _confirmReactivateCategory(String label, double amount) => showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: context.cardBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            context.tr('bm_category_exists_title'),
+            style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            context.trArgs('bm_category_exists_inactive_msg', {'name': label, 'amount': context.sar(amount)}),
+            style: TextStyle(color: context.textSecondary, fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: context.primaryButtonBg,
+                foregroundColor: context.primaryButtonFg,
+              ),
+              child: Text(context.tr('activate'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
 
   Future<void> _archiveCategory(
     _BudgetStaticData staticData,
