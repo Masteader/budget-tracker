@@ -111,6 +111,21 @@ class SubBudgetAllocationDialog extends StatefulWidget {
     ],
   };
 
+  /// The row of [cycleKey] among one category's budget rows, picked the way
+  /// the backend's `save_sub_allocations` picks the row it writes: keyed by
+  /// [cycleKey], or a legacy row without a `cycle_key` whose `month` is in that
+  /// cycle's month. Null when the cycle has no row.
+  static Map<String, dynamic>? cycleBudgetRow(Iterable<Map<String, dynamic>> rows, String cycleKey) {
+    for (final row in rows) {
+      final key = row['cycle_key']?.toString() ?? '';
+      final month = row['month']?.toString() ?? '';
+      if (key == cycleKey || (key.isEmpty && month.length >= 7 && month.substring(0, 7) == cycleKey)) {
+        return row;
+      }
+    }
+    return null;
+  }
+
   @override
   State<SubBudgetAllocationDialog> createState() =>
       _SubBudgetAllocationDialogState();
@@ -143,6 +158,29 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
   double _totalSum = 0.0;
   bool _parentIsSinkingFund = false;
   double _parentBaseAmount = 0.0;
+
+  /// The cycle's stored `_sinking_fund` settings were read (from the stored
+  /// row handed in or from the database). Until then the switches show a
+  /// guess, and saving must not overwrite what is stored.
+  bool _sinkingFundLoaded = false;
+
+  /// The user changed a sinking-fund switch in this dialog.
+  bool _sinkingFundChanged = false;
+
+  ApiService get _api => widget.apiService ?? ApiService.instance;
+
+  /// [SubBudgetAllocationDialog.existingBudget] is the stored row of the
+  /// dialog's cycle: it has an id (a database row) and belongs to the cycle.
+  bool get _existingIsCycleRow {
+    final budget = widget.existingBudget;
+    final cycleKey = widget.cycleKey;
+    if (budget == null || budget.id.isEmpty || cycleKey == null || cycleKey.isEmpty) return false;
+    return SubBudgetAllocationDialog.cycleBudgetRow(
+          [{'cycle_key': budget.cycleKey, 'month': budget.month}],
+          cycleKey,
+        ) !=
+        null;
+  }
 
   @override
   void initState() {
@@ -186,8 +224,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
   Future<void> _loadSubCategories() async {
     try {
       // 1. Fetch sub-categories from backend API (uses service-role key, bypassing RLS)
-      final api = widget.apiService ?? ApiService.instance;
-      final apiSubs = await api.getSubCategories(widget.categoryCode);
+      final apiSubs = await _api.getSubCategories(widget.categoryCode);
 
       List<Map<String, String>> rawDefs = [];
       if (apiSubs.isNotEmpty) {
@@ -229,34 +266,42 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
       if (existingSfRaw is Map) {
         existingSinkingFund = Map<String, dynamic>.from(existingSfRaw);
       }
-      try {
-        final cycleKey = widget.cycleKey;
-        var query = supabase
-            .from('budgets')
-            .select('sub_allocations')
-            .eq('household_id', widget.householdId)
-            .eq('category_code', widget.categoryCode);
-        if (cycleKey != null && cycleKey.isNotEmpty) {
-          query = query.eq('cycle_key', cycleKey);
-        }
-        final bData = await query.maybeSingle().timeout(const Duration(milliseconds: 1500));
-        if (bData != null && bData['sub_allocations'] is Map) {
-          final rawMap = bData['sub_allocations'] as Map<String, dynamic>;
-          final Map<String, double> dbAllocs = {};
-          for (final entry in rawMap.entries) {
-            if (!entry.key.startsWith('_') && entry.value is num) {
-              dbAllocs[entry.key] = (entry.value as num).toDouble();
+      var sinkingFundLoaded = _existingIsCycleRow;
+      // The cycle's row, picked as the backend picks the row it saves into.
+      // With no cycle key the server resolves the cycle, so no row is guessed
+      // here and the stored settings count as not loaded.
+      final cycleKey = widget.cycleKey;
+      if (cycleKey != null && cycleKey.isNotEmpty) {
+        try {
+          final rows = await supabase
+              .from('budgets')
+              .select('sub_allocations, cycle_key, month')
+              .eq('household_id', widget.householdId)
+              .eq('category_code', widget.categoryCode)
+              .timeout(const Duration(milliseconds: 1500));
+          final bData = SubBudgetAllocationDialog.cycleBudgetRow(rows, cycleKey);
+          final rawMap = bData?['sub_allocations'];
+          if (rawMap is Map) {
+            final Map<String, double> dbAllocs = {};
+            for (final entry in rawMap.entries) {
+              final key = entry.key.toString();
+              if (!key.startsWith('_') && entry.value is num) {
+                dbAllocs[key] = (entry.value as num).toDouble();
+              }
             }
+            existingAllocs = {...existingAllocs, ...dbAllocs};
           }
-          existingAllocs = {...existingAllocs, ...dbAllocs};
-          if (rawMap['_sinking_fund'] is Map) {
-            existingSinkingFund = {
-              ...existingSinkingFund,
-              ...Map<String, dynamic>.from(rawMap['_sinking_fund'] as Map),
-            };
-          }
+          // What is stored now replaces what was handed in; no row, or no
+          // `_sinking_fund` in it, means none is stored.
+          final storedSf = rawMap is Map ? rawMap['_sinking_fund'] : null;
+          existingSinkingFund = storedSf is Map ? Map<String, dynamic>.from(storedSf) : {};
+          sinkingFundLoaded = true;
+        } catch (e) {
+          // Not read: saving leaves the stored settings as they are.
+          logFailure('SubBudgetAllocation.loadBudgetRow', e);
         }
-      } catch (_) {}
+      }
+      _sinkingFundLoaded = sinkingFundLoaded;
 
       if (existingSinkingFund['_parent'] is Map) {
         _parentIsSinkingFund = (existingSinkingFund['_parent'] as Map)['accumulate'] == true;
@@ -312,6 +357,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
 
       _replaceSubItems(list);
     } catch (e) {
+      _sinkingFundLoaded = _existingIsCycleRow;
       final defaultList = SubBudgetAllocationDialog.kDefaultSubCategoriesCatalog[widget.categoryCode] ?? [];
       final existingAllocs = widget.existingBudget?.subAllocations ?? {};
       Map<String, dynamic> existingSinkingFund = {};
@@ -444,7 +490,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
     // Persist to cost_control_sub_categories via ApiService. A refused or failed add is not shown
     // as added: the item would vanish on the next load and its amount would never be saved.
     try {
-      final saved = await ApiService.instance.addSubCategory(
+      final saved = await _api.addSubCategory(
         householdId: widget.householdId,
         parentCode: widget.categoryCode,
         nameEn: name,
@@ -561,7 +607,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
     if (newName.isEmpty || newName == item.nameEn) return;
 
     try {
-      final resp = await ApiService.instance.renameSubCategory(
+      final resp = await _api.renameSubCategory(
         parentCode: widget.categoryCode,
         subCode: item.subCode,
         nameEn: newName,
@@ -659,7 +705,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
     if (confirm != true || !mounted) return;
 
     try {
-      final resp = await ApiService.instance.removeSubCategory(
+      final resp = await _api.removeSubCategory(
         householdId: widget.householdId,
         parentCode: widget.categoryCode,
         subCode: item.subCode,
@@ -742,15 +788,17 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         }
       }
 
-      // The sinking fund is always sent, empty when switched off, so a
-      // switched-off one is cleared.
-      final res = await ApiService.instance.saveSubAllocations(
+      // The sinking fund is sent (empty when switched off, which clears it)
+      // only when the stored settings were read or the user changed them.
+      // Otherwise none is sent and the server keeps what is stored: a read
+      // that failed must not clear a sinking fund.
+      final res = await _api.saveSubAllocations(
         householdId: widget.householdId,
         categoryCode: widget.categoryCode,
         subAllocations: allocMap,
         cycleKey: widget.cycleKey,
         allocatedAmount: parentAmount,
-        sinkingFund: sfMap,
+        sinkingFund: _sinkingFundLoaded || _sinkingFundChanged ? sfMap : null,
       );
 
       if (res['status'] != 'success') {
@@ -992,6 +1040,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                               InkWell(
                                 onTap: () {
                                   setState(() {
+                                    _sinkingFundChanged = true;
                                     _parentIsSinkingFund = !_parentIsSinkingFund;
                                     if (_parentIsSinkingFund && _parentBaseAmount <= 0) {
                                       _parentBaseAmount = parseMoneyInput(_fallbackParentController.text.trim()) ?? 0.0;
@@ -1045,6 +1094,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                         value: _parentIsSinkingFund,
                                         onChanged: (val) {
                                           setState(() {
+                                            _sinkingFundChanged = true;
                                             _parentIsSinkingFund = val;
                                             if (_parentIsSinkingFund && _parentBaseAmount <= 0) {
                                               _parentBaseAmount = parseMoneyInput(_fallbackParentController.text.trim()) ?? 0.0;
@@ -1150,6 +1200,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                           child: InkWell(
                                             onTap: () {
                                               setState(() {
+                                                _sinkingFundChanged = true;
                                                 item.isSinkingFund = !item.isSinkingFund;
                                                 if (item.isSinkingFund && item.baseAmount <= 0) {
                                                   item.baseAmount = parseMoneyInput(item.controller.text.trim()) ?? 0.0;

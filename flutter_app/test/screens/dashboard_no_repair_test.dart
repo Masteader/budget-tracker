@@ -32,7 +32,7 @@ void main() {
 
   group('_BudgetDashboard without repair service', () {
     // The budget repair service rewrote budget rows' cycle_key and month from
-    // the client and was removed. Neither screen may bring a repair step back.
+    // the client and was removed. No file under lib/ may bring a repair step back.
     const repairMarkers = [
       'BudgetRepairService',
       'budget_repair_service',
@@ -47,21 +47,22 @@ void main() {
       );
     });
 
-    for (final path in const [
-      'lib/screens/home/dashboard_screen.dart',
-      'lib/screens/home/budget_management_screen.dart',
-    ]) {
-      test('$path references no budget repair service', () {
-        final src = File(path).readAsStringSync();
+    test('nothing under lib/ references a budget repair service', () {
+      final offenders = <String>[];
+      final files = Directory('lib')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))
+          .toList();
+      expect(files, isNotEmpty, reason: 'the scan must run from flutter_app/');
+      for (final file in files) {
+        final src = file.readAsStringSync();
         for (final marker in repairMarkers) {
-          expect(
-            src.contains(marker),
-            isFalse,
-            reason: '$path must not reference $marker',
-          );
+          if (src.contains(marker)) offenders.add('${file.path}: $marker');
         }
-      });
-    }
+      }
+      expect(offenders, isEmpty, reason: 'no file under lib/ may bring a repair step back');
+    });
 
     testWidgets('_BudgetDashboard initializes and renders with no repair step', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);

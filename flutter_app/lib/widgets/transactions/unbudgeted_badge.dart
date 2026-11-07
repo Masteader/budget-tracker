@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../main.dart' show supabase;
 import '../../models/budget_coverage.dart';
-import '../../services/salary_cycle_service.dart';
+import '../../providers/budget_provider.dart';
 import '../../theme/app_themes.dart';
 import '../sub_budget_allocation_dialog.dart';
 
@@ -30,15 +31,34 @@ Future<BudgetCoverage> loadBudgetCoverage(String householdId) async {
 /// The existing budget dialog for [categoryCode] in the open cycle. Saving it
 /// gives the category a budget and makes it active; what the cycle already
 /// spent in it counts in that budget at once (migration 20261105001000).
+///
+/// The open cycle is the server's: the current cycle [BudgetProvider] loaded,
+/// or none, so the server resolves the household's payday cycle. The phone's
+/// cached payday can be stale (first launch, a failed fetch, a payday changed
+/// on another device) and would save into the wrong cycle.
 Future<bool> activateAndBudgetCategory(BuildContext context, String householdId, String categoryCode) async {
   final saved = await SubBudgetAllocationDialog.show(
     context,
     householdId: householdId,
     categoryCode: categoryCode,
     categoryName: context.trCat(categoryCode),
-    cycleKey: SalaryCycleService.currentCycle().key,
+    cycleKey: _serverOpenCycleKey(context),
   );
   return saved == true;
+}
+
+/// The current cycle the server listed for the household, if loaded.
+String? _serverOpenCycleKey(BuildContext context) {
+  final BudgetProvider provider;
+  try {
+    provider = Provider.of<BudgetProvider>(context, listen: false);
+  } on ProviderNotFoundException {
+    return null;
+  }
+  for (final cycle in provider.cycles) {
+    if (cycle.isCurrent && cycle.cycleKey.isNotEmpty) return cycle.cycleKey;
+  }
+  return null;
 }
 
 /// "Unbudgeted": an expense in a category with no active budget this cycle.

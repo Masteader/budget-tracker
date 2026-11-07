@@ -67,6 +67,11 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
   bool _isLoading = true;
   String? _errorMessage;
   CategoryBreakdownItem? _categoryData;
+
+  /// The stored budget row of [SubBudgetBreakdownSheet.cycleKey] (its id and
+  /// `_`-prefixed metadata such as `_sinking_fund`), when it was read. The
+  /// edit dialog gets it so it does not depend on its own read.
+  ({String id, String month, String? cycleKey, Map<String, dynamic> metadata})? _cycleRow;
   SalaryCycleInfo? _cycleInfo;
 
   @override
@@ -115,27 +120,44 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
         }
       }
 
-      // Fetch the latest budget row for this household & cycle to get any saved subAllocations
+      // Fetch the cycle's budget row (picked as the backend picks it) to get any saved subAllocations
       Map<String, double> dbSubAllocs = {};
+      ({String id, String month, String? cycleKey, Map<String, dynamic> metadata})? cycleRow;
       try {
-        var query = supabase
+        final rows = await supabase
             .from('budgets')
-            .select('sub_allocations, allocated_amount, spent_amount, remaining_amount, previous_cycle_delta')
+            .select('id, sub_allocations, cycle_key, month')
             .eq('household_id', widget.householdId)
             .eq('category_code', widget.categoryCode);
-        if (widget.cycleKey != null && widget.cycleKey!.isNotEmpty) {
-          query = query.eq('cycle_key', widget.cycleKey!);
-        }
-        final bData = await query.maybeSingle();
+        final cycleKey = widget.cycleKey;
+        final bData = cycleKey != null && cycleKey.isNotEmpty
+            ? SubBudgetAllocationDialog.cycleBudgetRow(rows, cycleKey)
+            // No cycle: only an unambiguous single row is shown, and its
+            // metadata is not handed on (it may be another cycle's).
+            : (rows.length == 1 ? rows.single : null);
         if (bData != null && bData['sub_allocations'] is Map) {
-          final rawMap = bData['sub_allocations'] as Map<String, dynamic>;
+          final rawMap = bData['sub_allocations'] as Map;
           final Map<String, double> dbSubAllocsMap = {};
           for (final entry in rawMap.entries) {
-            if (!entry.key.startsWith('_') && entry.value is num) {
-              dbSubAllocsMap[entry.key] = (entry.value as num).toDouble();
+            final key = entry.key.toString();
+            if (!key.startsWith('_') && entry.value is num) {
+              dbSubAllocsMap[key] = (entry.value as num).toDouble();
             }
           }
           dbSubAllocs = dbSubAllocsMap;
+        }
+        if (bData != null && cycleKey != null && cycleKey.isNotEmpty) {
+          final rawMap = bData['sub_allocations'];
+          cycleRow = (
+            id: bData['id']?.toString() ?? '',
+            month: bData['month']?.toString() ?? '',
+            cycleKey: bData['cycle_key'] as String?,
+            metadata: {
+              if (rawMap is Map)
+                for (final entry in rawMap.entries)
+                  if (entry.key.toString().startsWith('_')) entry.key.toString(): entry.value,
+            },
+          );
         }
       } catch (_) {}
 
@@ -198,6 +220,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
       if (mounted) {
         setState(() {
           _categoryData = matched;
+          _cycleRow = cycleRow;
           _isLoading = false;
         });
       }
@@ -330,16 +353,21 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                           allocMap[s.subCode!] = s.allocatedAmount;
                         }
                       }
+                      // The stored row's id and metadata (e.g. `_sinking_fund`)
+                      // when it was read, so saving keeps or changes exactly
+                      // what is stored.
+                      final row = _cycleRow;
                       existing = Budget(
-                        id: '',
+                        id: row?.id ?? '',
                         householdId: widget.householdId,
-                        month: '${widget.cycleKey ?? "2026-10"}-01',
+                        month: row?.month ?? '${widget.cycleKey ?? "2026-10"}-01',
                         categoryCode: widget.categoryCode,
                         allocatedAmount: _categoryData!.allocatedAmount,
                         spentAmount: _categoryData!.spentAmount,
                         remainingAmount: _categoryData!.remainingAmount,
-                        cycleKey: widget.cycleKey,
+                        cycleKey: row != null ? row.cycleKey : widget.cycleKey,
                         subAllocations: allocMap,
+                        metadata: row?.metadata ?? const {},
                       );
                     }
 
