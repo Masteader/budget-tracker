@@ -8,6 +8,9 @@ same; here the API's own gates are tested, with the repository's fakes.
   husband is there get the answer for a row they do not read ("not found"), on every path that
   rewrites it: the edit gate itself, the receipt enrichment, a new installment plan that adjusts
   it, and an edit of a plan linked to it. Its amount, and so the account's balance, do not move.
+* R3C-05: the reversal, the approval and the decline check the caller before they look the row up:
+  anyone who may not act gets the same answer for a repayment or a request that exists and for an
+  id of nothing.
 """
 
 from __future__ import annotations
@@ -20,8 +23,12 @@ from test_wife_account import (  # noqa: F401  (pytest fixtures)
     COWIFE,
     HER_BANK,
     HH,
+    HIS_BANK,
     HUSBAND,
+    KEY,
     MEMBER,
+    Q_PENDING,
+    R_PAID,
     WA1,
     WIFE,
     WIFE_ADMIN,
@@ -152,3 +159,38 @@ def test_r3c_01_she_still_edits_her_plan_and_its_purchase(wife_rows):
     resp = client.put(f"/budgets/installments/{PLAN}", headers=bearer(MEMBER), json={"notes": "due soon"})
     assert resp.status_code == 200, resp.text
     assert _row(wife_rows, ON_WA1) == before
+
+
+# ─── R3C-05: the caller before the row ───────────────────────────────────────
+# The reversal, the approval and the decline answer anyone who may not act the same way for a row
+# that exists and for an id of nothing (status and body), and call nothing.
+
+UNKNOWN = "c7000000-0000-4000-8000-0000000000ee"
+EXISTING = {"reverse": R_PAID, "approve": Q_PENDING, "decline": Q_PENDING}
+
+
+def _act(kind, caller, row):
+    base = f"/households/{HH}/nafaqah"
+    if kind == "reverse":
+        return client.post(f"{base}/reimbursements/{row}/reversal", headers=bearer(caller), json={"request_key": KEY})
+    if kind == "approve":
+        return client.post(f"{base}/reimbursement-requests/{row}/approve", headers=bearer(caller),
+                           json={"account_id": HIS_BANK, "request_key": KEY})
+    return client.post(f"{base}/reimbursement-requests/{row}/decline", headers=bearer(caller), json={"reason": "no"})
+
+
+@pytest.mark.parametrize("kind", ["reverse", "approve", "decline"])
+@pytest.mark.parametrize("who", ["wife", "co-wife", "member", "admin", "wife-admin"])
+def test_r3c_05_an_unauthorised_caller_learns_nothing_of_the_row(family, kind, who):
+    there, nothing = _act(kind, CALLERS[who], EXISTING[kind]), _act(kind, CALLERS[who], UNKNOWN)
+    assert there.status_code == 403, there.text
+    assert (there.status_code, there.json()) == (nothing.status_code, nothing.json())
+    assert family.rpc_calls == []
+
+
+@pytest.mark.parametrize("kind", ["reverse", "approve", "decline"])
+def test_r3c_05_her_husband_still_learns_an_id_of_nothing_is_nothing(family, kind):
+    resp = _act(kind, HUSBAND, UNKNOWN)
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["detail"]["code"] == ("reimbursement_not_found" if kind == "reverse" else "request_not_found")
+    assert family.rpc_calls == []
