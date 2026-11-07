@@ -130,7 +130,7 @@ Example used below: she pays 400 SAR for groceries from her wife account and rec
 
 ### Direct repayment
 
-1. He opens **Repay**, enters 100, picks the account it leaves (his own personal account, or a
+1. He taps **Reimburse Wife** on the family card, enters 100, picks the account it leaves (his own personal account, or a
    shared pool if he is an admin) and the wife account it goes into.
 2. His account goes down by 100 and her wife account goes up by 100, as one transfer. Each
    account's history shows "Repayment to wife". What is owed drops to 300.
@@ -138,7 +138,7 @@ Example used below: she pays 400 SAR for groceries from her wife account and rec
 
 ### Her request ("I received X")
 
-1. She marks "I received 100" and chooses which of her wife accounts it went into. The request is
+1. She taps **Mark as received**, enters 100 and chooses which of her wife accounts it went into. The request is
    **pending**: nothing moves and what is owed does not change.
 2. She can cancel it while it is pending.
 3. Her husband **approves** it (he picks the account it leaves; the money moves exactly as in a
