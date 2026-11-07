@@ -49,13 +49,15 @@ Last checked against the code: 2026-11-07 (`main` at `f6e57fb`).
 
 ### Signing in
 
-- The app signs in with **email and password** only. There is no Google or Apple sign-in and no
-  sign-in by email link.
+- The app signs in with **email and password**. There is no Google or Apple sign-in, and the sign-in
+  screen offers no email link. (Only when the password reset email cannot be sent does **Forgot
+  password?** fall back to a one-time sign-in email; its code is entered the same way as below.)
 - **Create Account** asks for a display name, an email and a password of at least 6 characters.
   The app then asks them to confirm the email from the link it sends.
-- **Forgot password?** sends an email. The person either taps the reset link, which opens the app
-  on **Set New Password**, or types the code from the email ("Have a verification code? Enter code
-  manually"). A new code can be asked for after 60 seconds.
+- **Forgot password?** → **Send Reset Code** sends an email and goes straight to **Enter
+  Verification Code**, which takes the code and the new password together. Tapping the reset link
+  in the email instead opens the app on **Set New Password**. A new code can be asked for after 60
+  seconds.
 - The app only accepts sign-in links meant for it. A link that carries sign-in tokens is refused,
   so nobody can sign someone into another account by sending them a link.
 - The sign-in is kept in the phone's secure storage, so the app opens signed in next time.
@@ -64,8 +66,9 @@ Last checked against the code: 2026-11-07 (`main` at `f6e57fb`).
 
 - A person with no household sees **Your Household**: create one (a name, then **Family** or
   **Roommates**) or join one with an invite code. See [section 2](#2-households-and-roles).
-- The household's admin then sees **Set up your household in two minutes** at the top of the
-  dashboard. Each step opens the right editor:
+- The household's admin then sees **Set up your household in two minutes** on the dashboard. While
+  the cycle has no budgets it takes the place of the hero card; once budgets exist it sits below the
+  hero card, the over-budget alerts and **Quick Access**. Each step opens the right editor:
 
 | Step | What it does | Done when |
 |---|---|---|
@@ -77,8 +80,9 @@ Last checked against the code: 2026-11-07 (`main` at `f6e57fb`).
 
 - A member who is not an admin sees **Budgets not set up yet** instead, and can already record
   expenses.
-- The checklist stays on the dashboard while steps are open. **Hide** removes it on this phone;
-  Settings → **Household Setup Checklist** → **Restore to Dashboard** brings it back.
+- The checklist stays on the dashboard while steps are open. **Hide** appears once the cycle has
+  budgets and removes it for this household on this phone; Settings → **Household Setup
+  Checklist** → **Restore to Dashboard** brings it back.
 - The first time the dashboard opens on a phone, the **Interactive Setup Tutor** also appears once
   (see [section 14](#14-help-support-and-the-in-app-guide)).
 
@@ -296,7 +300,7 @@ The budget is meant to spend exactly the money there is. The app checks this in 
 | Where | What it compares | What it shows |
 |---|---|---|
 | Each account card ([section 3](#3-accounts)) | The account's balance and the unspent budgets linked to it | **Zero-Based (100% Allocated)**, **+X Surplus Buffer** or **Deficit: X** with a quick transfer |
-| Budgets tab, **Cycle Funding Capacity** | All allocations and the income recorded this cycle (without any, operating cash plus what was spent) | "Within cycle capacity (X buffer)" or "Allocations exceed cycle funding capacity by X" |
+| Budgets tab, **Cycle Funding Capacity** | All allocations and the income recorded this cycle (without any, the account balances before commitments plus what was spent from accounts) | "Within cycle capacity (X buffer)" or "Allocations exceed cycle funding capacity by X" |
 | Budgets tab, account warning | An account and the unspent budgets that rely on it | "*Account* Capacity Deficit: X" with **Fix**, which opens a transfer into it |
 
 - When allocations are over the capacity, **Shrink to Match Cash** scales the variable categories
@@ -366,7 +370,7 @@ The budget is meant to spend exactly the money there is. The app checks this in 
 ## 6. Recording an expense
 
 Every way below ends in the same kind of expense. In a family household each one asks "Who paid,
-and for what?" ([section 7](#7-expense-kinds)); in a roommates household, who paid and whether it
+and for whom?" ([section 7](#7-expense-kinds)); in a roommates household, who paid and whether it
 is shared ([section 9](#9-roommate-settlements)).
 
 ### Manual Log
@@ -383,7 +387,8 @@ is shared ([section 9](#9-roommate-settlements)).
 ### Receipt scanner
 
 - **Add Expense** → **Scan Receipt**. The person adds one or more photos (**Snap Photo**, **Snap
-  Next Page**, **Gallery**; up to 8 photos for one long receipt), and can add the receipt's ZATCA QR
+  Next Page**, **Gallery**; the server takes at most 8 photos for one receipt, the app does not
+  stop at 8), and can add the receipt's ZATCA QR
   code with **Scan QR Camera** or **Paste Text**. A QR code alone is enough to record the total.
 - **The ZATCA Phase 2 QR code** is read on the phone: seller name, VAT number, date and time,
   total including VAT, and VAT amount. A valid code shows **ZATCA Verified**.
@@ -392,9 +397,14 @@ is shared ([section 9](#9-roommate-settlements)).
   reading on the phone itself.
 - The person reviews the result (merchant, total, VAT, items, who paid, the paying account) and
   saves it. Within 15 minutes the server saves what it showed, without a second AI call; after that
-  it reads the receipt again. The photos are stored, as one image, only after the expense is saved.
+  it reads the receipt again.
+- **The stored photo.** When the person saves, the app first uploads the **first** photo and sends
+  its place with the expense. The server joins all the pages into one image only when no photo
+  came with the request (for example when that upload failed). So a long receipt normally keeps its
+  first page only, and a save that fails afterwards leaves an uploaded photo linked to no expense
+  ([section 19](#19-accepted-limits-and-follow-ups)).
 - **Batch Scan Receipts** (Tools) photographs several receipts in a row and reviews them one by
-  one (**Save & Next →**).
+  one (**Save & Next →**, and **Save & Finish** on the last one).
 
 ### Voice and the AI chat
 
@@ -443,8 +453,9 @@ is shared ([section 9](#9-roommate-settlements)).
 - A member edits or deletes their own expenses; an admin any expense they can read
   ([section 2](#2-households-and-roles)). Others see "Added by another member · only admins can
   change it".
-- Swiping an expense away on **Transactions** deletes it, with **UNDO** for a short time. The budget
-  and the account balance follow.
+- Swiping an expense away on **Transactions** first asks **Delete Transaction**. After the delete,
+  **UNDO** is offered for a short time, only on the person's own expenses (an admin cannot undo the
+  delete of another member's expense). The budget and the account balance follow.
 
 ---
 
@@ -456,13 +467,14 @@ is shared ([section 9](#9-roommate-settlements)).
   several roommates so nobody pays in circles.
 - **Family.** Nothing is ever split 50/50 or by percentage between the spouses: Nafaqah (household
   maintenance) is the husband's. When an expense is recorded in a family household, the app asks
-  who paid and for what:
+  **Who paid, and for whom?** The labels depend on who is recording ({wife} and {husband} are their
+  names):
 
-| App choice | What it means | Effect |
-|---|---|---|
-| **Husband paid (household expense)** | The husband pays for shared things, or buys something for his wife | An ordinary household expense: no debt |
-| **Shared for family (husband reimburses)** | The wife pays for the home, the children or her husband from her own money (`wife_reimbursable`, her "advance") | Her husband now owes her that amount. Visible to the whole household |
-| **Personal (from my/her allowance)** | The wife buys something for herself (`wife_personal`) | Counted against her personal allowance for the current cycle, never against the category budgets. Private (see [section 16](#16-who-sees-what)) |
+| Kind | The husband sees | The wife sees | Another admin sees | What it means | Effect |
+|---|---|---|---|---|---|
+| Household expense | **I paid (household expense)** | **{husband} paid** | **Household expense (no debt)** | The husband pays for shared things, or buys something for his wife | An ordinary household expense: no debt |
+| Her advance (`wife_reimbursable`) | **{wife} paid for the home — I pay her back** | **I paid for the home — he pays me back** | **{wife} paid for the home — owed to her** | The wife pays for the home, the children or her husband from her own money | Her husband now owes her that amount. Visible to the whole household |
+| Her personal purchase (`wife_personal`) | **{wife}'s personal purchase — from her allowance** | **For me personally — from my allowance** | **{wife}'s personal purchase — from her allowance** | The wife buys something for herself | Counted against her personal allowance for the current cycle, never against the category budgets. Private (see [section 16](#16-who-sees-what)) |
 
 - Only the wife, the household's provider or an admin can mark a family expense as her advance or
   her personal purchase.
@@ -482,7 +494,7 @@ Details: [rule 02, family mode rules 1 to 4](../.agents/rules/02-saudi-fintech-a
 **What is owed** = her advances − repayments + reversals. Pending requests never count.
 
 Example used below: she pays 400 SAR for groceries from her wife account and records it as
-"Shared for family (husband reimburses)". Her husband now owes her 400.
+"I paid for the home — he pays me back". Her husband now owes her 400.
 
 ### Direct repayment
 
@@ -564,7 +576,7 @@ The dashboard's **Commitments** heading holds two cards: recurring bills and ins
 - **Recurring Bills & Reserves** lists the bills of the current cycle with their due day and a
   status (paid, upcoming or **Overdue**), and the amount **Reserved** for those not paid yet.
 - A bill comes from one of three places:
-  - a budgeted sub-category the household marked as recurring (**Configure Bills** → **Manage
+  - a budgeted sub-category the household marked as recurring (**Configure** → **Manage
     Recurring Bills**: switch it on and pick its due day, 1 to 31);
   - a known provider in the expense history (for example STC, Mobily, Zain, Saudi Electricity,
     National Water, Netflix, Shahid, rent);
@@ -578,8 +590,8 @@ The dashboard's **Commitments** heading holds two cards: recurring bills and ins
 
 - **Installments & BNPL** lists the active plans: provider, merchant, "Installment N of M paid ·
   next *date*", and what is due before payday.
-- **Add Installment Plan** (or **Log BNPL Plan**) records a **New Purchase** or an **Ongoing Plan
-  (In Progress)**: merchant, total, provider (**Tamara**, **Tabby**, **Bank** or **Other**), the
+- **Add Installment Plan** opens **New Installment Plan**: a **New Purchase** or an **Ongoing Plan
+  (In Progress)**, with merchant, total, provider (**Tamara**, **Tabby** or **Bank / Other**), the
   number of installments (1, 2, 3, 4, 6, 12 or a custom number up to 60) and the schedule
   (**Monthly** or **Every 2 weeks**; Tabby or Tamara in 4 start as every 2 weeks), and whether the
   first was paid at checkout.
@@ -587,7 +599,8 @@ The dashboard's **Commitments** heading holds two cards: recurring bills and ins
   into a plan.
 - **Record Payment** opens **Record Installment Payment** with the amount filled in. Saving it
   records the expense (from the chosen account) and counts one installment as paid.
-- **Edit Installment Plan** and delete are on each plan. Who can read the plan of a wife's personal
+- **Edit Installment Plan** (where the providers are **Tamara**, **Tabby**, **Bank** and **Other**)
+  and delete are on each plan. Who can read the plan of a wife's personal
   purchase is in [section 16](#16-who-sees-what).
 
 ### Commitments and operating cash
@@ -617,7 +630,7 @@ The dashboard's **Commitments** heading holds two cards: recurring bills and ins
 | Setup card | While the cycle has no budgets: the setup checklist, or "Budgets not set up yet" for a member ([section 1](#1-getting-started)) |
 | Hero card | "Left until payday", one daily amount and one verdict (below) |
 | Over-budget alerts | The categories spent over their budget |
-| **Quick Access** | Accounts, **Record Income**, **Income & Cash Flow Report**, Wife Allowance, Bills, Smart Basket; **Show all** opens Tools |
+| **Quick Access** | Accounts, **Record Income**, **Income & Cash Flow Report**, Wife Allowance, Bills, and Smart Basket (which opens Tools, not the optimizer itself); **Show all** opens Tools |
 | **Accounts & Balances** | Shown once there are 2 or more accounts: balances and what is left after commitments ([section 3](#3-accounts)) |
 | Household balances | The family card (what is owed to the wife, her allowance) or the roommates card ([section 9](#9-roommate-settlements)) |
 | **Commitments** | Recurring bills and installments ([section 10](#10-bills-installments-and-commitments)) |
@@ -652,16 +665,18 @@ The dashboard's **Commitments** heading holds two cards: recurring bills and ins
 
 - Settings → **REPORTS & OFFLINE QUEUE** → **Export Monthly Report** → **Export CSV**: the current
   cycle's expenses, without settlements and without a wife's personal purchases.
-- **Transactions** → ⋮ → **Export CSV**: **All Records**, every expense of the household the person
-  can read.
+- **Transactions** → ⋮ → **Export CSV**: **All Records**, every row of the household the person can
+  read, with no filter: settlement rows and the wife's personal purchases they can read are
+  included, unlike the Settings export.
 - Both show a preview; **Copy CSV** copies it to paste into Excel or Google Sheets. No file is saved.
   The columns are Date, Merchant, Category, Amount (SAR), VAT (SAR), Spent By, Source and Items
   Breakdown.
 
 ### Monthly PDF statement
 
-- **Transactions** → ⋮ → **Export PDF** downloads the current cycle's statement and opens the phone's
-  share sheet, to open, save or send it.
+- **Transactions** → ⋮ → **Export PDF** shows a **Monthly Statement (PDF)** dialog; **Download &
+  Share** downloads the current cycle's statement and opens the phone's share sheet, to open, save
+  or send it.
 - It has the cycle's totals and budgets, an estimated 15% VAT, spending by who spent it, spending by
   category and the latest 15 expenses. It lists only what the person can read. It is in English
   only.
@@ -679,7 +694,7 @@ The dashboard's **Commitments** heading holds two cards: recurring bills and ins
 |---|---|
 | **Payday check-in** ("It's payday") | On payday |
 | **3 days before payday** | Three days before the next payday |
-| **Recurring bills** ("*Merchant* is due today") | On each bill's expected day |
+| **Recurring bills** ("*Merchant* is due today") | On each monthly bill's expected day, at most the next two dates per bill |
 | **Installments** ("*Provider* installment due today") | On each installment's due date |
 
 - All four are on by default. Settings → **REMINDERS** switches each one off or on, on this phone.
@@ -715,9 +730,9 @@ Settings is the last tab of the bottom bar. Its sections fold open and closed:
 | **HOUSEHOLD & MEMBERSHIP** | The household card: name, join code (admins), **Copy Code**, **Share invite**, **Invite with Role**, members and dependents, **Add Member / Dependent**, switch, create, join and **Leave Household**; **Members & Admins** (roles, the household provider, financial roles, the household type); **Household Setup Checklist** ([section 2](#2-households-and-roles)) |
 | **SALARY & ACCOUNTS** | **Salary & Payday Cycle**: presets for the 27th (Govt / Standard), the 1st (Calendar Month) and the 25th, or any day 1 to 31, saved with **Save Payday** (admins only); **Accounts & Balances** → **Manage** |
 | **PARTNER SETTLEMENT** | When the household has more than one member: the family card or the roommates card |
-| **APPEARANCE & LANGUAGE** | **System Default**, **Light Mode** or **Dark Mode**; **English**, **العربية (Arabic)** or **اردو (Urdu)** |
+| **APPEARANCE & LANGUAGE** | **System Default**, **Light Mode** or **Dark Mode**; **English**, **العربية** or **اردو** |
 | **REMINDERS** | The four reminder switches ([section 12](#12-reminders-and-notifications)) |
-| **HARDWARE & APP PERMISSIONS** | Camera, microphone and notifications: **Grant Access**, **Test**, **Open App Settings** |
+| **HARDWARE & APP PERMISSIONS** | Camera, microphone and notifications, each with **Grant Access** while not granted. The camera has **Test Camera** (it opens the QR scanner); the others show a gear icon (**Open App Settings**) once granted |
 | **REPORTS & OFFLINE QUEUE** | **Export Monthly Report** (CSV) and the offline queue with **Sync Now** |
 | **HELP & SUPPORT** | **App Guide & Tutorial**, **Help Center & AI Support**, **Contact Developer** (copies the developer's email) |
 | **ACCOUNT** | **Sign Out** and **Delete account** ([section 18](#18-account-deletion)) |
@@ -737,8 +752,10 @@ Settings is the last tab of the bottom bar. Its sections fold open and closed:
   remembered on that phone, not on the account).
 - The steps: **1. Payday Cycle & Liquid Pool**, **2. Operating Accounts vs. Savings Vaults**, **3.
   Envelope Budgeting & Mid-Cycle Joining**, **4. Living Model: Family & Roommates**, **5. Three
-  Frictionless Ways to Record**. Steps 1 to 4 have a button that closes the tutor and opens the
-  matching screen (Settings, Accounts & Balances or Budgets); step 5 closes it.
+  Frictionless Ways to Record**. Steps 1 to 4 have a button that closes the tutor and opens a
+  screen: steps 1, 2 and 4 open Settings, step 3 opens Budgets; step 5 closes it. Step 2 is meant to
+  open Accounts & Balances, but no screen that opens the tutor gives it the household, so it falls
+  back to Settings ([section 19](#19-accepted-limits-and-follow-ups)).
 - It can be opened again from Settings → **App Guide & Tutorial**, from **Help & Support**
   (**Replay**), and from the AI chat (**Launch Setup Tutor**).
 
@@ -772,23 +789,30 @@ The website is served by the API at its own address. It has three parts.
 - Sections: an illustrative payday card (pick a payday to see the real cycle dates; the amounts are
   samples), "What the app does for you", "How wife expenses work", "Privacy: exactly what happens to
   your data", "Questions", and the early-access form "Try the app before launch". The form stores the
-  details and emails the developer; it does not create an account.
+  details and emails the developer (with no mail provider set up, it only stores them); it does
+  not create an account.
 
 ### The signed-in portal
 
 - **Sign In** or **Create Account** on the landing page (email and password, the same account as in
   the app) opens a portal with **Dashboard**, **Transactions**, **Budgets & Allocations** and **New
   Transaction**.
-- **It is an early version and is not a reliable view of the household's money today.** The
-  transaction list shows the household's real expenses. The dashboard and the budgets read some
-  database columns that do not exist, so they fall back to sample figures, assume a payday on the
-  27th, and **New Transaction** fails. Use the app for everything except account deletion.
+- **It is an early version and is not a reliable view of the household's money today.** It reads
+  some database columns that do not exist, and it assumes a payday on the 27th:
+  - **Transactions** shows the real amounts and dates, but every row is labelled "Expense".
+  - **Dashboard** shows the income from income records or the monthly income figure (15,000 SAR
+    when both are empty), 0 spent, an empty recent list, and a bills card with fixed sample bills.
+  - **Budgets & Allocations** shows sample allocations next to the real spending.
+  - **New Transaction** fails.
+- Use the app for everything except account deletion.
 
 ### Account deletion (`/delete-account`)
 
 - In Arabic, English and Urdu, for signed-in and signed-out visitors. A person signs in there and
   requests or cancels the deletion with the same server functions as the app. Someone who cannot
-  sign in can send a request form, which only emails the developer. The full rules are in
+  sign in can send a request form. It stores the request and emails the developer (or only stores
+  it when no mail provider is set up); if the request cannot be stored, the page says so and asks
+  to try again. It deletes nothing. The full rules are in
   [section 18](#18-account-deletion).
 
 ---
@@ -801,15 +825,17 @@ wife account.
 | Item | She | H | Co-wife (even an admin) | Admin who is not a wife | Member |
 |---|---|---|---|---|---|
 | Her ledger: what is owed, repayments, reversals, her requests and their outcomes, decline reasons | Yes | Yes | No | No | No |
-| Her wife account (row, balance, history) | Yes | Yes | No, and cannot learn it exists | No | No |
+| Her wife account (row, balance, history) | Yes | Yes | No, and the app never shows or tells her it exists | No, and the app never tells them it exists | No, and the app never tells them it exists |
 | Repayment lines, also in a pool's history | Yes | Yes | No | No | No: only the pool's balance moves |
 | Her allowance | Yes | Yes | No | Yes | No |
 | Her personal purchases, their receipts, their installment plans, the transfers of her personal accounts | Yes | Yes | No | Yes | No |
-| Her advances ("Shared for family") | Yes | Yes | Yes | Yes | Yes |
+| Her advances (`wife_reimbursable`) | Yes | Yes | Yes | Yes | Yes |
 | Ordinary expenses and shared pools | Yes | Yes | Yes | Yes | Yes |
 
 Notes:
 
+- A careful probe can still infer that a wife account exists; the owner accepted this
+  ([section 19](#19-accepted-limits-and-follow-ups)).
 - The owner of a personal account always reads the transfers of his own account. A member who
   sends money from his account to her personal account, or receives from it, keeps that row; nobody
   else gains it.
@@ -827,7 +853,8 @@ and [rule 04, section 4](../.agents/rules/04-security-and-privacy.md#4-household
 
 - **No SMS.** The app asks for no SMS permission and never reads text messages. Money comes in only
   by what the person does: typing, a receipt photo or QR code, voice, or the chat. The only
-  permissions it asks the person for are the camera, the microphone and notifications.
+  permissions it asks the person for are the camera, the microphone and notifications, plus speech
+  recognition on iOS.
 - **Keys.** The app and the website hold only the Supabase publishable key. The secret key and the
   AI model keys stay on the server; the app refuses to start with a secret key built in.
 - **Row level security.** Every table checks, in the database, which household a row belongs to
@@ -945,9 +972,15 @@ Details: [rule 04, section 6](../.agents/rules/04-security-and-privacy.md#6-acco
   each category. The savings reserve figure is not shown anywhere in the app.
 - **The household's monthly income figure** has no screen.
 - **The web portal** reads columns that do not exist (`households.type` and `currency`,
-  `budgets.amount`, `transactions.description`), so its dashboard and budgets show sample figures
-  and a payday on the 27th, and **New Transaction** fails. Its text is also partly not in the
-  translation file.
+  `budgets.amount`, `transactions.description`): it assumes a payday on the 27th, labels every
+  transaction "Expense", shows 0 spent and fixed sample bills on its dashboard and sample
+  allocations on its budgets, and **New Transaction** fails ([section 15](#15-the-website)). Its
+  text is also partly not in the translation file.
+- **The stored receipt photo** (app bug): the scanner uploads only the first photo before saving,
+  so the server's joined image of all pages is used only when that upload fails. A long receipt
+  keeps page 1 only, and a save that fails leaves an unlinked photo in storage.
+- **The setup tutor's step 2** (app bug): it should open Accounts & Balances, but every screen that
+  opens the tutor leaves out the household, so it opens Settings.
 - **The Notifications permission card** promises budget threshold alerts and sync status
   notifications, which the app does not send.
 - **Total net worth** adds EUR and AED balances to SAR without converting them.
