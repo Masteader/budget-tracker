@@ -13,6 +13,9 @@
 --           -> 535 -> 610 by the co-wife admin, and 180 -> -20 by the admin while the husband is
 --           there. The balance trigger's own gate refuses the same callers on a path that bypasses
 --           the policies (a SECURITY DEFINER function running under their JWT).
+--   R3C-05  The reversal, the approval and the decline check the caller before they look the row
+--           up: anyone who may not act gets the same answer (SQLSTATE, message and hint) for a
+--           repayment or a request that exists and for an id of nothing.
 -- Every client write is as the client makes it (RLS, as PostgREST applies it). Rolled back.
 -- ============================================================================
 \set ON_ERROR_STOP on
@@ -336,6 +339,59 @@ BEGIN
     PERFORM pg_temp.check('R3C-01 WA1 equals its ledger', pg_temp.ledger_equal(), 'true');
 END $$;
 
+-- ── R3C-05: the caller before the row ─────────────────────────────────────────────────────────
+-- C (husband there), W2, K and WA may not reverse, approve or decline: the same refusal for a
+-- repayment or a request that exists and for an id of nothing. W, whose request it is, is refused
+-- alike for hers and for nothing. Those who may act still learn an id of nothing is nothing.
+DO $$
+DECLARE
+    v_n int;
+    v_rev text := 'SELECT public.reverse_spouse_reimbursement(%L, %L, %L::uuid, NULL)::text';
+    v_app text := 'SELECT public.approve_spouse_reimbursement_request(%L, %L, %L::uuid, %L::uuid, NULL, NULL)::text';
+    v_dec text := 'SELECT public.decline_spouse_reimbursement_request(%L, %L, NULL, NULL)::text';
+    v_none uuid := 'e70f0000-0000-0000-0000-000000000099';
+BEGIN
+    FOREACH v_n IN ARRAY ARRAY[5, 3, 4, 6] LOOP
+        PERFORM pg_temp.check('R3C-05 reversal, existing vs nothing, as ' || v_n,
+            pg_temp.refusal(pg_temp.u(v_n), format(v_rev, pg_temp.h(1), pg_temp.id('R1'), pg_temp.k(40 + v_n))),
+            pg_temp.refusal(pg_temp.u(v_n), format(v_rev, pg_temp.h(1), v_none, pg_temp.k(40 + v_n))));
+        PERFORM pg_temp.check('R3C-05 approval, existing vs nothing, as ' || v_n,
+            pg_temp.refusal(pg_temp.u(v_n), format(v_app, pg_temp.h(1), pg_temp.id('Q1'), pg_temp.a(1), pg_temp.k(50 + v_n))),
+            pg_temp.refusal(pg_temp.u(v_n), format(v_app, pg_temp.h(1), v_none, pg_temp.a(1), pg_temp.k(50 + v_n))));
+        PERFORM pg_temp.check('R3C-05 decline, existing vs nothing, as ' || v_n,
+            pg_temp.refusal(pg_temp.u(v_n), format(v_dec, pg_temp.h(1), pg_temp.id('Q1'))),
+            pg_temp.refusal(pg_temp.u(v_n), format(v_dec, pg_temp.h(1), v_none)));
+        PERFORM pg_temp.check('R3C-05 the refusal is forbidden, as ' || v_n,
+            split_part(pg_temp.refusal(pg_temp.u(v_n), format(v_rev, pg_temp.h(1), v_none, pg_temp.k(40 + v_n))), ':', 1)
+            || '|' || pg_temp.call(pg_temp.u(v_n), format(v_app, pg_temp.h(1), v_none, pg_temp.a(1), pg_temp.k(50 + v_n)))
+            || '|' || pg_temp.call(pg_temp.u(v_n), format(v_dec, pg_temp.h(1), v_none)),
+            '42501|ERR:forbidden|ERR:forbidden');
+    END LOOP;
+    PERFORM pg_temp.check('R3C-05 W approves her own request vs nothing',
+        pg_temp.refusal(pg_temp.u(2), format(v_app, pg_temp.h(1), pg_temp.id('Q1'), pg_temp.a(2), pg_temp.k(60))),
+        pg_temp.refusal(pg_temp.u(2), format(v_app, pg_temp.h(1), v_none, pg_temp.a(2), pg_temp.k(60))));
+    PERFORM pg_temp.check('R3C-05 W declines her own request vs nothing',
+        pg_temp.refusal(pg_temp.u(2), format(v_dec, pg_temp.h(1), pg_temp.id('Q1'))),
+        pg_temp.refusal(pg_temp.u(2), format(v_dec, pg_temp.h(1), v_none)));
+    PERFORM pg_temp.check('R3C-05 W reverses a repayment to her vs nothing',
+        pg_temp.refusal(pg_temp.u(2), format(v_rev, pg_temp.h(1), pg_temp.id('R1'), pg_temp.k(61))),
+        pg_temp.refusal(pg_temp.u(2), format(v_rev, pg_temp.h(1), v_none, pg_temp.k(61))));
+    -- The husband still learns that an id of nothing is nothing, and still acts.
+    PERFORM pg_temp.check('R3C-05 H: an id of nothing',
+        pg_temp.call(pg_temp.u(1), format(v_rev, pg_temp.h(1), v_none, pg_temp.k(70))) || '|'
+        || pg_temp.call(pg_temp.u(1), format(v_app, pg_temp.h(1), v_none, pg_temp.a(1), pg_temp.k(71))) || '|'
+        || pg_temp.call(pg_temp.u(1), format(v_dec, pg_temp.h(1), v_none)),
+        'ERR:reimbursement_not_found|ERR:request_not_found|ERR:request_not_found');
+    PERFORM pg_temp.check('R3C-05 nothing of theirs was recorded or claimed',
+        (SELECT count(*)::text FROM public.spouse_reimbursements WHERE household_id = pg_temp.h(1) AND kind = 'reversal') || '|'
+        || (SELECT count(*)::text FROM public.spouse_reimbursement_request_outcomes o WHERE o.request_id = pg_temp.id('Q1')) || '|'
+        || (SELECT count(*)::text FROM public.nafaqah_request_keys WHERE household_id = pg_temp.h(1)), '0|0|3');
+    PERFORM pg_temp.check('R3C-05 H reverses R1', pg_temp.j(pg_temp.call(pg_temp.u(1), format(v_rev, pg_temp.h(1), pg_temp.id('R1'), pg_temp.k(72))), 'kind'), 'reversal');
+    PERFORM pg_temp.check('R3C-05 H approves Q1', pg_temp.j(pg_temp.call(pg_temp.u(1), format(v_app, pg_temp.h(1), pg_temp.id('Q1'), pg_temp.a(1), pg_temp.k(73))), 'wife_account_id'), pg_temp.id('WA1')::text);
+    PERFORM pg_temp.check('R3C-05 WA1 after both: -20 +10', pg_temp.wbal(), '578.00');
+    PERFORM pg_temp.check('R3C-05 WA1 equals its ledger', pg_temp.ledger_equal(), 'true');
+END $$;
+
 DO $$
 DECLARE
     v_list text;
@@ -345,7 +401,7 @@ BEGIN
     IF v_list IS NOT NULL THEN
         RAISE EXCEPTION E'Test 70 failed:\n%', v_list;
     END IF;
-    RAISE NOTICE 'PASSED: R3C: only who sees her wife account edits or deletes its rows.';
+    RAISE NOTICE 'PASSED: R3C: only who sees her wife account edits or deletes its rows; refusals check the caller first.';
 END $$;
 
 ROLLBACK;
