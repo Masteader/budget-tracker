@@ -876,17 +876,8 @@ def add_category_and_budget(req: Any) -> Dict[str, Any]:
         }).execute()
     # A shared/system code is used as-is: its definition is never rewritten from a household request.
 
-    # The category list follows household_category_settings, so an active budget must come with
-    # an active setting. Otherwise a code the household had deactivated (typing "Fuel" builds the
-    # system OPEX-FUEL) gets an active budget row the budget screen hides. Written before the
-    # budget so a failure here leaves no hidden row behind; only the setting is written, past-cycle
-    # rows stay as they are.
-    client.table("household_category_settings").upsert({
-        "household_id": req.household_id,
-        "category_code": req.code,
-        "is_active": True,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }, on_conflict="household_id,category_code").execute()
+    # Typing "Fuel" builds the system OPEX-FUEL, which the household may have deactivated.
+    activate_household_category(client, req.household_id, req.code)
 
     current_cycle = current_household_cycle(req.household_id)
     today = riyadh_today()
@@ -1241,6 +1232,7 @@ def save_sub_allocations(
     total_allocated = round(sum(clean_sub_allocations.values()), 2)
 
     client = get_client()
+    activate_household_category(client, household_id, category_code)
 
     res = (
         client.table("budgets")
@@ -1285,7 +1277,6 @@ def save_sub_allocations(
             "is_active": True,
         }
         client.table("budgets").insert(insert_data).execute()
-    activate_household_category(client, household_id, category_code)
 
     return {
         "status": "success",
@@ -1379,16 +1370,17 @@ def activate_household_category(client: Any, household_id: str, category_code: s
     category toggled off earlier and budgeted again is listed and matched as active. Budget rows
     are written by the caller; the database counts the open cycle's spending into the newly active
     row (migration 20261105001000).
+
+    Call it BEFORE writing the budget and let a failure propagate: the category list follows this
+    setting, so an active budget row written without it is hidden from the budget screen while
+    still counted on the dashboard. Only the setting is written; past-cycle rows stay as they are.
     """
-    try:
-        client.table("household_category_settings").upsert({
-            "household_id": household_id,
-            "category_code": category_code,
-            "is_active": True,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }, on_conflict="household_id,category_code").execute()
-    except Exception as exc:
-        logger.warning("Could not activate category %s for household %s: %s", category_code, household_id, exc)
+    client.table("household_category_settings").upsert({
+        "household_id": household_id,
+        "category_code": category_code,
+        "is_active": True,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }, on_conflict="household_id,category_code").execute()
 
 
 def toggle_category_status(household_id: str, category_code: str, is_active: bool) -> Dict[str, Any]:

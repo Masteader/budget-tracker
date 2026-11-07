@@ -109,6 +109,29 @@ def test_add_category_and_budget_writes_no_budget_when_the_setting_fails(househo
     assert _budget_rows(household, "OPEX-FUEL") == []
 
 
+def test_save_sub_allocations_writes_no_new_budget_when_the_setting_fails(household):
+    """Sub-allocations switch the category on before writing: a failure leaves no hidden active row."""
+    from salary_cycle import save_sub_allocations
+
+    household.schemas["household_category_settings"] = {"id"}  # every write to it fails
+    with pytest.raises(Exception):
+        save_sub_allocations(HH, "OPEX-FUEL", {"fuel_petrol": 300.0})
+    assert _budget_rows(household, "OPEX-FUEL") == []
+
+
+def test_save_sub_allocations_leaves_an_inactive_row_alone_when_the_setting_fails(household):
+    from salary_cycle import save_sub_allocations
+
+    household.seed("budgets", [{
+        "id": "b-fuel", "household_id": HH, "category_code": "OPEX-FUEL", "cycle_key": CYCLE,
+        "month": f"{CYCLE}-01", "allocated_amount": 0.0, "spent_amount": 0.0, "is_active": False,
+    }])
+    household.schemas["household_category_settings"] = {"id"}
+    with pytest.raises(Exception):
+        save_sub_allocations(HH, "OPEX-FUEL", {"fuel_petrol": 300.0})
+    assert [(r["is_active"], r["allocated_amount"]) for r in _budget_rows(household, "OPEX-FUEL")] == [(False, 0.0)]
+
+
 def test_create_household_custom_category_uses_household_payday(household):
     from salary_cycle import create_household_custom_category
 
