@@ -108,6 +108,21 @@ void main() {
     expect(AppLocalizations(const Locale('ur')).get('tutor_stage_3_desc'), contains('زیادہ'));
   });
 
+  test("no answer tells a wife that only she sees her accounts (review R2-5)", () {
+    final en = AppLocalizations(const Locale('en'));
+    for (final key in ['faq_privacy_a1', 'faq_household_a4']) {
+      final v = en.get(key);
+      expect(v, isNot(contains('seen only by you')), reason: key);
+      expect(v, isNot(contains('only you see it')), reason: key);
+      expect(v, contains('admins who are not wives'), reason: "$key says who else sees a wife's purchases");
+    }
+    for (final lang in ['ar', 'ur']) {
+      final l = AppLocalizations(Locale(lang));
+      expect(l.get('faq_privacy_a1'), isNot(contains(lang == 'ar' ? 'تشوفها أنت فقط' : 'صرف آپ دیکھتے ہیں')), reason: lang);
+      expect(l.get('faq_household_a4'), isNot(contains(lang == 'ar' ? 'أنت فقط تشوفه' : 'صرف آپ دیکھتے ہیں')), reason: lang);
+    }
+  });
+
   test('the deletion answer promises no email (rule 04 §6)', () {
     for (final lang in _langs) {
       final v = AppLocalizations(Locale(lang)).get('faq_privacy_a2');
