@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:budget_tracker/widgets/onboarding/app_setup_tutor_dialog.dart';
@@ -11,7 +12,7 @@ void main() {
 
   testWidgets('AppSetupTutorDialog renders 5-stage setup wizard with direct action buttons', (tester) async {
     await tester.pumpWidget(localizedApp(
-      const AppSetupTutorDialog(),
+      const AppSetupTutorDialog(householdId: 'h1'),
       lang: 'en',
     ));
     await tester.pumpAndSettle();
@@ -58,7 +59,7 @@ void main() {
 
   testWidgets('AppSetupTutorDialog renders localized in Arabic', (tester) async {
     await tester.pumpWidget(localizedApp(
-      const AppSetupTutorDialog(),
+      const AppSetupTutorDialog(householdId: 'h1'),
       lang: 'ar',
     ));
     await tester.pumpAndSettle();
@@ -68,19 +69,25 @@ void main() {
     expect(find.text('الخطوة التالية'), findsOneWidget);
   });
 
-  testWidgets('Direct action button on stage 1 invokes onAction callback', (tester) async {
-    String? triggeredAction;
+  testWidgets('the stage 1 button closes the tutor with the payday action', (tester) async {
+    TutorAction? closedWith;
+    var closed = false;
     await tester.pumpWidget(localizedApp(
       AppSetupTutorDialog(
-        onActionTriggered: (actionId) => triggeredAction = actionId,
+        householdId: 'h1',
+        onClose: (action) {
+          closed = true;
+          closedWith = action;
+        },
       ),
       lang: 'en',
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Set Payday & Income'));
+    await tester.tap(find.byKey(const ValueKey('tutor_action_payday')));
     await tester.pumpAndSettle();
 
-    expect(triggeredAction, 'open_payday');
+    expect(closed, isTrue);
+    expect(closedWith, TutorAction.payday);
   });
 }

@@ -104,12 +104,12 @@
 - `test/widgets/household_setup_card_test.dart` (existing): the payday step still opens the editor and saves. Run it unchanged.
 
 **Checklist**
-- [ ] Write the navigation tests and see them fail
-- [ ] Add `TutorAction`, `onClose` and the `show` result; remove the in-dialog navigation
-- [ ] Add `TutorNavigator`; extract `HouseholdSetupCard.openPaydayEditor`
-- [ ] Hide the household-bound buttons when there is no household
-- [ ] Gates: `flutter analyze` and `flutter test`
-- [ ] Commit `fix(onboarding): tutor buttons open their screen after the dialog closes`
+- [x] Write the navigation tests and see them fail
+- [x] Add `TutorAction`, `onClose` and the `show` result; remove the in-dialog navigation
+- [x] Add `TutorNavigator`; extract `HouseholdSetupCard.openPaydayEditor`
+- [x] Hide the household-bound buttons when there is no household
+- [x] Gates: `flutter analyze` and `flutter test`
+- [x] Commit `fix(onboarding): tutor buttons open their screen after the dialog closes`
 
 **Size:** M. About +180 code / +150 test lines, about 3 hours.
 

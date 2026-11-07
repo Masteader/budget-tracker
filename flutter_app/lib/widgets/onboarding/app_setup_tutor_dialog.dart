@@ -3,35 +3,40 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../l10n/app_localizations.dart';
-import '../../screens/accounts/accounts_overview_screen.dart';
-import '../../screens/home/budget_management_screen.dart';
-import '../../screens/settings/settings_screen.dart';
 import '../../theme/app_themes.dart';
+import 'tutor_navigator.dart';
 
-/// 5-Stage Interactive Setup Tutor Wizard for Saudi Households.
-/// Walks users through Payday Cycle, Accounts vs. Vaults, Budget Envelopes,
-/// Living Model (Islamic Nafaqah vs. Roommates), and Three Recording Modes.
+export 'tutor_navigator.dart' show TutorAction, TutorNavigator;
+
+/// The Interactive Setup Tutor: payday, accounts, budgets, the household's
+/// living model and the ways to record an expense.
+///
+/// The dialog never navigates: a step's button closes it with a
+/// [TutorAction], and [AppSetupTutorDialog.show] opens that screen from the
+/// caller's context once the dialog has gone.
 class AppSetupTutorDialog extends StatefulWidget {
-  final VoidCallback? onDismiss;
-  final ValueChanged<String>? onActionTriggered;
+  /// Called once the tutor is marked seen, with the chosen action (null when
+  /// it was closed, skipped or finished).
+  final ValueChanged<TutorAction?>? onClose;
   final String? householdId;
 
   const AppSetupTutorDialog({
     super.key,
-    this.onDismiss,
-    this.onActionTriggered,
+    this.onClose,
     this.householdId,
   });
 
   static const String prefKey = 'has_seen_setup_tutor_v2';
 
-  /// Shows the tutor dialog unconditionally (e.g. from Settings or Help).
+  /// Shows the tutor (e.g. from Settings or Help), then opens what the chosen
+  /// step's button asked for.
   static Future<void> show(
     BuildContext context, {
     String? householdId,
-    ValueChanged<String>? onActionTriggered,
-  }) {
-    return showDialog(
+    bool? fallbackIsAdmin,
+    @visibleForTesting TutorNavigator? navigator,
+  }) async {
+    final action = await showDialog<TutorAction>(
       context: context,
       barrierDismissible: true,
       builder: (ctx) => Dialog(
@@ -39,23 +44,27 @@ class AppSetupTutorDialog extends StatefulWidget {
         insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         child: AppSetupTutorDialog(
           householdId: householdId,
-          onActionTriggered: onActionTriggered,
-          onDismiss: () => Navigator.of(ctx).pop(),
+          onClose: (action) => Navigator.of(ctx).pop(action),
         ),
       ),
     );
+    if (action == null || householdId == null && TutorNavigator.needsHousehold(action)) return;
+    if (!context.mounted) return;
+    await (navigator ?? const TutorNavigator()).open(context, action, householdId ?? '');
   }
 
-  /// Automatically shows the dialog forcefully on first launch if not yet seen.
+  /// Shows the tutor once per phone (the first time the dashboard opens).
   static Future<bool> showIfFirstTime(
     BuildContext context, {
     String? householdId,
+    @visibleForTesting TutorNavigator? navigator,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final hasSeen = prefs.getBool(prefKey) ?? false;
     if (!hasSeen && context.mounted) {
-      await show(context, householdId: householdId);
       await prefs.setBool(prefKey, true);
+      if (!context.mounted) return false;
+      await show(context, householdId: householdId, navigator: navigator);
       return true;
     }
     return false;
@@ -68,6 +77,7 @@ class AppSetupTutorDialog extends StatefulWidget {
 class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+  bool _closing = false;
 
   @override
   void dispose() {
@@ -75,67 +85,65 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
     super.dispose();
   }
 
-  static const List<_TutorStep> _steps = [
-    _TutorStep(
-      id: 'stage_1',
-      icon: Icons.calendar_month_rounded,
-      gradient: [Color(0xFF800020), Color(0xFFB76E79)],
-      titleKey: 'tutor_stage_1_title',
-      descKey: 'tutor_stage_1_desc',
-      actionBtnKey: 'tutor_stage_1_btn',
-      actionIcon: Icons.calendar_today_rounded,
-      routeAction: 'open_payday',
-    ),
-    _TutorStep(
-      id: 'stage_2',
-      icon: Icons.account_balance_wallet_rounded,
-      gradient: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
-      titleKey: 'tutor_stage_2_title',
-      descKey: 'tutor_stage_2_desc',
-      actionBtnKey: 'tutor_stage_2_btn',
-      actionIcon: Icons.account_balance_rounded,
-      routeAction: 'open_accounts',
-    ),
-    _TutorStep(
-      id: 'stage_3',
-      icon: Icons.pie_chart_rounded,
-      gradient: [Color(0xFF065F46), Color(0xFF10B981)],
-      titleKey: 'tutor_stage_3_title',
-      descKey: 'tutor_stage_3_desc',
-      actionBtnKey: 'tutor_stage_3_btn',
-      actionIcon: Icons.tune_rounded,
-      routeAction: 'open_budgets',
-    ),
-    _TutorStep(
-      id: 'stage_4',
-      icon: Icons.family_restroom_rounded,
-      gradient: [Color(0xFF581C87), Color(0xFF9333EA)],
-      titleKey: 'tutor_stage_4_title',
-      descKey: 'tutor_stage_4_desc',
-      actionBtnKey: 'tutor_stage_4_btn',
-      actionIcon: Icons.shield_outlined,
-      routeAction: 'open_roles',
-    ),
-    _TutorStep(
-      id: 'stage_5',
-      icon: Icons.rocket_launch_rounded,
-      gradient: [Color(0xFF9A3412), Color(0xFFF97316)],
-      titleKey: 'tutor_stage_5_title',
-      descKey: 'tutor_stage_5_desc',
-      actionBtnKey: 'tutor_stage_5_btn',
-      actionIcon: Icons.check_circle_rounded,
-      routeAction: 'finish',
-    ),
-  ];
+  bool get _hasHousehold => widget.householdId != null && widget.householdId!.isNotEmpty;
 
-  void _next() {
-    if (_currentPage < _steps.length - 1) {
+  /// A button is offered only when its screen can open.
+  TutorAction? _offer(TutorAction action) =>
+      _hasHousehold || !TutorNavigator.needsHousehold(action) ? action : null;
+
+  List<_TutorStep> get _steps => [
+        _TutorStep(
+          icon: Icons.calendar_month_rounded,
+          titleKey: 'tutor_stage_1_title',
+          descKey: 'tutor_stage_1_desc',
+          actionBtnKey: 'tutor_stage_1_btn',
+          actionIcon: Icons.calendar_today_rounded,
+          action: _offer(TutorAction.payday),
+          secondaryBtnKey: 'record_income',
+          secondaryAction: _offer(TutorAction.income),
+        ),
+        _TutorStep(
+          icon: Icons.account_balance_wallet_rounded,
+          titleKey: 'tutor_stage_2_title',
+          descKey: 'tutor_stage_2_desc',
+          actionBtnKey: 'tutor_stage_2_btn',
+          actionIcon: Icons.account_balance_rounded,
+          action: _offer(TutorAction.accounts),
+        ),
+        _TutorStep(
+          icon: Icons.pie_chart_rounded,
+          titleKey: 'tutor_stage_3_title',
+          descKey: 'tutor_stage_3_desc',
+          actionBtnKey: 'tutor_stage_3_btn',
+          actionIcon: Icons.tune_rounded,
+          action: _offer(TutorAction.budgets),
+        ),
+        _TutorStep(
+          icon: Icons.family_restroom_rounded,
+          titleKey: 'tutor_stage_4_title',
+          descKey: 'tutor_stage_4_desc',
+          actionBtnKey: 'tutor_stage_4_btn',
+          actionIcon: Icons.shield_outlined,
+          action: _offer(TutorAction.roles),
+        ),
+        const _TutorStep(
+          icon: Icons.rocket_launch_rounded,
+          titleKey: 'tutor_stage_5_title',
+          descKey: 'tutor_stage_5_desc',
+          actionBtnKey: 'tutor_stage_5_btn',
+          actionIcon: Icons.check_circle_rounded,
+          finishes: true,
+        ),
+      ];
+
+  void _next(int count) {
+    if (_currentPage < count - 1) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
     } else {
-      _finish();
+      _close(null);
     }
   }
 
@@ -148,55 +156,22 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
     }
   }
 
-  Future<void> _finish() async {
+  /// Marks the tutor seen, then closes it with [action].
+  Future<void> _close(TutorAction? action) async {
+    if (_closing) return;
+    _closing = true;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(AppSetupTutorDialog.prefKey, true);
     } catch (_) {}
     if (mounted) {
-      widget.onDismiss?.call();
-    }
-  }
-
-  void _handleStepAction(_TutorStep step) {
-    widget.onActionTriggered?.call(step.routeAction);
-    if (step.routeAction == 'finish') {
-      _finish();
-      return;
-    }
-    if (widget.onActionTriggered == null) {
-      _finish();
-      switch (step.routeAction) {
-        case 'open_payday':
-        case 'open_roles':
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const SettingsScreen()),
-          );
-          break;
-        case 'open_accounts':
-          if (widget.householdId != null) {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => AccountsOverviewScreen(householdId: widget.householdId!),
-              ),
-            );
-          } else {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            );
-          }
-          break;
-        case 'open_budgets':
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const BudgetManagementScreen()),
-          );
-          break;
-      }
+      widget.onClose?.call(action);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final steps = _steps;
     return Container(
       constraints: const BoxConstraints(maxWidth: 420, maxHeight: 620),
       decoration: BoxDecoration(
@@ -242,7 +217,7 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
                     child: Text(
                       context.trArgs('tutor_step_badge', {
                         'current': '${_currentPage + 1}',
-                        'total': '${_steps.length}',
+                        'total': '${steps.length}',
                       }),
                       style: GoogleFonts.outfit(
                         fontSize: 12,
@@ -254,7 +229,7 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
                   IconButton(
                     tooltip: context.tr('close'),
                     icon: Icon(Icons.close_rounded, color: context.textSecondary, size: 20),
-                    onPressed: _finish,
+                    onPressed: () => _close(null),
                   ),
                 ],
               ),
@@ -264,10 +239,10 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
-                itemCount: _steps.length,
+                itemCount: steps.length,
                 onPageChanged: (idx) => setState(() => _currentPage = idx),
                 itemBuilder: (ctx, index) {
-                  final step = _steps[index];
+                  final step = steps[index];
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Center(
@@ -282,15 +257,11 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
                               width: 82,
                               height: 82,
                               decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: step.gradient,
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
+                                gradient: context.icedAccentGradient,
                                 borderRadius: BorderRadius.circular(22),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: step.gradient.first.withValues(alpha: 0.35),
+                                    color: context.primaryButtonBg.withValues(alpha: 0.35),
                                     blurRadius: 20,
                                     offset: const Offset(0, 8),
                                   ),
@@ -326,28 +297,46 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
                             ),
                             const SizedBox(height: 20),
 
-                            // Direct Action Button
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: context.primaryButtonBg,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
+                            if (step.finishes || step.action != null)
+                              ElevatedButton.icon(
+                                key: ValueKey('tutor_action_${step.finishes ? 'finish' : step.action!.name}'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: context.primaryButtonBg,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  elevation: 3,
                                 ),
-                                elevation: 3,
+                                icon: Icon(step.actionIcon, size: 18),
+                                label: Text(
+                                  context.tr(step.actionBtnKey),
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamilyFallback: VelvetBurgundyTheme.arabicFallback,
+                                  ),
+                                ),
+                                onPressed: () => _close(step.action),
                               ),
-                              icon: Icon(step.actionIcon, size: 18),
-                              label: Text(
-                                context.tr(step.actionBtnKey),
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamilyFallback: VelvetBurgundyTheme.arabicFallback,
+                            if (step.secondaryAction != null) ...[
+                              const SizedBox(height: 10),
+                              OutlinedButton(
+                                key: ValueKey('tutor_action_${step.secondaryAction!.name}'),
+                                onPressed: () => _close(step.secondaryAction),
+                                child: Text(
+                                  context.tr(step.secondaryBtnKey!),
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamilyFallback: VelvetBurgundyTheme.arabicFallback,
+                                  ),
                                 ),
                               ),
-                              onPressed: () => _handleStepAction(step),
-                            ),
+                            ],
                           ],
                         ),
                       ),
@@ -366,7 +355,7 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: List.generate(
-                      _steps.length,
+                      steps.length,
                       (idx) => AnimatedContainer(
                         duration: const Duration(milliseconds: 250),
                         margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -415,7 +404,8 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
                               minimumSize: Size.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
-                            onPressed: _finish,
+                            key: const ValueKey('tutor_skip'),
+                            onPressed: () => _close(null),
                             child: Text(
                               context.tr('tutor_btn_skip'),
                               overflow: TextOverflow.ellipsis,
@@ -444,13 +434,14 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
                               minimumSize: Size.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
-                            onPressed: _next,
+                            key: const ValueKey('tutor_next'),
+                            onPressed: () => _next(steps.length),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Flexible(
                                   child: Text(
-                                    _currentPage == _steps.length - 1
+                                    _currentPage == steps.length - 1
                                         ? context.tr('tutor_btn_finish')
                                         : context.tr('tutor_btn_next'),
                                     overflow: TextOverflow.ellipsis,
@@ -463,7 +454,7 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
                                 ),
                                 const SizedBox(width: 4),
                                 Icon(
-                                  _currentPage == _steps.length - 1
+                                  _currentPage == steps.length - 1
                                       ? Icons.check_circle_rounded
                                       : Icons.arrow_forward_rounded,
                                   size: 14,
@@ -486,23 +477,29 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
 }
 
 class _TutorStep {
-  final String id;
   final IconData icon;
-  final List<Color> gradient;
   final String titleKey;
   final String descKey;
   final String actionBtnKey;
   final IconData actionIcon;
-  final String routeAction;
+
+  /// What the main button opens; null for no button (unless [finishes]).
+  final TutorAction? action;
+
+  /// The last step: its button closes the tutor.
+  final bool finishes;
+  final String? secondaryBtnKey;
+  final TutorAction? secondaryAction;
 
   const _TutorStep({
-    required this.id,
     required this.icon,
-    required this.gradient,
     required this.titleKey,
     required this.descKey,
     required this.actionBtnKey,
     required this.actionIcon,
-    required this.routeAction,
+    this.action,
+    this.finishes = false,
+    this.secondaryBtnKey,
+    this.secondaryAction,
   });
 }

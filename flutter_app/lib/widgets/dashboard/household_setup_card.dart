@@ -345,19 +345,13 @@ class HouseholdSetupCard extends StatelessWidget {
   Future<void> _open(BuildContext context, SetupStep step) async {
     switch (step) {
       case SetupStep.payday:
-        await _sheet(
+        await openPaydayEditor(
           context,
-          PaydaySettingsCard(
-            initialPayday: data.paydayDay ?? SalaryCycleService.paydayDay,
-            onSavePayday: (day) async {
-              final ok = await (savePayday ?? (d) => _defaultSavePayday(context, d))(day);
-              if (ok) {
-                await (confirmPayday ?? () => HouseholdSetupPrefs.setPaydayConfirmed(householdId))();
-                onChanged();
-              }
-              return ok;
-            },
-          ),
+          householdId: householdId,
+          initialPayday: data.paydayDay,
+          savePayday: savePayday,
+          confirmPayday: confirmPayday,
+          onSaved: onChanged,
         );
       case SetupStep.income:
         await RecordIncomeSheet.show(
@@ -366,7 +360,7 @@ class HouseholdSetupCard extends StatelessWidget {
         );
         onChanged();
       case SetupStep.budgets:
-        await _sheet(
+        await showEditorSheet(
           context,
           StarterBudgetSheet(
             monthlyIncome: data.monthlyIncome,
@@ -384,7 +378,7 @@ class HouseholdSetupCard extends StatelessWidget {
         );
         onChanged();
       case SetupStep.provider:
-        await _sheet(
+        await showEditorSheet(
           context,
           HouseholdRolesCard(
             householdId: householdId,
@@ -394,7 +388,33 @@ class HouseholdSetupCard extends StatelessWidget {
     }
   }
 
-  Future<void> _sheet(BuildContext context, Widget child) => showModalBottomSheet<void>(
+  /// Opens the payday editor in a sheet (the checklist's payday step, also
+  /// used by the setup tutor). Saving confirms the payday on this device.
+  static Future<void> openPaydayEditor(
+    BuildContext context, {
+    required String householdId,
+    int? initialPayday,
+    Future<bool> Function(int day)? savePayday,
+    Future<void> Function()? confirmPayday,
+    VoidCallback? onSaved,
+  }) =>
+      showEditorSheet(
+        context,
+        PaydaySettingsCard(
+          initialPayday: initialPayday ?? SalaryCycleService.paydayDay,
+          onSavePayday: (day) async {
+            final ok = await (savePayday ?? (d) => _defaultSavePayday(context, householdId, d))(day);
+            if (ok) {
+              await (confirmPayday ?? () => HouseholdSetupPrefs.setPaydayConfirmed(householdId))();
+              onSaved?.call();
+            }
+            return ok;
+          },
+        ),
+      );
+
+  /// A settings editor in a bottom sheet, laid out like its settings card.
+  static Future<void> showEditorSheet(BuildContext context, Widget child) => showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
         // The settings editors reused here are laid out for a full-width card.
@@ -414,7 +434,7 @@ class HouseholdSetupCard extends StatelessWidget {
 
   /// Server first (MOB-27): the local cycle arithmetic changes only once the
   /// API confirmed the payday.
-  Future<bool> _defaultSavePayday(BuildContext context, int day) async {
+  static Future<bool> _defaultSavePayday(BuildContext context, String householdId, int day) async {
     try {
       await saveHouseholdSetting<int>(
         householdId: householdId,
@@ -441,7 +461,7 @@ class HouseholdSetupCard extends StatelessWidget {
 
 
 
-  String _saveError(BuildContext context, Object e) =>
+  static String _saveError(BuildContext context, Object e) =>
       e is HouseholdSettingNotSavedException ? context.tr('setting_not_saved_server') : context.tr('set_failed_save_payday');
 
   Future<bool> _defaultCreateBudget(String code, String name, double amount) async {
