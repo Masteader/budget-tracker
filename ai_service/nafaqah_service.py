@@ -1261,6 +1261,15 @@ def _require_payer(ctx: FamilyContext, actor_id: str, wife_id: str) -> None:
         raise NafaqahForbidden("Only her husband, or an admin who is not a wife when he is gone, can do this.")
 
 
+def _require_ledger_manager(ctx: FamilyContext, actor_id: str) -> None:
+    """Her husband, or an admin who is not a wife when he is gone, before any request is looked
+    up (review R3C-05): anyone else, she herself included, gets this one answer for a request that
+    exists and for an id of nothing, and learns nothing of it."""
+    _require_member(ctx, actor_id)
+    if not can_manage_wife_ledgers(ctx, actor_id):
+        raise NafaqahForbidden("Only her husband, or an admin who is not a wife when he is gone, can do this.")
+
+
 def _require_key(request_key: Optional[str]) -> None:
     if not request_key:
         raise InvalidCodedRequest("A request key is required to move money.", "request_key_required")
@@ -1546,6 +1555,7 @@ def decline_reimbursement_request(
 ) -> Dict[str, Any]:
     """The husband or an admin declines a pending request, with an optional short reason; nothing moves."""
     _require_family(ctx)
+    _require_ledger_manager(ctx, actor_id)
     row = _request_row(ctx, request_id)
     _require_payer(ctx, actor_id, str(row.get("wife_user_id")))
     clean = (reason or "").strip() or None
@@ -1569,6 +1579,7 @@ def approve_reimbursement_request(
     wife account she named, or ``wife_account_id``, another of hers he picks (never an account
     that is not hers). The database re-checks what is owed at that moment (RequestExceedsOutstanding)."""
     _require_family(ctx)
+    _require_ledger_manager(ctx, actor_id)
     row = _request_row(ctx, request_id)
     wife_id = str(row.get("wife_user_id"))
     if str(actor_id) == wife_id:
@@ -1618,8 +1629,11 @@ def reverse_reimbursement(ctx: FamilyContext, actor_id: str, reimbursement_id: s
     """Reverses a tracked repayment in full: the money goes back to the account it left and the
     amount back to what is owed. The original stays, marked reversed. Who reverses: her ledger's
     manager only, from the account it left as its owner (a personal account) or as an admin (a
-    pool) (review R3B-06). Once per repayment."""
+    pool) (review R3B-06). Once per repayment. Who may reverse at all is checked before the
+    repayment is looked up (review R3C-05): anyone else gets one answer for a repayment that exists
+    and for an id of nothing."""
     _require_family(ctx)
+    _require_reverser(ctx, actor_id, None)
     row = first_row(
         get_client()
         .table("spouse_reimbursements")
