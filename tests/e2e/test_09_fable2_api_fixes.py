@@ -14,6 +14,22 @@ from e2e_harness.zatca import tlv_qr
 REPR = {"Prefer": "return=representation"}
 
 
+def _payer_account(user, hh, amount=10000):
+    """A funded account of the payer (20261105001300: every repayment leaves an account)."""
+    res = user.rest.post("/accounts", json={
+        "household_id": hh.id, "owner_user_id": user.id, "name": f"Repayments {user.display_name}",
+        "account_type": "bank", "is_shared_pool": False,
+    }, headers=REPR)
+    assert res.status_code == 201, res.text
+    account = res.json()[0]["id"]
+    res = user.rpc("record_income", {
+        "p_household_id": hh.id, "p_account_id": account, "p_cycle_key": None, "p_source_type": "salary",
+        "p_title": "Salary", "p_base_amount": amount,
+    })
+    assert res.status_code == 200, res.text
+    return account
+
+
 def _debts(res):
     assert res.status_code == 200, res.text
     return sorted((d["from_id"], d["to_id"], float(d["amount"])) for d in res.json()["pairwise_debts"])
@@ -168,7 +184,13 @@ def test_api05_installment_on_repaid_advance_is_409_and_leaves_no_plan(world, db
                             paid_by="me", beneficiary="both")
     assert res.status_code == 200 and res.json()["nafaqah_class"] == "wife_reimbursable", res.text
     tx_id = res.json()["transaction_id"]
-    r = husband.api.post(f"/households/{family.id}/nafaqah/reimbursements", json={"amount": 200})
+    # 20261105001300: every repayment leaves a funded account of his and credits her wife account.
+    wa = husband.api.post(f"/households/{family.id}/nafaqah/wife-accounts",
+                          json={"wife_user_id": wife.id, "name": "Her card"})
+    assert wa.status_code == 200, wa.text
+    r = husband.api.post(f"/households/{family.id}/nafaqah/reimbursements",
+                         json={"amount": 200, "account_id": _payer_account(husband, family),
+                               "request_key": str(uuid.uuid4()), "wife_account_id": wa.json()["id"]})
     assert r.status_code == 200, r.text
     plan = wife.api.post("/budgets/installments", json={"household_id": family.id, "merchant": "Extra",
                                                         "total_amount": 300, "installment_count": 4,
