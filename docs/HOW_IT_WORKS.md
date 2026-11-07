@@ -19,7 +19,8 @@ The database enforces every rule below. The API re-checks them for the signed-in
 only hides what the server would refuse anyway. Button and screen names are the English ones the
 app shows; the app also runs in Arabic and Urdu.
 
-Last checked against the code: 2026-11-07 (`main` at `f6e57fb`).
+Last checked against the code: 2026-11-07 (`main` at `f6e57fb`; the setup tutor, the Help FAQ and
+the duplicate card in §1, §6 and §14 on `feat/onboarding-guide-update`).
 
 ## Contents
 
@@ -83,8 +84,9 @@ Last checked against the code: 2026-11-07 (`main` at `f6e57fb`).
 - The checklist stays on the dashboard while steps are open. **Hide** appears once the cycle has
   budgets and removes it for this household on this phone; Settings → **Household Setup
   Checklist** → **Restore to Dashboard** brings it back.
-- The first time the dashboard opens on a phone, the **Interactive Setup Tutor** also appears once
-  (see [section 14](#14-help-support-and-the-in-app-guide)).
+- The first time the dashboard has loaded the household on a phone, the **Interactive Setup Tutor**
+  also appears once, with the steps for the person's role (see
+  [section 14](#14-help-support-and-the-in-app-guide)).
 
 ### Finding your way
 
@@ -430,7 +432,8 @@ is shared ([section 9](#9-roommate-settlements)).
   code at any time, or the same amount (within 0.05 SAR) at a similar merchant within the last 24
   hours. Only expenses the person can read are compared.
 - The chat offers **Enrich Existing Transaction** (add the items to the one already there), **Log
-  as New** or **Discard**. The scanner offers **Log as Separate** or **Discard Duplicate**.
+  as New** or **Discard**. The scanner's duplicate card also offers to enrich the existing
+  expense, besides **Log as Separate** or **Discard Duplicate**.
 - Manual Log has no duplicate check.
 
 ### Offline
@@ -748,23 +751,32 @@ Settings is the last tab of the bottom bar. Its sections fold open and closed:
 
 ### The Interactive Setup Tutor
 
-- A five-step guide that opens by itself the first time the dashboard is shown on a phone (it is
-  remembered on that phone, not on the account).
-- The steps: **1. Payday Cycle & Liquid Pool**, **2. Operating Accounts vs. Savings Vaults**, **3.
-  Envelope Budgeting & Mid-Cycle Joining**, **4. Living Model: Family & Roommates**, **5. Three
-  Frictionless Ways to Record**. Steps 1 to 4 have a button that closes the tutor and opens a
-  screen: steps 1, 2 and 4 open Settings, step 3 opens Budgets; step 5 closes it. Step 2 is meant to
-  open Accounts & Balances, but no screen that opens the tutor gives it the household, so it falls
-  back to Settings ([section 19](#19-accepted-limits-and-follow-ups)).
+- A step-by-step guide that opens by itself once per phone, the first time the dashboard has loaded
+  the household (it is remembered on that phone, not on the account; the flag is
+  `has_seen_setup_tutor_v3`, so people who saw the earlier tutor see this one once).
+- It shows the steps for the person's role, from the household's member list (display only; the
+  server still checks every action):
+
+| Step | An admin | Anyone else |
+|---|---|---|
+| **Payday & Income** | **Set Payday** (the payday editor) and **Record Income** | "Your household's admin sets this up" for the payday; **Record Income** |
+| **Operating Accounts vs. Savings Vaults** | **Set Up Bank & Savings** (Accounts & Balances) | The same |
+| **Envelope Budgeting & Joining Mid-Cycle** | **Configure Envelopes** (Budgets), and **Log Prior Spending** for a household joining mid-cycle | The admin sets the budgets; no button |
+| **Living Model: Family & Roommates** | **Members & Admins** | The admin sets it up; no button |
+| One step for the role | A wife: "Who paid, and for whom?", her allowance and **Mark as received**. The husband: **Add wife account** on Accounts & Balances (shown before his wife has joined too), **Reimburse Wife**, approve or decline, **Reverse**; its button opens Accounts & Balances. Roommates: **Split Equally (All)** / **Personal (100%)**, **Fewest transfers** and **Settle** | The same |
+| **Three Ways to Record** | **Add Expense**: **Voice & AI Assistant**, **Scan Receipt** or **Manual Log**; its button closes the tutor | The same |
+
+- A button closes the tutor first, then opens its screen. Without the household (or when its member
+  list cannot be loaded, the cached admin flag decides), the buttons that need it are not offered.
 - It can be opened again from Settings → **App Guide & Tutorial**, from **Help & Support**
   (**Replay**), and from the AI chat (**Launch Setup Tutor**).
 
 ### Help & Support
 
 - Opened from Settings → **Help Center & AI Support**, or from the bell icon on the dashboard.
-- **FAQs & Guide**: searchable questions in six groups (salary cycle, receipts and ZATCA, recurring
-  bills, installments, household and roommates, wife expenses and allowance), and the tutor's
-  **Replay** card.
+- **FAQs & Guide**: searchable questions in seven groups (salary cycle, wife expenses and
+  allowance, receipts and ZATCA, recurring bills, installments, household and roommates, privacy and
+  your account), and the tutor's **Replay** card.
 - **AI Assistant**: a support chat that answers questions about the app. When it sees a technical
   problem it offers **Escalate to Developer**.
 - **Message the Developer**: a message sent from the signed-in account; the developer answers by
@@ -979,8 +991,6 @@ Details: [rule 04, section 6](../.agents/rules/04-security-and-privacy.md#6-acco
 - **The stored receipt photo** (app bug): the scanner uploads only the first photo before saving,
   so the server's joined image of all pages is used only when that upload fails. A long receipt
   keeps page 1 only, and a save that fails leaves an unlinked photo in storage.
-- **The setup tutor's step 2** (app bug): it should open Accounts & Balances, but every screen that
-  opens the tutor leaves out the household, so it opens Settings.
 - **The Notifications permission card** promises budget threshold alerts and sync status
   notifications, which the app does not send.
 - **Total net worth** adds EUR and AED balances to SAR without converting them.

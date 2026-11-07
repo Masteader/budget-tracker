@@ -327,9 +327,9 @@
 - This plan: tick the boxes.
 
 **Checklist**
-- [ ] Write the CSV from the final `app_localizations.dart` values
-- [ ] Update HOW_IT_WORKS §1, §6, §14 and §19
-- [ ] Commit `docs(onboarding): translation review sheet and how-it-works update`
+- [x] Write the CSV from the final `app_localizations.dart` values
+- [x] Update HOW_IT_WORKS §1, §6, §14 and §19
+- [x] Commit `docs(onboarding): translation review sheet and how-it-works update`
 - [ ] Then Round 1 and Round 2 reviews on the full branch diff (fresh subagents, spec plus diff only)
 
 **Size:** S. About 55 CSV rows and the doc edits, about 1 hour. No test runs (docs only).
@@ -338,8 +338,8 @@
 
 ## Decisions for the owner
 
-- **D1. Show the new tutor again to current users?** Default: no. Keep `has_seen_setup_tutor_v2`, so only new phones see it automatically and everyone else can use Replay. The alternative is to change the key to `v3`, so every user sees the fixed, role-aware tutor once.
-- **D2. The husband step before his wife has joined.** Default: show it, with "(it appears once she has joined)". The alternative is to show it only when the household has a wife.
-- **D3. Household screen tabs.** Default: tap to switch, no swipe, so the whole page can scroll with the keyboard open. The alternative is to keep swiping with a more complex nested scroll.
-- **D4. The 400 SAR Iqama fee FAQ.** Default: reword it without a fixed amount, pointing to the real Government sub-categories. The alternative is to keep the 400 SAR figure.
-- **D5. Budgets step for members.** Default: no button, just "Your household's admin sets this up." The alternative is a view-only "Open Budgets" button.
+- **D1. Show the new tutor again to current users?** Owner decided (2026-11-07): yes, via the new key `has_seen_setup_tutor_v3` (the v2 flag is left as it was). Planned default was: no. Keep `has_seen_setup_tutor_v2`, so only new phones see it automatically and everyone else can use Replay. The alternative is to change the key to `v3`, so every user sees the fixed, role-aware tutor once.
+- **D2. The husband step before his wife has joined.** Owner: the default. Default: show it, with "(it appears once she has joined)". The alternative is to show it only when the household has a wife.
+- **D3. Household screen tabs.** Owner: the default. Default: tap to switch, no swipe, so the whole page can scroll with the keyboard open. The alternative is to keep swiping with a more complex nested scroll.
+- **D4. The 400 SAR Iqama fee FAQ.** Owner: the default. Default: reword it without a fixed amount, pointing to the real Government sub-categories. The alternative is to keep the 400 SAR figure.
+- **D5. Budgets step for members.** Owner: the default. Default: no button, just "Your household's admin sets this up." The alternative is a view-only "Open Budgets" button.
