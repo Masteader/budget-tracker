@@ -311,6 +311,7 @@
 --     public.nafaqah_receipt_hidden(text),
 --     public.nafaqah_caller_hidden_wives(),
 --     public.nafaqah_caller_sees_allowances(),
+--     public.nafaqah_caller_hidden_wife_accounts(),
 --     public.nafaqah_may_see_allowances(uuid, uuid);
 --   Then run these CREATE OR REPLACE statements: record_spouse_reimbursement,
 --   get_spouse_reimbursement_balance, get_member_allowance_status and set_member_allowance from
@@ -2623,15 +2624,44 @@ CREATE POLICY transactions_select_household ON public.transactions
                 OR nafaqah_spouse_id = (SELECT auth.uid())
                 OR (SELECT public.nafaqah_caller_sees_allowances())));
 
+-- The wife accounts (section 12) of the caller's active household that the caller may not see:
+-- nobody but her, its owner and her ledger's managers updates or deletes a transaction recorded on
+-- one (review R3C-01, owner decision 2026-11-07). Her advances are read household-wide, but a
+-- co-wife (even an admin), an ordinary member, and an admin who is not a wife while the husband is
+-- there reach none of the rows on her wife account: an edit or a delete of one changes 0 rows, the
+-- answer for a row they do not read, and nothing moves her account's balance. Runs once per
+-- statement (an InitPlan of the policies below), as the caller; PL/pgSQL so that it may name
+-- section 12's nafaqah_may_see_wife_account, made further down.
+CREATE OR REPLACE FUNCTION public.nafaqah_caller_hidden_wife_accounts()
+RETURNS uuid[]
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_uid uuid := auth.uid();
+    v_hh uuid := public.get_auth_user_household_id();
+BEGIN
+    RETURN COALESCE((SELECT array_agg(a.id ORDER BY a.id)
+                     FROM public.accounts a
+                     WHERE a.household_id = v_hh AND a.account_type = 'wife'
+                       AND NOT public.nafaqah_may_see_wife_account(a.household_id, v_uid, a.owner_user_id, a.assigned_wife_id)),
+                    '{}');
+END;
+$$;
+
 -- 20261020400000's rules (the creator or an admin; a personal account only on its owner's rows),
--- with the read test above on the row it picks and on the row it leaves.
+-- with the read test above on the row it picks and on the row it leaves, and no row on a wife
+-- account the caller does not see, before or after (review R3C-01).
 DROP POLICY IF EXISTS transactions_update_household ON public.transactions;
 CREATE POLICY transactions_update_household ON public.transactions
     FOR UPDATE TO authenticated
     USING (household_id = (SELECT public.get_auth_user_household_id())
            AND (nafaqah_class IS DISTINCT FROM 'wife_personal'
                 OR nafaqah_spouse_id = (SELECT auth.uid())
-                OR (SELECT public.nafaqah_caller_sees_allowances())))
+                OR (SELECT public.nafaqah_caller_sees_allowances()))
+           AND (account_id IS NULL OR NOT (ARRAY[account_id] && (SELECT public.nafaqah_caller_hidden_wife_accounts()))))
     WITH CHECK (
         household_id = (SELECT public.get_auth_user_household_id())
         AND (user_id = (SELECT auth.uid()) OR (SELECT public.get_auth_user_role()) = 'admin')
@@ -2642,6 +2672,7 @@ CREATE POLICY transactions_update_household ON public.transactions
         AND (nafaqah_class IS DISTINCT FROM 'wife_personal'
              OR nafaqah_spouse_id = (SELECT auth.uid())
              OR (SELECT public.nafaqah_caller_sees_allowances()))
+        AND (account_id IS NULL OR NOT (ARRAY[account_id] && (SELECT public.nafaqah_caller_hidden_wife_accounts())))
     );
 
 DROP POLICY IF EXISTS transactions_delete_household ON public.transactions;
@@ -2650,7 +2681,8 @@ CREATE POLICY transactions_delete_household ON public.transactions
     USING (household_id = (SELECT public.get_auth_user_household_id())
            AND (nafaqah_class IS DISTINCT FROM 'wife_personal'
                 OR nafaqah_spouse_id = (SELECT auth.uid())
-                OR (SELECT public.nafaqah_caller_sees_allowances())));
+                OR (SELECT public.nafaqah_caller_sees_allowances()))
+           AND (account_id IS NULL OR NOT (ARRAY[account_id] && (SELECT public.nafaqah_caller_hidden_wife_accounts()))));
 
 -- Her receipt photo follows her purchase. Receipts are stored under the household's folder
 -- (<household id>/<file>); transactions.receipt_url holds that path, or a legacy URL ending in
@@ -3266,9 +3298,12 @@ END;
 $$;
 
 -- 20261020400000's balance trigger and its helper, with the wife account: the wife it is assigned
--- to debits it with her own purchases (and an admin edits them as any member's), as an owner debits
--- his own account. Nothing else of either changes; trg_wife_account_spending decides which of her
--- purchases may be on it.
+-- to debits it with her own purchases, as an owner debits his own account. An admin edits or
+-- deletes her purchases on it only when he may see it (review R3C-01, owner decision 2026-11-07):
+-- its owner, or her ledger's manager (an admin who is not a wife when her husband is gone); a
+-- co-wife admin, and an admin who is not a wife while the husband is there, never move its balance,
+-- also on a path the row policies do not cover. Nothing else of either changes;
+-- trg_wife_account_spending decides which of her purchases may be on it.
 CREATE OR REPLACE FUNCTION public.transaction_personal_account_writable(
     p_account public.accounts,
     p_creator_user_id uuid,
@@ -3288,6 +3323,9 @@ AS $$
             (p_account.owner_user_id = p_creator_user_id
              OR (p_account.account_type = 'wife' AND p_account.assigned_wife_id = p_creator_user_id))
             AND public.household_member_role(p_account.household_id, p_caller_uid) = 'admin'
+            AND (p_account.account_type IS DISTINCT FROM 'wife'
+                 OR public.nafaqah_may_see_wife_account(p_account.household_id, p_caller_uid,
+                                                        p_account.owner_user_id, p_account.assigned_wife_id))
         );
 $$;
 
@@ -3753,6 +3791,9 @@ REVOKE ALL ON FUNCTION public.nafaqah_transaction_plan_owner() FROM PUBLIC, anon
 REVOKE ALL ON FUNCTION public.nafaqah_forget_transfer_owner() FROM PUBLIC, anon, authenticated;
 -- Her advance's guard (10d) is a trigger: nobody executes it.
 REVOKE ALL ON FUNCTION public.nafaqah_guard_advance_attribution() FROM PUBLIC, anon, authenticated;
+-- Who edits a row on her wife account (10d, review R3C-01): the write policies run it as the caller.
+REVOKE ALL ON FUNCTION public.nafaqah_caller_hidden_wife_accounts() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.nafaqah_caller_hidden_wife_accounts() TO authenticated, service_role;
 -- Her receipt photo: the storage policy runs the helper as the caller.
 REVOKE ALL ON FUNCTION public.nafaqah_receipt_hidden(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.nafaqah_receipt_hidden(text) TO authenticated, service_role;
