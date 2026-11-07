@@ -22,6 +22,15 @@
 --   C6  Her husband reassigns a new wife account of hers to her co-wife, not yet committed: a
 --       repayment to her into it waits, then is refused as wife_account_invalid (it is not hers
 --       any more); nothing moves.
+--   C7  Her purge (prepare_account_purge: pools, households FOR UPDATE, then her wife accounts)
+--       and his transfer into her wife account (review R3C-03): the purge holds the household
+--       first; the transfer waits for the household before it locks either account (nothing of
+--       her account is held while it waits), so the purge goes through, and the transfer after
+--       it. Before R3C-03 the transfer locked both accounts first and took the household last
+--       (the foreign key of its insert): a deadlock.
+--   C8  The same order on her own spending (review R3C-03): while the purge holds the household,
+--       her new purchase, an edit of its amount and its deletion wait for the household before
+--       anything locks her wife account; then they go through.
 -- ============================================================================
 \set ON_ERROR_STOP on
 
@@ -70,6 +79,8 @@ BEGIN
     DELETE FROM public.household_memberships WHERE household_id = ANY (v_hhs) AND role <> 'admin';
     DELETE FROM public.household_memberships WHERE household_id = ANY (v_hhs);
     DELETE FROM public.households WHERE id = ANY (v_hhs);
+    DELETE FROM public.account_deletion_requests WHERE user_id = ANY (v_users);
+    DELETE FROM auth.sessions WHERE user_id = ANY (v_users);
     DELETE FROM auth.users WHERE id = ANY (v_users);
 END;
 $$;
@@ -389,6 +400,120 @@ BEGIN
     PERFORM pg_temp.expect('C6 nothing moved', pg_temp.bal(v_new)::text || '|' || pg_temp.bal(pg_temp.a(1))::text,
                            '0.00|' || v_his0::text);
     RAISE NOTICE 'PASSED: C6 a repayment racing the reassignment of a new wife account is refused, and nothing moves.';
+END $$;
+
+-- ── C7: her purge holds the household; his transfer into her wife account waits for it ───────
+-- Her account deletion, claimed and due, as the deletion worker finds it (committed).
+DO $$
+DECLARE
+    v_sess text;
+BEGIN
+    INSERT INTO auth.sessions (user_id, created_at) VALUES (pg_temp.u(2), now()) RETURNING id::text INTO v_sess;
+    PERFORM set_config('request.jwt.claims', jsonb_build_object('role', 'authenticated', 'sub', pg_temp.u(2), 'session_id', v_sess)::text, true);
+    SET LOCAL ROLE authenticated;
+    PERFORM public.request_account_deletion('DELETE', '[]'::jsonb, NULL, 'en');
+    RESET ROLE;
+    PERFORM set_config('request.jwt.claims', '', true);
+    UPDATE public.account_deletion_requests SET scheduled_for = now() - interval '1 minute' WHERE user_id = pg_temp.u(2);
+    PERFORM set_config('request.jwt.claims', jsonb_build_object('role', 'service_role')::text, true);
+    SET LOCAL ROLE service_role;
+    PERFORM public.claim_due_account_deletions(50, 30);
+    RESET ROLE;
+    PERFORM set_config('request.jwt.claims', '', true);
+END $$;
+DO $$
+DECLARE
+    v_req uuid := (SELECT id FROM public.account_deletion_requests WHERE user_id = pg_temp.u(2));
+    v_wa0 numeric := pg_temp.bal(pg_temp.wa());
+    v_his0 numeric := pg_temp.bal(pg_temp.a(1));
+    v_p_pid int;
+    v_t_pid int;
+    v_probe text;
+    v_purge text;
+    v_move text;
+BEGIN
+    PERFORM pg_temp.expect('C7 her deletion is claimed', (SELECT status FROM public.account_deletion_requests WHERE id = v_req), 'processing');
+    PERFORM pg_temp.disconnect_all();
+    -- X holds the household (as another purge would), so the purge below stops right after its
+    -- first steps, holding nothing yet, and queues for the household first.
+    PERFORM pg_temp.connect('x');
+    PERFORM t69_dblink.dblink_exec('x', 'BEGIN');
+    PERFORM * FROM t69_dblink.dblink('x', format('SELECT 1 FROM public.households WHERE id = %L FOR UPDATE', pg_temp.h(1))) AS t(r int);
+    -- P: the purge, as the deletion worker runs it, in a transaction this test rolls back.
+    v_p_pid := pg_temp.connect('p');
+    PERFORM * FROM t69_dblink.dblink('p', format('SELECT set_config(%L, %L, false)', 'request.jwt.claims',
+        jsonb_build_object('role', 'service_role')::text)) AS t(x text);
+    PERFORM t69_dblink.dblink_exec('p', 'SET ROLE service_role');
+    PERFORM t69_dblink.dblink_exec('p', 'BEGIN');
+    PERFORM t69_dblink.dblink_send_query('p', format('SELECT public.prepare_account_purge(%L)::text', v_req));
+    PERFORM pg_temp.expect('C7 the purge waits for the household', pg_temp.wait('p', v_p_pid), 'blocked');
+    -- T: his transfer into her wife account.
+    v_t_pid := pg_temp.connect('t');
+    PERFORM pg_temp.as_user('t', pg_temp.u(1));
+    PERFORM t69_dblink.dblink_send_query('t', format(
+        'SELECT (public.transfer_between_accounts(%L, %L, %L, 5, 0, %L) ->> %L)', pg_temp.h(1), pg_temp.a(1), pg_temp.wa(), 'T69 C7', 'notes'));
+    PERFORM pg_temp.expect('C7 the transfer waits', pg_temp.wait('t', v_t_pid), 'blocked');
+    -- While it waits it holds nothing of either account: another session locks both at once.
+    PERFORM pg_temp.connect('z');
+    BEGIN
+        SELECT r INTO v_probe FROM t69_dblink.dblink('z', format(
+            'SELECT count(*)::text FROM (SELECT 1 FROM public.accounts WHERE id IN (%L, %L) FOR UPDATE NOWAIT) s', pg_temp.a(1), pg_temp.wa())) AS t(r text);
+    EXCEPTION WHEN OTHERS THEN
+        v_probe := 'ERR:' || SQLSTATE;
+    END;
+    PERFORM pg_temp.expect('C7 the waiting transfer holds neither account', v_probe, '2');
+    -- The household is free: the purge goes on (her wife accounts, then the rest) and is held open.
+    PERFORM t69_dblink.dblink_exec('x', 'ROLLBACK');
+    v_purge := pg_temp.result('p');
+    PERFORM pg_temp.expect('C7 the purge went through', COALESCE((v_purge::jsonb ->> 'prepared'), v_purge), 'true');
+    PERFORM pg_temp.expect('C7 the transfer still waits, for the purge', pg_temp.wait('t', v_t_pid), 'blocked');
+    -- Undo the purge (this test keeps her); the transfer then goes through.
+    PERFORM t69_dblink.dblink_exec('p', 'ROLLBACK');
+    v_move := pg_temp.result('t');
+    PERFORM pg_temp.disconnect_all();
+
+    PERFORM pg_temp.expect('C7 the transfer went through', v_move, 'T69 C7');
+    PERFORM pg_temp.expect('C7 her account: +5 exactly', pg_temp.bal(pg_temp.wa())::text, (v_wa0 + 5)::numeric(14, 2)::text);
+    PERFORM pg_temp.expect('C7 his account: -5 exactly', pg_temp.bal(pg_temp.a(1))::text, (v_his0 - 5)::numeric(14, 2)::text);
+    RAISE NOTICE 'PASSED: C7 her purge and a transfer into her wife account: the transfer waits for the household, no deadlock.';
+END $$;
+
+-- ── C8: her spending waits for the household before anything locks her wife account ──────────
+DO $$
+DECLARE
+    v_wa0 numeric := pg_temp.bal(pg_temp.wa());
+    v_w_pid int;
+    v_step text;
+    v_probe text;
+    v_res text;
+BEGIN
+    FOREACH v_step IN ARRAY ARRAY['buy', 'edit', 'delete'] LOOP
+        PERFORM pg_temp.disconnect_all();
+        PERFORM pg_temp.connect('x');
+        PERFORM t69_dblink.dblink_exec('x', 'BEGIN');
+        PERFORM * FROM t69_dblink.dblink('x', format('SELECT 1 FROM public.households WHERE id = %L FOR UPDATE', pg_temp.h(1))) AS t(r int);
+        v_w_pid := pg_temp.connect('w');
+        PERFORM pg_temp.as_user('w', pg_temp.u(2));
+        PERFORM t69_dblink.dblink_send_query('w', CASE v_step
+            WHEN 'buy' THEN pg_temp.spend_sql(8, 40)
+            WHEN 'edit' THEN format('UPDATE public.transactions SET amount = 25 WHERE id = %L RETURNING id::text', pg_temp.t(8))
+            ELSE format('DELETE FROM public.transactions WHERE id = %L RETURNING id::text', pg_temp.t(8)) END);
+        PERFORM pg_temp.expect('C8 ' || v_step || ' waits for the household', pg_temp.wait('w', v_w_pid), 'blocked');
+        PERFORM pg_temp.connect('z');
+        BEGIN
+            SELECT r INTO v_probe FROM t69_dblink.dblink('z', format(
+                'SELECT count(*)::text FROM (SELECT 1 FROM public.accounts WHERE id = %L FOR UPDATE NOWAIT) s', pg_temp.wa())) AS t(r text);
+        EXCEPTION WHEN OTHERS THEN
+            v_probe := 'ERR:' || SQLSTATE;
+        END;
+        PERFORM pg_temp.expect('C8 ' || v_step || ' holds nothing of her account while it waits', v_probe, '1');
+        PERFORM t69_dblink.dblink_exec('x', 'ROLLBACK');
+        v_res := pg_temp.result('w');
+        PERFORM pg_temp.disconnect_all();
+        PERFORM pg_temp.expect('C8 ' || v_step || ' went through', v_res, pg_temp.t(8)::text);
+    END LOOP;
+    PERFORM pg_temp.expect('C8 her account: bought, edited, deleted: as it was', pg_temp.bal(pg_temp.wa())::text, v_wa0::text);
+    RAISE NOTICE 'PASSED: C8 her purchase, its edit and its deletion wait for the household before her wife account.';
 END $$;
 
 SELECT pg_temp.disconnect_all();
