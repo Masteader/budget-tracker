@@ -1007,12 +1007,15 @@ def archive_category_for_household(household_id: str, category_code: str) -> Dic
     # zeroed so a failure here (raised) leaves the category as it was, not active with no budget.
     toggle_category_status(household_id, category_code, is_active=False)
 
-    # 2. Update or create an inactive record in budgets so the UI reliably knows it is inactive
+    # 2. Return the open cycle's allocation (or create an inactive record for it so the UI
+    # reliably knows it is inactive). Past cycles keep their allocations: they are the history
+    # the reports compare spending against. The toggle above already marked every row inactive.
     existing_budgets = (
         client.table("budgets")
         .select("id")
         .eq("household_id", household_id)
         .eq("category_code", category_code)
+        .eq("cycle_key", target_key)
         .execute()
     )
 
@@ -1021,7 +1024,7 @@ def archive_category_for_household(household_id: str, category_code: str) -> Dic
             "is_active": False,
             "allocated_amount": 0.0,
             "sub_allocations": {},
-        }).eq("household_id", household_id).eq("category_code", category_code).execute()
+        }).eq("household_id", household_id).eq("category_code", category_code).eq("cycle_key", target_key).execute()
     else:
         insert_data = {
             "household_id": household_id,
@@ -1441,19 +1444,24 @@ def toggle_category_status(household_id: str, category_code: str, is_active: boo
         "updated_at": now_iso,
     }, on_conflict="household_id,category_code").execute()
 
-    update_res = client.table("budgets").update({
+    client.table("budgets").update({
         "is_active": is_active,
     }).eq("household_id", household_id).eq("category_code", category_code).execute()
 
-    # If activating and no budget row existed for this category yet, create an initial budget row
-    if is_active and (not update_res.data or len(update_res.data) == 0):
-        existing_check = client.table("budgets").select("id").eq("household_id", household_id).eq("category_code", category_code).execute()
-        if not existing_check.data or len(existing_check.data) == 0:
-            from supabase_client import get_household_payday
-            today = riyadh_today()
-            month_str = today.replace(day=1).isoformat()
-            # Salary-cycle key (27th → next month), not the calendar month.
-            cycle_key = get_cycle_for_date(today, payday_day=get_household_payday(household_id))["cycle_key"]
+    # If activating and the household's open cycle has no row for this category (none at all, or
+    # only past cycles), create one so the active category has a current budget.
+    if is_active:
+        from supabase_client import get_household_payday
+        today = riyadh_today()
+        month_str = today.replace(day=1).isoformat()
+        # Salary-cycle key (27th → next month), not the calendar month.
+        cycle_key = get_cycle_for_date(today, payday_day=get_household_payday(household_id))["cycle_key"]
+        existing_check = (
+            client.table("budgets").select("id")
+            .eq("household_id", household_id).eq("category_code", category_code).eq("cycle_key", cycle_key)
+            .execute()
+        )
+        if not existing_check.data:
             client.table("budgets").insert({
                 "household_id": household_id,
                 "category_code": category_code,
@@ -1498,7 +1506,14 @@ def create_household_custom_category(
         .data
         or []
     )
-    if not own:
+    if own:
+        # A retry: take this request's definition (the first attempt may have had a typo).
+        client.table("cost_control_codes").update({
+            "category": category.strip(),
+            "keywords": keywords,
+            "is_flexible": is_flexible,
+        }).eq("id", own[0]["id"]).execute()
+    else:
         client.table("cost_control_codes").insert({
             "code": clean_code,
             "category": category.strip(),

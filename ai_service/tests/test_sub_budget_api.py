@@ -51,7 +51,12 @@ def test_get_category_breakdown(monkeypatch):
     assert "sub_categories" in cat
 
 
-def test_add_and_archive_category(monkeypatch):
+def test_add_and_archive_category(monkeypatch, fake_supabase):
+    # The add is stubbed, so seed the code it would create: archiving checks the household owns it.
+    fake_supabase.seed("cost_control_codes", [
+        {"id": "c-testing", "code": "OPEX-TESTING", "category": "Testing Category", "keywords": [],
+         "is_flexible": True, "household_id": HOUSEHOLD_ID, "is_system": False},
+    ])
     monkeypatch.setattr("routes.budgets.add_category_and_budget", lambda req: {"status": "success", "category_code": req.code})
     monkeypatch.setattr("routes.budgets.archive_category_for_household", lambda hid, code: {"status": "success"})
 

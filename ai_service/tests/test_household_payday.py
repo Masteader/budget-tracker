@@ -177,6 +177,45 @@ def test_create_custom_category_can_be_retried_after_a_failed_activation(househo
     assert len([c for c in household.tables["cost_control_codes"] if c["code"] == "CUSTOM-PETS"]) == 1
 
 
+def test_archive_keeps_past_cycles_allocations(household):
+    """Deactivating returns the open cycle's allocation; past cycles keep theirs (history)."""
+    from salary_cycle import archive_category_for_household
+
+    household.seed("budgets", [
+        {"id": "b-past", "household_id": HH, "category_code": "OPEX-DINING", "cycle_key": "2026-06",
+         "month": "2026-06-01", "allocated_amount": 300.0, "spent_amount": 250.0, "is_active": True},
+        {"id": "b-open", "household_id": HH, "category_code": "OPEX-DINING", "cycle_key": CYCLE,
+         "month": f"{CYCLE}-01", "allocated_amount": 400.0, "spent_amount": 0.0, "is_active": True},
+    ])
+    archive_category_for_household(HH, "OPEX-DINING")
+    rows = {r["cycle_key"]: (r["is_active"], r["allocated_amount"]) for r in _budget_rows(household, "OPEX-DINING")}
+    assert rows == {"2026-06": (False, 300.0), CYCLE: (False, 0.0)}
+
+
+def test_reactivating_with_only_past_rows_creates_the_open_cycle_row(household):
+    from salary_cycle import toggle_category_status
+
+    household.seed("budgets", [
+        {"id": "b-past", "household_id": HH, "category_code": "OPEX-DINING", "cycle_key": "2026-06",
+         "month": "2026-06-01", "allocated_amount": 300.0, "spent_amount": 0.0, "is_active": False},
+    ])
+    toggle_category_status(HH, "OPEX-DINING", True)
+    rows = {r["cycle_key"]: r["is_active"] for r in _budget_rows(household, "OPEX-DINING")}
+    assert rows.get(CYCLE) is True, rows
+
+
+def test_create_custom_category_retry_takes_the_corrected_name(household):
+    from salary_cycle import create_household_custom_category
+
+    household.schemas["household_category_settings"] = {"id"}
+    with pytest.raises(Exception):
+        create_household_custom_category(HH, "PETS", "Petz", ["cat"])
+    del household.schemas["household_category_settings"]
+    create_household_custom_category(HH, "PETS", "Pets", ["cat food"])
+    rows = [c for c in household.tables["cost_control_codes"] if c["code"] == "CUSTOM-PETS"]
+    assert [(r["category"], r["keywords"]) for r in rows] == [("Pets", ["cat food"])]
+
+
 def test_create_household_custom_category_uses_household_payday(household):
     from salary_cycle import create_household_custom_category
 

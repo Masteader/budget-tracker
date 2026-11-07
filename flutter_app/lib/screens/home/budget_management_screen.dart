@@ -1300,6 +1300,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     final catData = await context.read<BudgetProvider>().getHouseholdCategories(data.householdId);
     if (!mounted) return;
 
+    // The sheet shows a switch's result on top of itself; once it is closed, the screen does.
+    var sheetOpen = true;
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1317,12 +1319,21 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
           );
           // The sheet shows the result on top of itself and, when this throws, moves the
           // category back to where it was.
-          if (!ok) throw StateError('Category toggle refused for ${cat.code}');
+          if (!ok) {
+            if (!sheetOpen && mounted) AppSnackBar.showError(context, context.tr('bm_toggle_failed'));
+            throw StateError('Category toggle refused for ${cat.code}');
+          }
           if (mounted) {
             context.read<BudgetProvider>().invalidateCategoriesCache();
             setState(() {
               _staticFuture = _loadStaticData();
             });
+            if (!sheetOpen) {
+              AppSnackBar.showSuccess(
+                context,
+                context.trArgs(isActive ? 'bm_cat_activated' : 'bm_cat_deactivated', {'name': cat.name}),
+              );
+            }
           }
         },
         onAddCustom: () {
@@ -1331,6 +1342,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         },
       ),
     );
+    sheetOpen = false;
   }
 
   IconData _categoryIconFor(String code) {

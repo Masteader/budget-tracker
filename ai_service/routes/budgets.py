@@ -636,6 +636,14 @@ async def delete_budget_category(
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
+    # Same rule and answer as switching a category on or off (the database trigger refuses the
+    # settings write for any other code, which would otherwise surface as a 500).
+    try:
+        usable = await asyncio.to_thread(category_usable_by_household, category_code, household_id)
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to archive category.")
+    if not usable:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=CATEGORY_FORBIDDEN)
     try:
         return await asyncio.to_thread(archive_category_for_household, household_id, category_code)
     except Exception as exc:

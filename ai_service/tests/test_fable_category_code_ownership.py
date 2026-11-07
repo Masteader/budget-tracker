@@ -134,6 +134,24 @@ def test_switching_off_refuses_a_code_the_household_cannot_use(api, households, 
     assert _rows(fake, "household_category_settings", a.hid, code) == []
 
 
+@pytest.mark.parametrize("code", ["CUSTOM-SECRET", "CUSTOM-NOWHERE"])
+def test_archiving_refuses_a_code_the_household_cannot_use(api, households, code):
+    from salary_cycle import CATEGORY_FORBIDDEN
+
+    fake, a, _ = households
+    r = api.delete(f"/budgets/categories/{code}", params={"household_id": a.hid}, headers=a.hdr("admin_a"))
+    assert r.status_code == 403 and r.json()["detail"] == CATEGORY_FORBIDDEN
+    assert _rows(fake, "household_category_settings", a.hid, code) == []
+    assert _rows(fake, "budgets", a.hid, code) == []
+
+
+def test_archiving_an_own_code_works(api, households):
+    fake, a, _ = households
+    r = api.delete("/budgets/categories/CUSTOM-PETS", params={"household_id": a.hid}, headers=a.hdr("admin_a"))
+    assert r.status_code == 200, r.text
+    assert [s["is_active"] for s in _rows(fake, "household_category_settings", a.hid, "CUSTOM-PETS")] == [False]
+
+
 def test_switching_off_an_own_code_works(api, households):
     fake, a, _ = households
     r = _toggle(api, a, "CUSTOM-PETS", False)

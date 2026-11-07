@@ -1,5 +1,7 @@
 // The Category Library switch goes through the backend only and reports a refusal:
 // the category stays where it was and the failure is shown, never a success.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -17,8 +19,9 @@ import 'package:budget_tracker/services/api_service.dart';
 import '../support/localized_app.dart';
 
 class _FakeApi extends ApiService {
-  _FakeApi({required this.accept});
+  _FakeApi({required this.accept, this.answer});
   final bool accept;
+  final Completer<bool>? answer; // when set, the server answers only when the test completes it
   final List<String> toggles = [];
 
   @override
@@ -34,7 +37,8 @@ class _FakeApi extends ApiService {
     required bool isActive,
   }) async {
     toggles.add('$categoryCode=$isActive');
-    return accept;
+    final pending = answer;
+    return pending == null ? accept : await pending.future;
   }
 }
 
@@ -81,7 +85,8 @@ Future<void> _activateFuelInLibrary(WidgetTester tester, _FakeApi api) async {
   await tester.tap(find.text('Library / Inactive (1)'));
   await tester.pumpAndSettle();
   await tester.tap(find.widgetWithText(FilledButton, 'Activate'));
-  await tester.pumpAndSettle();
+  await tester.pump();
+  if (api.answer == null) await tester.pumpAndSettle();
 }
 
 void main() {
@@ -112,5 +117,21 @@ void main() {
     expect(api.toggles, ['OPEX-FUEL=true']);
     expect(find.text('Category "Fuel" activated.').hitTestable(), findsOneWidget);
     expect(find.text('Failed to update category'), findsNothing);
+  });
+
+  testWidgets('a refusal that arrives after the sheet is closed is still shown', (tester) async {
+    final answer = Completer<bool>();
+    final api = _FakeApi(accept: false, answer: answer);
+    ApiService.instance = api;
+    await _activateFuelInLibrary(tester, api);
+
+    // Close the sheet (tap the barrier above it) before the server answers.
+    await tester.tapAt(const Offset(540, 100));
+    await tester.pumpAndSettle();
+    expect(find.text('Category Library'), findsNothing);
+
+    answer.complete(false);
+    await tester.pumpAndSettle();
+    expect(find.text('Failed to update category').hitTestable(), findsOneWidget);
   });
 }
