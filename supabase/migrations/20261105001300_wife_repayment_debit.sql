@@ -1405,12 +1405,18 @@ DECLARE
     v_reason text := NULLIF(btrim(p_reason), '');
 BEGIN
     PERFORM public.nafaqah_require_member(p_household_id, v_actor);
+    -- Her husband, or an admin who is not a wife when he is gone: never she herself, nor a co-wife (R1-01, R3-01).
+    -- Checked before the request is looked up (review R3C-05): anyone else gets this answer for a
+    -- request that exists and for an id of nothing alike.
+    IF NOT public.nafaqah_may_repay(p_household_id, v_actor) THEN
+        RAISE EXCEPTION 'Forbidden: only her husband, or an admin who is not a wife when he is gone, declines a request'
+            USING ERRCODE = '42501', HINT = 'forbidden';
+    END IF;
     SELECT * INTO v_req FROM public.spouse_reimbursement_requests WHERE id = p_request_id AND household_id = p_household_id;
     IF v_req.id IS NULL THEN
         RAISE EXCEPTION 'No such request in this household' USING ERRCODE = 'P0002', HINT = 'request_not_found';
     END IF;
-    -- Her husband, or an admin who is not a wife when he is gone: never she herself, nor a co-wife (R1-01, R3-01).
-    IF v_actor = v_req.wife_user_id OR NOT public.nafaqah_may_repay(p_household_id, v_actor) THEN
+    IF v_actor = v_req.wife_user_id THEN
         RAISE EXCEPTION 'Forbidden: only her husband, or an admin who is not a wife when he is gone, declines a request'
             USING ERRCODE = '42501', HINT = 'forbidden';
     END IF;
@@ -1447,12 +1453,18 @@ DECLARE
     v_wife_account uuid;
 BEGIN
     PERFORM public.nafaqah_require_member(p_household_id, v_actor);
+    -- Her husband, or an admin who is not a wife when he is gone: never she herself, nor a co-wife (R1-01, R3-01).
+    -- Checked before the request is looked up (review R3C-05): anyone else gets this answer for a
+    -- request that exists and for an id of nothing alike.
+    IF NOT public.nafaqah_may_repay(p_household_id, v_actor) THEN
+        RAISE EXCEPTION 'Forbidden: only her husband, or an admin who is not a wife when he is gone, approves a request'
+            USING ERRCODE = '42501', HINT = 'forbidden';
+    END IF;
     SELECT * INTO v_req FROM public.spouse_reimbursement_requests WHERE id = p_request_id AND household_id = p_household_id;
     IF v_req.id IS NULL THEN
         RAISE EXCEPTION 'No such request in this household' USING ERRCODE = 'P0002', HINT = 'request_not_found';
     END IF;
-    -- Her husband, or an admin who is not a wife when he is gone: never she herself, nor a co-wife (R1-01, R3-01).
-    IF v_actor = v_req.wife_user_id OR NOT public.nafaqah_may_repay(p_household_id, v_actor) THEN
+    IF v_actor = v_req.wife_user_id THEN
         RAISE EXCEPTION 'Forbidden: only her husband, or an admin who is not a wife when he is gone, approves a request'
             USING ERRCODE = '42501', HINT = 'forbidden';
     END IF;
@@ -1516,16 +1528,14 @@ BEGIN
     IF p_request_key IS NULL THEN
         RAISE EXCEPTION 'A request key is required to move money' USING ERRCODE = '22023', HINT = 'request_key_required';
     END IF;
-    SELECT * INTO v_orig FROM public.spouse_reimbursements WHERE id = p_reimbursement_id AND household_id = p_household_id;
-    IF v_orig.id IS NULL THEN
-        RAISE EXCEPTION 'No such repayment in this household' USING ERRCODE = 'P0002', HINT = 'reimbursement_not_found';
-    END IF;
     -- Never a wife (review R1-01). Only her ledger's manager now: her husband, or an admin who is
     -- not a wife when he is gone (review R3B-06, owner decision 2026-11-06, superseding R1-07): a
     -- replaced husband or a demoted admin no longer reverses, even from his own account. Within
     -- that, the account it left decides (the account helper below, under the locks): a personal
     -- account only by its owner, a pool only by an admin. So a personal account's repayment whose
-    -- owner no longer manages her ledger is reversed by nobody.
+    -- owner no longer manages her ledger is reversed by nobody. Checked before the repayment is
+    -- looked up (review R3C-05): anyone else gets the same answer for a repayment that exists and
+    -- for an id of nothing.
     IF public.nafaqah_is_spouse_member(p_household_id, v_actor) THEN
         RAISE EXCEPTION 'Forbidden: a wife does not reverse a repayment'
             USING ERRCODE = '42501', HINT = 'forbidden';
@@ -1533,6 +1543,10 @@ BEGIN
     IF NOT public.nafaqah_may_manage_ledgers(p_household_id, v_actor) THEN
         RAISE EXCEPTION 'Forbidden: a repayment is reversed by the husband, or by an admin who is not a wife when he is gone'
             USING ERRCODE = '42501', HINT = 'forbidden';
+    END IF;
+    SELECT * INTO v_orig FROM public.spouse_reimbursements WHERE id = p_reimbursement_id AND household_id = p_household_id;
+    IF v_orig.id IS NULL THEN
+        RAISE EXCEPTION 'No such repayment in this household' USING ERRCODE = 'P0002', HINT = 'reimbursement_not_found';
     END IF;
 
     PERFORM pg_advisory_xact_lock(hashtextextended('spouse_reimbursement:' || p_household_id::text || ':' || v_orig.wife_user_id::text, 0));
