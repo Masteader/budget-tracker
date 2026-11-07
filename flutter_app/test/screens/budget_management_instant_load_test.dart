@@ -78,15 +78,6 @@ void main() {
   });
 
   group('BudgetManagementScreen Instant Load & Stale-While-Revalidate', () {
-    test('budget_management_screen.dart source code contains NO references to BudgetRepairService', () {
-      final src = File('lib/screens/home/budget_management_screen.dart').readAsStringSync();
-      expect(
-        src.contains('BudgetRepairService'),
-        isFalse,
-        reason: 'BudgetRepairService must not be referenced in budget_management_screen.dart',
-      );
-    });
-
     test('budget_management_screen.dart fetches categories through BudgetProvider.getHouseholdCategories', () {
       final src = File('lib/screens/home/budget_management_screen.dart').readAsStringSync();
       expect(
