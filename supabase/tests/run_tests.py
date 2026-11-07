@@ -162,6 +162,14 @@ BEGIN
        OR has_column_privilege('authenticated', 'public.accounts', 'assigned_wife_id', 'UPDATE') THEN
         RAISE EXCEPTION 'wife account: a read, a credit or a guard is missing';
     END IF;
+    -- Review CHK-01: the write policies ask about the row's own account; no helper a client can
+    -- call lists the wife accounts hidden from it.
+    IF to_regprocedure('public.nafaqah_caller_hidden_wife_accounts()') IS NOT NULL
+       OR (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'transactions'
+           AND cmd IN ('UPDATE', 'DELETE') AND qual LIKE '%NOT nafaqah_wife_account_hidden(account_id)%') <> 2
+       OR has_function_privilege('anon', 'public.nafaqah_wife_account_hidden(uuid)', 'EXECUTE') THEN
+        RAISE EXCEPTION 'CHK-01: a wife account is listed to a caller who does not see it';
+    END IF;
 END $$;
 """,
 }

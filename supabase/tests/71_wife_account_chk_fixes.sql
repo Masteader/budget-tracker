@@ -263,7 +263,7 @@ BEGIN
                                    has_function_privilege('authenticated', p.oid, 'EXECUTE'),
                                    has_function_privilege('anon', p.oid, 'EXECUTE'))
                   FROM pg_proc p WHERE p.oid = to_regprocedure('public.nafaqah_wife_account_hidden(uuid)')), 'missing'),
-        'true,s,boolean,true,true,false');
+        't,s,boolean,t,t,f');
     -- The three policy clauses that used the list ask about the row's own account now.
     PERFORM pg_temp.check('CHK-01 the write policies use the per-account helper',
         (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'transactions' AND cmd IN ('UPDATE', 'DELETE')
