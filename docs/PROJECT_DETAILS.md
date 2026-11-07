@@ -224,7 +224,7 @@ roommate homes in the GCC. It addresses realities that generic budgeting tools i
 - **Purge:** only `ai_service/account_deletion_worker.py`, off until `ACCOUNT_DELETION_PURGE_ENABLED=1`;
   deletion emails also need `ACCOUNT_DELETION_EMAILS_ENABLED=1`. Rules: [rule 04 §6](../.agents/rules/04-security-and-privacy.md#6-account-deletion);
   operations: [`runbooks/account-deletion-purge.md`](runbooks/account-deletion-purge.md); walk-through:
-  [`HOW_IT_WORKS.md` §7](HOW_IT_WORKS.md#7-account-deletion).
+  [`HOW_IT_WORKS.md` §18](HOW_IT_WORKS.md#18-account-deletion).
 
 ---
 
