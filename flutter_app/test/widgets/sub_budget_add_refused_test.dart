@@ -10,8 +10,9 @@ import 'package:budget_tracker/services/api_service.dart';
 import 'package:budget_tracker/widgets/sub_budget_allocation_dialog.dart';
 
 class _FakeApi extends ApiService {
-  _FakeApi({required this.refuse});
+  _FakeApi({required this.refuse, this.status = 'success'});
   final bool refuse;
+  final String status;
   final List<String> added = [];
 
   @override
@@ -25,8 +26,12 @@ class _FakeApi extends ApiService {
   }) async {
     if (refuse) throw Exception('403 Forbidden');
     added.add(nameEn);
-    return {'status': 'success'};
+    return {'status': status};
   }
+
+  // No network in tests: the dialog loads the category's sub-categories.
+  @override
+  Future<List<Map<String, dynamic>>> getSubCategories(String parentCode, {String? householdId}) async => const [];
 }
 
 Future<void> _addToys(WidgetTester tester) async {
@@ -77,6 +82,15 @@ void main() {
 
   testWidgets('a refused sub-category is not added and the failure is shown', (tester) async {
     final api = _FakeApi(refuse: true);
+    ApiService.instance = api;
+    await _addToys(tester);
+
+    expect(find.text('Add Failed'), findsOneWidget);
+    expect(find.text('Toys'), findsNothing);
+  });
+
+  testWidgets('a sub-category the server did not save is not added', (tester) async {
+    final api = _FakeApi(refuse: false, status: 'error');
     ApiService.instance = api;
     await _addToys(tester);
 

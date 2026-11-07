@@ -151,6 +151,32 @@ def test_switching_off_reports_a_failed_budget_sync(household):
         toggle_category_status(HH, "OPEX-DINING", False)
 
 
+def test_archive_writes_nothing_when_switching_off_fails(household):
+    """Archiving switches the category off first: a failure leaves the allocation untouched."""
+    from salary_cycle import archive_category_for_household
+
+    household.seed("budgets", [{
+        "id": "b-dining", "household_id": HH, "category_code": "OPEX-DINING", "cycle_key": CYCLE,
+        "month": f"{CYCLE}-01", "allocated_amount": 400.0, "spent_amount": 0.0, "is_active": True,
+    }])
+    household.schemas["household_category_settings"] = {"id"}
+    with pytest.raises(Exception):
+        archive_category_for_household(HH, "OPEX-DINING")
+    assert [(r["is_active"], r["allocated_amount"]) for r in _budget_rows(household, "OPEX-DINING")] == [(True, 400.0)]
+
+
+def test_create_custom_category_can_be_retried_after_a_failed_activation(household):
+    from salary_cycle import create_household_custom_category
+
+    household.schemas["household_category_settings"] = {"id"}
+    with pytest.raises(Exception):
+        create_household_custom_category(HH, "PETS", "Pets", ["cat food"])
+    del household.schemas["household_category_settings"]
+    res = create_household_custom_category(HH, "PETS", "Pets", ["cat food"])
+    assert res["code"] == "CUSTOM-PETS"
+    assert len([c for c in household.tables["cost_control_codes"] if c["code"] == "CUSTOM-PETS"]) == 1
+
+
 def test_create_household_custom_category_uses_household_payday(household):
     from salary_cycle import create_household_custom_category
 

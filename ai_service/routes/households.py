@@ -580,15 +580,15 @@ async def toggle_category_endpoint(
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
-    # Switching on writes a setting and budget rows, so only for a system category or one of this
-    # household's own. Switching off only touches the household's own rows and stays open.
-    if req.is_active:
-        try:
-            usable = await asyncio.to_thread(category_usable_by_household, req.category_code, household_id)
-        except Exception as exc:
-            raise safe_error_response(exc, public_message="Failed to toggle category status.")
-        if not usable:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=CATEGORY_FORBIDDEN)
+    # Only a system category or one of this household's own, in both directions: the settings
+    # write is refused by the database trigger (validate_category_code_exists) for any other code,
+    # so answer that with one clean refusal instead of a 500.
+    try:
+        usable = await asyncio.to_thread(category_usable_by_household, req.category_code, household_id)
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to toggle category status.")
+    if not usable:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=CATEGORY_FORBIDDEN)
     try:
         return await asyncio.to_thread(
             toggle_category_status,

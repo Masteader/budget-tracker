@@ -122,8 +122,44 @@ def test_a_household_row_flagged_system_is_not_shared(households):
     assert not category_usable_by_household("CUSTOM-FLAGGED", b.hid)
 
 
-def test_switching_off_is_not_restricted(api, households):
-    """Switching off only touches the household's own rows, so any code may be switched off."""
+@pytest.mark.parametrize("code", ["CUSTOM-SECRET", "CUSTOM-NOWHERE"])
+def test_switching_off_refuses_a_code_the_household_cannot_use(api, households, code):
+    """The database trigger refuses the settings write for such a code; the route answers that
+    with the same clean 403 as switching on, not a 500."""
+    from salary_cycle import CATEGORY_FORBIDDEN
+
     fake, a, _ = households
-    r = _toggle(api, a, "CUSTOM-NOWHERE", False)
+    r = _toggle(api, a, code, False)
+    assert r.status_code == 403 and r.json()["detail"] == CATEGORY_FORBIDDEN
+    assert _rows(fake, "household_category_settings", a.hid, code) == []
+
+
+def test_switching_off_an_own_code_works(api, households):
+    fake, a, _ = households
+    r = _toggle(api, a, "CUSTOM-PETS", False)
     assert r.status_code == 200, r.text
+    assert [s["is_active"] for s in _rows(fake, "household_category_settings", a.hid, "CUSTOM-PETS")] == [False]
+
+
+def test_an_uppercase_household_id_sees_and_edits_its_own_custom_category(households):
+    from types import SimpleNamespace
+    from salary_cycle import add_category_and_budget, get_household_categories
+
+    fake, a, _ = households
+    codes = {c["code"] for c in get_household_categories(a.hid.upper())["active"] + get_household_categories(a.hid.upper())["inactive"]}
+    assert "CUSTOM-PETS" in codes
+    add_category_and_budget(SimpleNamespace(
+        household_id=a.hid.upper(), code="CUSTOM-PETS", category="Pets & Vet", allocated_amount=50.0,
+        keywords=None, is_flexible=False))
+    rows = [c for c in fake.tables["cost_control_codes"] if c["code"] == "CUSTOM-PETS"]
+    assert [(r["household_id"], r["category"]) for r in rows] == [(a.hid, "Pets & Vet")], "edited, not duplicated"
+
+
+def test_match_sub_category_reads_the_household_id_in_canonical_form(households):
+    from salary_cycle import match_sub_category
+
+    fake, a, _ = households
+    fake.seed("cost_control_sub_categories", [
+        {"parent_code": "CUSTOM-PETS", "sub_code": "cat_food", "name_en": "Cat food", "name_ar": "x", "keywords": ["whiskas"]},
+    ])
+    assert match_sub_category("CUSTOM-PETS", "WHISKAS 2kg", household_id=a.hid.upper()) == "cat_food"

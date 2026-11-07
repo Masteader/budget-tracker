@@ -885,7 +885,10 @@ def add_category_and_budget(req: Any) -> Dict[str, Any]:
         .data
         or []
     )
-    own_rows = [r for r in rows if r.get("household_id") == req.household_id]
+    own_rows = [
+        r for r in rows
+        if r.get("household_id") and canonical_household_id(r["household_id"]) == canonical_household_id(req.household_id)
+    ]
     shared_rows = [r for r in rows if r.get("household_id") is None]
     if own_rows:
         # Only this household's own custom definition may be edited.
@@ -998,7 +1001,13 @@ def archive_category_for_household(household_id: str, category_code: str) -> Dic
     target_key = current_cycle["cycle_key"]
     month_start = f"{target_key}-01"
 
-    # 1. Update or create an inactive record in budgets so the UI reliably knows it is inactive
+    # 1. Persist inactive status in household_category_settings first. Categories are NEVER
+    # deleted (even custom categories with zero transactions); they are only deactivated so they
+    # remain available in the Category Library for reactivation. Done before the allocations are
+    # zeroed so a failure here (raised) leaves the category as it was, not active with no budget.
+    toggle_category_status(household_id, category_code, is_active=False)
+
+    # 2. Update or create an inactive record in budgets so the UI reliably knows it is inactive
     existing_budgets = (
         client.table("budgets")
         .select("id")
@@ -1025,11 +1034,6 @@ def archive_category_for_household(household_id: str, category_code: str) -> Dic
             "sub_allocations": {},
         }
         client.table("budgets").insert(insert_data).execute()
-
-    # 2. Persist inactive status in household_category_settings.
-    # Categories are NEVER deleted (even custom categories with zero transactions);
-    # they are only deactivated so they remain available in the Category Library for reactivation.
-    toggle_category_status(household_id, category_code, is_active=False)
 
     return {
         "status": "success",
@@ -1128,7 +1132,10 @@ def rename_sub_category(
             .execute()
             .data or []
         )
-        hh_match = [r for r in existing if r.get("household_id") == household_id]
+        hh_match = [
+            r for r in existing
+            if r.get("household_id") and canonical_household_id(r["household_id"]) == canonical_household_id(household_id)
+        ]
         if hh_match:
             client.table("cost_control_sub_categories").update(update_data).eq("parent_code", parent_code).eq("sub_code", sub_code).eq("household_id", household_id).execute()
         elif existing and any(r.get("household_id") is None for r in existing):
@@ -1334,9 +1341,10 @@ def get_household_categories(household_id: str) -> Dict[str, List[Dict[str, Any]
     all_codes = all_codes_resp.data or []
 
     # Filter for global OR this household, and purge test categories completely
+    own_id = canonical_household_id(household_id)
     hh_codes = [
         c for c in all_codes
-        if (c.get("household_id") is None or c.get("household_id") == household_id)
+        if (c.get("household_id") is None or canonical_household_id(c["household_id"]) == own_id)
         and "test" not in (c.get("code") or "").lower()
         and "test" not in (c.get("category") or "").lower()
     ]
@@ -1479,15 +1487,26 @@ def create_household_custom_category(
     if not clean_code.startswith("CUSTOM-"):
         clean_code = f"CUSTOM-{clean_code}"
 
-    # Insert into cost_control_codes
-    client.table("cost_control_codes").insert({
-        "code": clean_code,
-        "category": category.strip(),
-        "keywords": keywords,
-        "is_flexible": is_flexible,
-        "is_system": False,
-        "household_id": household_id,
-    }).execute()
+    # Insert into cost_control_codes, unless this household already owns the code (a retry after
+    # a failed activation below must not hit the (household_id, code) unique index forever).
+    own = (
+        client.table("cost_control_codes")
+        .select("id")
+        .eq("code", clean_code)
+        .eq("household_id", household_id)
+        .execute()
+        .data
+        or []
+    )
+    if not own:
+        client.table("cost_control_codes").insert({
+            "code": clean_code,
+            "category": category.strip(),
+            "keywords": keywords,
+            "is_flexible": is_flexible,
+            "is_system": False,
+            "household_id": household_id,
+        }).execute()
 
     # Set as active in household_category_settings
     toggle_category_status(household_id, clean_code, is_active=True)

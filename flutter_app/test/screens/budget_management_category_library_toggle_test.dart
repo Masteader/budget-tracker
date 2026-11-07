@@ -98,7 +98,8 @@ void main() {
     await _activateFuelInLibrary(tester, api);
 
     expect(api.toggles, ['OPEX-FUEL=true']);
-    expect(find.text('Failed to update category'), findsOneWidget);
+    // Shown on top of the sheet, not behind it (hitTestable: the user can see and touch it).
+    expect(find.text('Failed to update category').hitTestable(), findsOneWidget);
     expect(find.text('Category "Fuel" activated.'), findsNothing);
     expect(find.text('Library / Inactive (1)'), findsOneWidget, reason: 'Fuel is moved back to the inactive list');
   });
@@ -109,7 +110,7 @@ void main() {
     await _activateFuelInLibrary(tester, api);
 
     expect(api.toggles, ['OPEX-FUEL=true']);
-    expect(find.text('Category "Fuel" activated.'), findsOneWidget);
+    expect(find.text('Category "Fuel" activated.').hitTestable(), findsOneWidget);
     expect(find.text('Failed to update category'), findsNothing);
   });
 }

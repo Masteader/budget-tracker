@@ -3,10 +3,15 @@ import 'package:flutter/material.dart';
 import '../../models/models.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
+import '../app_snackbar.dart';
 
 /// Modal bottom sheet allowing users to view active vs inactive categories,
 /// activate new developer categories from the library, deactivate unused categories,
 /// and add custom root categories for their household.
+///
+/// [onToggle] completes normally on success and throws on failure; the sheet then
+/// moves the category back and says so. The sheet shows these messages itself, on
+/// top of the sheet (a message shown by the screen would sit behind it).
 class CategoryLibrarySheet extends StatefulWidget {
   final List<CategoryItem> activeCategories;
   final List<CategoryItem> inactiveCategories;
@@ -29,6 +34,21 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
   late List<CategoryItem> _activeCategories;
   late List<CategoryItem> _inactiveCategories;
   final Set<String> _processingCodes = {};
+  // A context inside the sheet's own ScaffoldMessenger, for messages shown on top of the sheet.
+  final GlobalKey _bodyKey = GlobalKey();
+
+  void _showResult(CategoryItem item, {required bool activated, required bool ok}) {
+    final ctx = _bodyKey.currentContext;
+    if (!mounted || ctx == null) return;
+    if (!ok) {
+      AppSnackBar.showError(ctx, context.tr('bm_toggle_failed'));
+      return;
+    }
+    AppSnackBar.showSuccess(
+      ctx,
+      context.trArgs(activated ? 'bm_cat_activated' : 'bm_cat_deactivated', {'name': item.name}),
+    );
+  }
 
   @override
   void initState() {
@@ -77,6 +97,7 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
     });
     try {
       await widget.onToggle(item, false);
+      _showResult(item, activated: false, ok: true);
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -86,6 +107,7 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
           }
         });
       }
+      _showResult(item, activated: false, ok: false);
     } finally {
       if (mounted) {
         setState(() => _processingCodes.remove(item.code));
@@ -103,6 +125,7 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
     });
     try {
       await widget.onToggle(item, true);
+      _showResult(item, activated: true, ok: true);
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -112,6 +135,7 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
           }
         });
       }
+      _showResult(item, activated: true, ok: false);
     } finally {
       if (mounted) {
         setState(() => _processingCodes.remove(item.code));
@@ -131,182 +155,190 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
           color: theme.scaffoldBackgroundColor,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: Column(
-          children: [
-            // Handle bar
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: 10, bottom: 6),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            // Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.category_outlined,
-                    color: context.accentText,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    context.tr('category_library'),
-                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const Spacer(),
-                  FilledButton.tonalIcon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: context.primaryButtonBg,
-                      foregroundColor: context.primaryButtonFg,
+        clipBehavior: Clip.antiAlias,
+        // Its own messenger, so the sheet's messages show on top of it.
+        child: ScaffoldMessenger(
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Column(
+              key: _bodyKey,
+              children: [
+                // Handle bar
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 10, bottom: 6),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(2),
                     ),
-                    onPressed: widget.onAddCustom,
-                    icon: const Icon(Icons.add, size: 18),
-                    label: Text(context.tr('cls_custom')),
                   ),
-                ],
-              ),
-            ),
-            // TabBar
-            TabBar(
-              indicatorColor: context.accentText,
-              labelColor: context.accentText,
-              unselectedLabelColor: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-              tabs: [
-                Tab(text: context.trArgs('cls_active_tab', {'count': _activeCategories.length})),
-                Tab(text: context.trArgs('cls_inactive_tab', {'count': _inactiveCategories.length})),
-              ],
-            ),
-            // TabBarView
-            Expanded(
-              child: TabBarView(
-                children: [
-                  // Active Categories List
-                  _activeCategories.isEmpty
-                      ? Center(child: Text(context.tr('cls_no_active')))
-                      : ListView.separated(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _activeCategories.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (ctx, index) {
-                            final item = _activeCategories[index];
-                            final isBusy = _processingCodes.contains(item.code);
-                            return ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: (context.successText).withValues(alpha: 0.15),
-                                child: Icon(
-                                  Icons.check_circle,
-                                  color: context.successText,
-                                  size: 20,
-                                ),
-                              ),
-                              title: Text(
-                                item.name,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                              subtitle: Text(
-                                item.code,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                                ),
-                              ),
-                              trailing: isBusy
-                                  ? const SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    )
-                                  : OutlinedButton(
-                                      onPressed: () => _confirmDeactivate(item),
-                                      style: OutlinedButton.styleFrom(
-                                        visualDensity: VisualDensity.compact,
-                                        foregroundColor: theme.colorScheme.error,
-                                      ),
-                                      child: Text(context.tr('deactivate')),
-                                    ),
-                            );
-                          },
+                ),
+                // Header
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.category_outlined,
+                        color: context.accentText,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        context.tr('category_library'),
+                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      FilledButton.tonalIcon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: context.primaryButtonBg,
+                          foregroundColor: context.primaryButtonFg,
                         ),
-                  // Inactive / Library Categories List
-                  _inactiveCategories.isEmpty
-                      ? Center(child: Text(context.tr('cls_all_active')))
-                      : ListView.separated(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _inactiveCategories.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (ctx, index) {
-                            final item = _inactiveCategories[index];
-                            final isBusy = _processingCodes.contains(item.code);
-                            return ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.08),
-                                child: Icon(
-                                  item.isSystem ? Icons.auto_awesome : Icons.label_outline,
-                                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                                  size: 20,
-                                ),
-                              ),
-                              title: Row(
-                                children: [
-                                  Text(
+                        onPressed: widget.onAddCustom,
+                        icon: const Icon(Icons.add, size: 18),
+                        label: Text(context.tr('cls_custom')),
+                      ),
+                    ],
+                  ),
+                ),
+                // TabBar
+                TabBar(
+                  indicatorColor: context.accentText,
+                  labelColor: context.accentText,
+                  unselectedLabelColor: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  tabs: [
+                    Tab(text: context.trArgs('cls_active_tab', {'count': _activeCategories.length})),
+                    Tab(text: context.trArgs('cls_inactive_tab', {'count': _inactiveCategories.length})),
+                  ],
+                ),
+                // TabBarView
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      // Active Categories List
+                      _activeCategories.isEmpty
+                          ? Center(child: Text(context.tr('cls_no_active')))
+                          : ListView.separated(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _activeCategories.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (ctx, index) {
+                                final item = _activeCategories[index];
+                                final isBusy = _processingCodes.contains(item.code);
+                                return ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: (context.successText).withValues(alpha: 0.15),
+                                    child: Icon(
+                                      Icons.check_circle,
+                                      color: context.successText,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  title: Text(
                                     item.name,
                                     style: const TextStyle(fontWeight: FontWeight.w600),
                                   ),
-                                  if (item.isSystem) ...[
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: context.accentSubtleBg,
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        context.tr('cls_available'),
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: context.accentText,
+                                  subtitle: Text(
+                                    item.code,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                    ),
+                                  ),
+                                  trailing: isBusy
+                                      ? const SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      : OutlinedButton(
+                                          onPressed: () => _confirmDeactivate(item),
+                                          style: OutlinedButton.styleFrom(
+                                            visualDensity: VisualDensity.compact,
+                                            foregroundColor: theme.colorScheme.error,
+                                          ),
+                                          child: Text(context.tr('deactivate')),
                                         ),
-                                      ),
+                                );
+                              },
+                            ),
+                      // Inactive / Library Categories List
+                      _inactiveCategories.isEmpty
+                          ? Center(child: Text(context.tr('cls_all_active')))
+                          : ListView.separated(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _inactiveCategories.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (ctx, index) {
+                                final item = _inactiveCategories[index];
+                                final isBusy = _processingCodes.contains(item.code);
+                                return ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                                    child: Icon(
+                                      item.isSystem ? Icons.auto_awesome : Icons.label_outline,
+                                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                                      size: 20,
                                     ),
-                                  ],
-                                ],
-                              ),
-                              subtitle: Text(
-                                item.code,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                                ),
-                              ),
-                              trailing: isBusy
-                                  ? const SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    )
-                                  : FilledButton(
-                                      onPressed: () => _confirmActivate(item),
-                                      style: FilledButton.styleFrom(
-                                        visualDensity: VisualDensity.compact,
-                                        backgroundColor: context.primaryButtonBg,
-                                        foregroundColor: context.primaryButtonFg,
+                                  ),
+                                  title: Row(
+                                    children: [
+                                      Text(
+                                        item.name,
+                                        style: const TextStyle(fontWeight: FontWeight.w600),
                                       ),
-                                      child: Text(context.tr('activate')),
+                                      if (item.isSystem) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: context.accentSubtleBg,
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            context.tr('cls_available'),
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: context.accentText,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  subtitle: Text(
+                                    item.code,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                                     ),
-                            );
-                          },
-                        ),
-                ],
-              ),
+                                  ),
+                                  trailing: isBusy
+                                      ? const SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      : FilledButton(
+                                          onPressed: () => _confirmActivate(item),
+                                          style: FilledButton.styleFrom(
+                                            visualDensity: VisualDensity.compact,
+                                            backgroundColor: context.primaryButtonBg,
+                                            foregroundColor: context.primaryButtonFg,
+                                          ),
+                                          child: Text(context.tr('activate')),
+                                        ),
+                                );
+                              },
+                            ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

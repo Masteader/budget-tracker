@@ -1315,22 +1315,14 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
             categoryCode: cat.code,
             isActive: isActive,
           );
-          if (!ok) {
-            if (mounted) AppSnackBar.showError(context, context.tr('bm_toggle_failed'));
-            // The sheet moves the category back to where it was when the toggle throws.
-            throw StateError('Category toggle refused for ${cat.code}');
-          }
+          // The sheet shows the result on top of itself and, when this throws, moves the
+          // category back to where it was.
+          if (!ok) throw StateError('Category toggle refused for ${cat.code}');
           if (mounted) {
             context.read<BudgetProvider>().invalidateCategoriesCache();
             setState(() {
               _staticFuture = _loadStaticData();
             });
-            AppSnackBar.showSuccess(
-              context,
-              isActive
-                  ? context.trArgs('bm_cat_activated', {'name': cat.name})
-                  : context.trArgs('bm_cat_deactivated', {'name': cat.name}),
-            );
           }
         },
         onAddCustom: () {
