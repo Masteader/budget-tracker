@@ -103,7 +103,9 @@ class AppSetupTutorDialog extends StatefulWidget {
     HouseholdRoster? roster,
     bool loadMissingRoster = true,
     ValueChanged<TutorAction>? onActionDone,
-    @visibleForTesting TutorNavigator? navigator,
+    // What the buttons open; the real screens when null (a seam for tests,
+    // passed on by the dashboard).
+    TutorNavigator? navigator,
   }) async {
     final SharedPreferences prefs;
     try {
@@ -148,7 +150,7 @@ class _TutorLoader extends StatelessWidget {
       builder: (context, snap) {
         if (!snap.hasData) {
           return Container(
-            constraints: const BoxConstraints(maxWidth: 420, minHeight: 160),
+            constraints: const BoxConstraints(maxWidth: 420, minHeight: 160, maxHeight: 160),
             decoration: BoxDecoration(
               color: context.cardBg,
               borderRadius: BorderRadius.circular(24),
@@ -156,7 +158,7 @@ class _TutorLoader extends StatelessWidget {
             ),
             child: Stack(
               children: [
-                Center(child: CircularProgressIndicator(color: context.accentText)),
+                Center(heightFactor: 1, child: CircularProgressIndicator(color: context.accentText)),
                 PositionedDirectional(
                   top: 8,
                   end: 8,
@@ -201,6 +203,7 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
       'whoPaid': 'nafaqah_q_title',
       'shared': 'nafaqah_w_opt_shared',
       'personal': 'nafaqah_w_opt_personal',
+      'reimburse': 'reimburse_wife',
       'received': 'nafaqah_mark_received',
     },
     'tutor_role_husband_desc': {
@@ -366,12 +369,14 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Hero badge
+              // Hero badge: the deep burgundy hero gradient in both modes,
+              // so the hero text colour keeps its contrast.
               Container(
+                key: const ValueKey('tutor_hero'),
                 width: 82,
                 height: 82,
                 decoration: BoxDecoration(
-                  gradient: context.icedAccentGradient,
+                  gradient: context.icedHeroGradient,
                   borderRadius: BorderRadius.circular(22),
                   boxShadow: [
                     BoxShadow(
@@ -381,7 +386,7 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
                     ),
                   ],
                 ),
-                child: Icon(step.icon, size: 42, color: Colors.white),
+                child: Icon(step.icon, size: 42, color: context.heroText),
               ),
               const SizedBox(height: 18),
               Text(
@@ -479,7 +484,8 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
         border: Border.all(color: context.borderColor, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: context.isDark ? 0.6 : 0.15),
+            color: (context.isDark ? VelvetBurgundyColors.canvasDarkBg : VelvetBurgundyColors.primaryLight)
+                .withValues(alpha: context.isDark ? 0.6 : 0.15),
             blurRadius: 32,
             offset: const Offset(0, 10),
           ),

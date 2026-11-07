@@ -104,6 +104,21 @@ void main() {
     expect(_step(v, TutorStepId.payday).action, TutorAction.payday);
   });
 
+  test('a husband who is not an admin gets his step and the member steps', () {
+    final v = TutorViewer.from(
+      roster: _family(
+        providerId: 'h',
+        members: [_m('a', admin: true), _m('h', self: true, provider: true), _m('w', financialRole: 'spouse')],
+      ),
+      fallbackIsAdmin: true,
+    );
+    expect(v.isAdmin, isFalse);
+    expect(v.roleStep, TutorRoleStep.husband);
+    expect(_step(v, TutorStepId.payday).action, TutorAction.income);
+    expect(_step(v, TutorStepId.budgets).action, isNull);
+    expect(_step(v, TutorStepId.husband).action, TutorAction.accounts);
+  });
+
   test('a roommate gets the roommate step', () {
     final v = TutorViewer.from(
       roster: HouseholdRoster(

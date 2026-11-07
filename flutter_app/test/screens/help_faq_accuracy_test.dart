@@ -1,5 +1,7 @@
 // The Help FAQ answers match what the app does (docs/HOW_IT_WORKS.md) and
 // name the app's buttons exactly, in every language.
+import 'dart:io';
+
 import 'package:budget_tracker/l10n/app_localizations.dart';
 import 'package:budget_tracker/screens/settings/help_support_screen.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +10,12 @@ import 'package:flutter_test/flutter_test.dart';
 import '../support/localized_app.dart';
 
 const _langs = ['en', 'ar', 'ur'];
+
+/// Every FAQ key (question, answer and group title) in the translation file.
+final _faqKeys = RegExp(r"^\s*'(faq_[a-z0-9_]+)'\s*:", multiLine: true)
+    .allMatches(File('lib/l10n/app_localizations.dart').readAsStringSync())
+    .map((m) => m.group(1)!)
+    .toSet();
 
 void main() {
   test('the payday is the household\'s own: only the first answer names the 27th, as the default', () {
@@ -60,9 +68,12 @@ void main() {
       expect(receipts.contains('Gemini') || receipts.toLowerCase().contains('green'), isFalse, reason: lang);
       expect(receipts, isNot(contains('الأخضر')));
       expect(receipts, isNot(contains('سبز')));
+      expect(_faqKeys.length, greaterThan(40));
+      for (final key in _faqKeys) {
+        expect(l.get(key), isNot(contains('400')), reason: '$lang $key names a fixed fee');
+      }
       for (final key in ['faq_bills_a3', 'faq_bills_q2', 'faq_bills_a2', 'faq_cat_bills']) {
         final v = l.get(key);
-        expect(v, isNot(contains('400')), reason: '$lang $key');
         expect(v.toLowerCase(), isNot(contains('green')), reason: '$lang $key');
         expect(v, isNot(contains('الأخضر')), reason: '$lang $key');
         expect(v, isNot(contains('سبز')), reason: '$lang $key');
@@ -70,6 +81,31 @@ void main() {
       expect(l.get('faq_bills_a1'), isNot(contains('Manage Bills')), reason: lang);
     }
     expect(AppLocalizations(const Locale('en')).get('faq_nafaqah_a3'), contains('an admin who is not a wife'));
+  });
+
+  test('only the primary admin chooses to hand over or delete a household', () {
+    final en = AppLocalizations(const Locale('en')).get('faq_privacy_a2');
+    expect(en, contains('primary admin'));
+    expect(en, contains('co-admin'));
+    expect(AppLocalizations(const Locale('ar')).get('faq_privacy_a2'), contains('المشرف الرئيسي'));
+    expect(AppLocalizations(const Locale('ur')).get('faq_privacy_a2'), contains('مرکزی ایڈمن'));
+  });
+
+  test('"Mark as received" is only for money paid outside the app', () {
+    final en = AppLocalizations(const Locale('en'));
+    expect(en.get('faq_nafaqah_a4'), contains('outside the app'));
+    expect(en.get('tutor_role_wife_desc'), contains('outside the app'));
+    expect(en.get('tutor_role_husband_desc'), contains('outside the app'));
+    for (final lang in _langs) {
+      final l = AppLocalizations(Locale(lang));
+      expect(l.get('tutor_role_wife_desc'), contains('{reimburse}'), reason: '$lang: a direct repayment needs nothing from her');
+    }
+  });
+
+  test('Log Prior Spending is described as part of the over-allocation warning', () {
+    expect(AppLocalizations(const Locale('en')).get('tutor_stage_3_desc'), contains('exceed'));
+    expect(AppLocalizations(const Locale('ar')).get('tutor_stage_3_desc'), contains('تتجاوز'));
+    expect(AppLocalizations(const Locale('ur')).get('tutor_stage_3_desc'), contains('زیادہ'));
   });
 
   test('the deletion answer promises no email (rule 04 §6)', () {
@@ -114,6 +150,23 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text(ar.get('faq_cat_privacy')), findsOneWidget);
     expect(find.text(ar.get('faq_cat_salary')), findsNothing);
+  });
+
+  testWidgets('an English search for "delete" finds the deletion question', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(localizedApp(const HelpSupportScreen(), lang: 'en', scaffold: false));
+    await tester.pumpAndSettle();
+    final en = AppLocalizations(const Locale('en'));
+
+    await tester.enterText(find.byType(TextField).first, 'delete');
+    await tester.pumpAndSettle();
+    final topic = find.text(en.get('faq_cat_privacy'));
+    expect(topic, findsOneWidget);
+    await tester.tap(topic);
+    await tester.pumpAndSettle();
+    expect(find.text(en.get('faq_privacy_q2')), findsOneWidget);
   });
 
   testWidgets('the household and wife groups list their new questions', (tester) async {

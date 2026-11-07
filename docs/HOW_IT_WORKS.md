@@ -307,9 +307,9 @@ The budget is meant to spend exactly the money there is. The app checks this in 
 
 - When allocations are over the capacity, **Shrink to Match Cash** scales the variable categories
   down to the cash and leaves fixed ones (rent, utilities) as they are.
-- **Log Prior Spending** (admins) is for a household that joins mid-cycle: it records what was
-  already spent before using the app as an **Opening Spend Adjustment**, so the cycle matches the
-  bank.
+- **Log Prior Spending** (admins, shown with the over-capacity warning above) is for a household
+  that joins mid-cycle: it records what was already spent before using the app as an **Opening
+  Spend Adjustment**, so the cycle matches the bank.
 
 ### Payday check-in and salary distribution
 
@@ -761,9 +761,9 @@ Settings is the last tab of the bottom bar. Its sections fold open and closed:
 |---|---|---|
 | **Payday & Income** | **Set Payday** (the payday editor) and **Record Income** | "Your household's admin sets this up" for the payday; **Record Income** |
 | **Operating Accounts vs. Savings Vaults** | **Set Up Bank & Savings** (Accounts & Balances) | The same |
-| **Envelope Budgeting & Joining Mid-Cycle** | **Configure Envelopes** (Budgets), and **Log Prior Spending** for a household joining mid-cycle | The admin sets the budgets; no button |
+| **Envelope Budgeting & Joining Mid-Cycle** | **Configure Envelopes** (Budgets); for a household joining mid-cycle it names **Log Prior Spending**, which appears when the Budgets tab warns that the allocations exceed the cycle's funding | The admin sets the budgets; no button |
 | **Living Model: Family & Roommates** | **Members & Admins** | The admin sets it up; no button |
-| One step for the role | A wife: "Who paid, and for whom?", her allowance and **Mark as received**. The husband: **Add wife account** on Accounts & Balances (shown before his wife has joined too), **Reimburse Wife**, approve or decline, **Reverse**; its button opens Accounts & Balances. Roommates: **Split Equally (All)** / **Personal (100%)**, **Fewest transfers** and **Settle** | The same |
+| One step for the role | A wife: "Who paid, and for whom?", her allowance, that a repayment he makes with **Reimburse Wife** needs nothing from her, and **Mark as received** only for money he paid her outside the app. The husband: **Add wife account** on Accounts & Balances (shown before his wife has joined too), **Reimburse Wife**, approve or decline, **Reverse**; its button opens Accounts & Balances. Roommates: **Split Equally (All)** / **Personal (100%)**, **Fewest transfers** and **Settle** | The same |
 | **Three Ways to Record** | **Add Expense**: **Voice & AI Assistant**, **Scan Receipt** or **Manual Log**; its button closes the tutor | The same |
 
 - A button closes the tutor first, then opens its screen. Without the household (or when its member
