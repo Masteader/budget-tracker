@@ -216,6 +216,52 @@ def test_create_custom_category_retry_takes_the_corrected_name(household):
     assert [(r["category"], r["keywords"]) for r in rows] == [("Pets", ["cat food"])]
 
 
+def _days_after_payday(monkeypatch):
+    """Nov 5 with payday 10: still cycle 2026-10, while the calendar month is November."""
+    instant = datetime.fromisoformat("2026-11-05T09:00:00+00:00")
+    monkeypatch.setattr(utils, "utc_now", lambda: instant)
+
+
+def test_reactivation_row_is_keyed_by_the_cycle_month_not_the_calendar_month(household, monkeypatch):
+    """budgets is UNIQUE (household_id, month, category_code): a calendar month after payday is the
+    next cycle's month (or the closed cycle's), so the row must use the cycle's own month."""
+    from salary_cycle import toggle_category_status
+
+    _days_after_payday(monkeypatch)
+    household.seed("budgets", [
+        {"id": "b-past", "household_id": HH, "category_code": "OPEX-DINING", "cycle_key": "2026-09",
+         "month": "2026-09-01", "allocated_amount": 300.0, "spent_amount": 0.0, "is_active": False},
+    ])
+    toggle_category_status(HH, "OPEX-DINING", True)
+    rows = {r["cycle_key"]: r["month"] for r in _budget_rows(household, "OPEX-DINING")}
+    assert rows[CYCLE] == f"{CYCLE}-01", rows
+
+
+def test_add_category_row_is_keyed_by_the_cycle_month(household, monkeypatch):
+    from salary_cycle import add_category_and_budget
+
+    _days_after_payday(monkeypatch)
+    add_category_and_budget(SimpleNamespace(household_id=HH, code="OPEX-FUEL", category="Fuel", keywords=None,
+                                            is_flexible=False, allocated_amount=120.0))
+    assert [(r["cycle_key"], r["month"]) for r in _budget_rows(household, "OPEX-FUEL")] == [(CYCLE, f"{CYCLE}-01")]
+
+
+def test_legacy_open_cycle_row_without_a_cycle_key_is_reused(household):
+    """A row keyed only by month is this cycle's row: archive and reactivation reuse it instead of
+    inserting a second one (which the unique month constraint refuses)."""
+    from salary_cycle import archive_category_for_household, toggle_category_status
+
+    household.seed("budgets", [
+        {"id": "b-legacy", "household_id": HH, "category_code": "OPEX-DINING", "cycle_key": None,
+         "month": f"{CYCLE}-01", "allocated_amount": 250.0, "spent_amount": 0.0, "is_active": True},
+    ])
+    archive_category_for_household(HH, "OPEX-DINING")
+    rows = _budget_rows(household, "OPEX-DINING")
+    assert [(r["id"], r["is_active"], r["allocated_amount"]) for r in rows] == [("b-legacy", False, 0.0)]
+    toggle_category_status(HH, "OPEX-DINING", True)
+    assert [r["id"] for r in _budget_rows(household, "OPEX-DINING")] == ["b-legacy"]
+
+
 def test_create_household_custom_category_uses_household_payday(household):
     from salary_cycle import create_household_custom_category
 

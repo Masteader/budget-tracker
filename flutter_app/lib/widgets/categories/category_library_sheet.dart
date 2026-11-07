@@ -18,12 +18,17 @@ class CategoryLibrarySheet extends StatefulWidget {
   final FutureOr<void> Function(CategoryItem category, bool isActive) onToggle;
   final VoidCallback onAddCustom;
 
+  /// Called when the sheet is gone (after its closing animation); from then on the
+  /// sheet can no longer show a result, so the caller shows it.
+  final VoidCallback? onClosed;
+
   const CategoryLibrarySheet({
     super.key,
     required this.activeCategories,
     required this.inactiveCategories,
     required this.onToggle,
     required this.onAddCustom,
+    this.onClosed,
   });
 
   @override
@@ -48,6 +53,12 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
       ctx,
       context.trArgs(activated ? 'bm_cat_activated' : 'bm_cat_deactivated', {'name': item.name}),
     );
+  }
+
+  @override
+  void dispose() {
+    widget.onClosed?.call();
+    super.dispose();
   }
 
   @override

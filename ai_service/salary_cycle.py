@@ -872,6 +872,30 @@ def get_category_owner_households(category_code: str) -> Dict[str, Any]:
     return {"shared": shared, "owners": owners}
 
 
+def cycle_budget_rows(client: Any, household_id: str, category_code: str, cycle_key: str) -> List[Dict[str, Any]]:
+    """
+    The budget rows of (household, category) for one salary cycle: rows keyed by ``cycle_key`` and
+    legacy rows without one whose ``month`` is that cycle's month. budgets is UNIQUE (household_id,
+    month, category_code), so a cycle's row must be found this way before inserting one, and an
+    inserted row uses the cycle's month (``f"{cycle_key}-01"``, as rollover writes it), never the
+    calendar month: after payday the calendar month is another cycle's month.
+    """
+    rows = (
+        client.table("budgets")
+        .select("id, cycle_key, month")
+        .eq("household_id", household_id)
+        .eq("category_code", category_code)
+        .execute()
+        .data
+        or []
+    )
+    month = f"{cycle_key}-01"
+    return [
+        r for r in rows
+        if r.get("cycle_key") == cycle_key or (not r.get("cycle_key") and str(r.get("month") or "")[:10] == month)
+    ]
+
+
 def add_category_and_budget(req: Any) -> Dict[str, Any]:
     from supabase_client import get_client
     client = get_client()
@@ -914,22 +938,14 @@ def add_category_and_budget(req: Any) -> Dict[str, Any]:
     activate_household_category(client, req.household_id, req.code)
 
     current_cycle = current_household_cycle(req.household_id)
-    today = riyadh_today()
-    month_str = today.replace(day=1).isoformat()
+    month_str = f"{current_cycle['cycle_key']}-01"
 
-    existing_b = (
-        client.table("budgets")
-        .select("id")
-        .eq("household_id", req.household_id)
-        .eq("category_code", req.code)
-        .eq("cycle_key", current_cycle["cycle_key"])
-        .execute()
-        .data
-    )
+    existing_b = cycle_budget_rows(client, req.household_id, req.code, current_cycle["cycle_key"])
     if existing_b:
         client.table("budgets").update({
             "allocated_amount": req.allocated_amount,
             "is_active": True,
+            "cycle_key": current_cycle["cycle_key"],
         }).eq("id", existing_b[0]["id"]).execute()
     else:
         budget_payload = {
@@ -1010,21 +1026,16 @@ def archive_category_for_household(household_id: str, category_code: str) -> Dic
     # 2. Return the open cycle's allocation (or create an inactive record for it so the UI
     # reliably knows it is inactive). Past cycles keep their allocations: they are the history
     # the reports compare spending against. The toggle above already marked every row inactive.
-    existing_budgets = (
-        client.table("budgets")
-        .select("id")
-        .eq("household_id", household_id)
-        .eq("category_code", category_code)
-        .eq("cycle_key", target_key)
-        .execute()
-    )
+    existing_budgets = cycle_budget_rows(client, household_id, category_code, target_key)
 
-    if existing_budgets.data:
-        client.table("budgets").update({
-            "is_active": False,
-            "allocated_amount": 0.0,
-            "sub_allocations": {},
-        }).eq("household_id", household_id).eq("category_code", category_code).eq("cycle_key", target_key).execute()
+    if existing_budgets:
+        for row in existing_budgets:
+            client.table("budgets").update({
+                "is_active": False,
+                "allocated_amount": 0.0,
+                "sub_allocations": {},
+                "cycle_key": target_key,
+            }).eq("id", row["id"]).execute()
     else:
         insert_data = {
             "household_id": household_id,
@@ -1453,15 +1464,11 @@ def toggle_category_status(household_id: str, category_code: str, is_active: boo
     if is_active:
         from supabase_client import get_household_payday
         today = riyadh_today()
-        month_str = today.replace(day=1).isoformat()
-        # Salary-cycle key (27th → next month), not the calendar month.
+        # Salary-cycle key (27th → next month), not the calendar month; the row's month is the
+        # cycle's month too (see cycle_budget_rows).
         cycle_key = get_cycle_for_date(today, payday_day=get_household_payday(household_id))["cycle_key"]
-        existing_check = (
-            client.table("budgets").select("id")
-            .eq("household_id", household_id).eq("category_code", category_code).eq("cycle_key", cycle_key)
-            .execute()
-        )
-        if not existing_check.data:
+        month_str = f"{cycle_key}-01"
+        if not cycle_budget_rows(client, household_id, category_code, cycle_key):
             client.table("budgets").insert({
                 "household_id": household_id,
                 "category_code": category_code,
@@ -1545,11 +1552,9 @@ def create_household_custom_category(
                 "is_active": True,
             }).eq("id", existing[0]["id"]).execute()
         else:
-            today = riyadh_today()
-            month_str = today.replace(day=1).isoformat()
             client.table("budgets").insert({
                 "household_id": household_id,
-                "month": month_str,
+                "month": f"{current_cycle['cycle_key']}-01",
                 "cycle_key": current_cycle["cycle_key"],
                 "category_code": clean_code,
                 "allocated_amount": allocated_amount,
@@ -1726,13 +1731,12 @@ def replace_household_category(
     except Exception as exc:
         logger.warning("Could not activate category setting for %s: %s", clean_code, exc)
 
-    # 6. Create new budget envelope with transferred allocation
+    # 6. Create new budget envelope with transferred allocation (the cycle's month, see
+    # cycle_budget_rows)
     try:
-        today = riyadh_today()
-        month_str = today.replace(day=1).isoformat()
         client.table("budgets").insert({
             "household_id": household_id,
-            "month": month_str,
+            "month": f"{cycle_key}-01",
             "cycle_key": cycle_key,
             "category_code": clean_code,
             "allocated_amount": allocated_amount,

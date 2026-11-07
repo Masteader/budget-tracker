@@ -1340,9 +1340,11 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
           Navigator.pop(ctx);
           _showAddCategoryDialog(data);
         },
+        // Closed only once the sheet is gone: during its closing animation it still shows the
+        // result itself, so the screen does not show it a second time.
+        onClosed: () => sheetOpen = false,
       ),
     );
-    sheetOpen = false;
   }
 
   IconData _categoryIconFor(String code) {
