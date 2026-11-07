@@ -187,3 +187,79 @@ def test_sinking_fund_for_a_sub_category_not_sent_is_refused(api, fake_supabase,
     r = _post(api, w, body)
     assert r.status_code == 422, r.text
     assert _rows(fake_supabase, w, body["category_code"]) == []
+
+
+# Leaving sinking_fund out keeps the stored settings, but only those of the sub-categories saved:
+# a stored key with no amount left made the next cycle's rollover take the sinking parent branch.
+_MEAT = {"accumulate": True, "base_amount": 100}
+_DAIRY = {"accumulate": True, "base_amount": 50}
+_PARENT = {"accumulate": True, "base_amount": 300}
+_RECURRING = {"meat": {"due_day": 5}, "ghost": {"due_day": 9}}
+
+
+def _seed_grocery(fake, w, sub_allocations):
+    fake.seed("budgets", [
+        {"id": "b-dec", "household_id": w.hid, "category_code": "OPEX-GROCERY", "cycle_key": "2026-12",
+         "month": "2026-12-01", "allocated_amount": 150.0, "spent_amount": 0.0, "is_active": True,
+         "sub_allocations": sub_allocations},
+    ])
+
+
+def test_parent_only_save_keeps_only_the_stored_parent_sinking_fund(api, fake_supabase, w):
+    _seed_grocery(fake_supabase, w, {
+        "meat": 100, "dairy_eggs": 50,
+        "_sinking_fund": {"meat": _MEAT, "dairy_eggs": _DAIRY, "_parent": _PARENT},
+        "_recurring_config": _RECURRING,
+    })
+    r = _post(api, w, {"category_code": "OPEX-GROCERY", "sub_allocations": {}, "allocated_amount": 300})
+    assert r.status_code == 200, r.text
+    [row] = _rows(fake_supabase, w, "OPEX-GROCERY")
+    assert row["allocated_amount"] == 300.0
+    assert row["sub_allocations"] == {"_sinking_fund": {"_parent": _PARENT}, "_recurring_config": _RECURRING}
+
+
+def test_parent_only_save_drops_a_sinking_fund_left_with_only_stale_sub_keys(api, fake_supabase, w):
+    _seed_grocery(fake_supabase, w, {"meat": 100, "_sinking_fund": {"meat": _MEAT}})
+    r = _post(api, w, {"category_code": "OPEX-GROCERY", "sub_allocations": {}, "allocated_amount": 300})
+    assert r.status_code == 200, r.text
+    [row] = _rows(fake_supabase, w, "OPEX-GROCERY")
+    assert row["allocated_amount"] == 300.0
+    assert row["sub_allocations"] == {}
+
+
+def test_sub_save_drops_the_sinking_fund_of_removed_sub_categories(api, fake_supabase, w):
+    _seed_grocery(fake_supabase, w, {
+        "meat": 100, "dairy_eggs": 50,
+        "_sinking_fund": {"meat": _MEAT, "dairy_eggs": _DAIRY, "_parent": _PARENT},
+        "_recurring_config": _RECURRING,
+    })
+    r = _post(api, w, {"category_code": "OPEX-GROCERY", "sub_allocations": {"meat": 120}})
+    assert r.status_code == 200, r.text
+    [row] = _rows(fake_supabase, w, "OPEX-GROCERY")
+    assert row["allocated_amount"] == 120.0
+    assert row["sub_allocations"] == {
+        "meat": 120.0, "_sinking_fund": {"meat": _MEAT}, "_recurring_config": _RECURRING,
+    }
+
+
+def test_sub_save_removes_the_sinking_fund_when_no_kept_sub_category_has_one(api, fake_supabase, w):
+    _seed_grocery(fake_supabase, w, {"meat": 100, "dairy_eggs": 50, "_sinking_fund": {"dairy_eggs": _DAIRY}})
+    r = _post(api, w, {"category_code": "OPEX-GROCERY", "sub_allocations": {"meat": 100}})
+    assert r.status_code == 200, r.text
+    [row] = _rows(fake_supabase, w, "OPEX-GROCERY")
+    assert row["sub_allocations"] == {"meat": 100.0}
+
+
+def test_a_sent_sinking_fund_replaces_the_stored_one(api, fake_supabase, w):
+    _seed_grocery(fake_supabase, w, {
+        "meat": 100, "dairy_eggs": 50,
+        "_sinking_fund": {"dairy_eggs": _DAIRY, "_parent": _PARENT},
+        "_recurring_config": _RECURRING,
+    })
+    r = _post(api, w, {"category_code": "OPEX-GROCERY", "sub_allocations": {"meat": 100, "dairy_eggs": 50},
+                       "sinking_fund": {"meat": _MEAT}})
+    assert r.status_code == 200, r.text
+    [row] = _rows(fake_supabase, w, "OPEX-GROCERY")
+    assert row["sub_allocations"] == {
+        "meat": 100.0, "dairy_eggs": 50.0, "_sinking_fund": {"meat": _MEAT}, "_recurring_config": _RECURRING,
+    }

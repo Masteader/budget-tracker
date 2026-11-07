@@ -1274,7 +1274,8 @@ def save_sub_allocations(
     Saves sub-category allocations for a category in the specified cycle.
     Automatically sets the parent budget's allocated_amount to the sum of sub-allocations;
     ``allocated_amount`` is the parent amount of a category saved without sub-category amounts.
-    ``sinking_fund`` (when given; ``{}`` clears) replaces ``sub_allocations["_sinking_fund"]``.
+    ``sinking_fund`` (when given; ``{}`` clears) replaces ``sub_allocations["_sinking_fund"]``;
+    left out, the stored one is kept for the sub-categories saved only (``_parent`` without them).
 
     ``_``-prefixed keys are metadata kept in the same JSONB (e.g. ``_recurring_config`` of the
     recurring bills): they are ignored in the input (clients cannot write them), excluded from
@@ -1318,6 +1319,19 @@ def save_sub_allocations(
         metadata = (
             {k: v for k, v in stored.items() if is_allocation_metadata_key(k)} if isinstance(stored, dict) else {}
         )
+        if not incoming_meta and "_sinking_fund" in metadata:
+            # A kept sinking fund keeps only the settings of the sub-categories saved ("_parent" on
+            # a parent-only save): a stale key made the rollover take the sinking parent branch.
+            saved_codes = set(clean_sub_allocations) if clean_sub_allocations else {"_parent"}
+            stored_sinking = metadata["_sinking_fund"]
+            kept_sinking = (
+                {k: v for k, v in stored_sinking.items() if k in saved_codes}
+                if isinstance(stored_sinking, dict) else {}
+            )
+            if kept_sinking:
+                metadata["_sinking_fund"] = kept_sinking
+            else:
+                del metadata["_sinking_fund"]
         # Update allocated_amount and sub_allocations (note: remaining_amount is GENERATED ALWAYS)
         update_data = {
             "allocated_amount": total_allocated,
