@@ -174,7 +174,7 @@ REVOKE TRUNCATE ON public.inquiries FROM anon, authenticated;
 DRIFT_MISSING = ("20261026120000",)
 # Tests that do not need what the drifted database lacks (42 and 43 test that migration's objects).
 DRIFT_TESTS = ("36_", "37_", "38_", "39_", "40_", "41_", "44_", "45_", "46_", "47_", "49_", "50_", "51_", "52_", "53_",
-               "54_", "55_", "56_", "57_", "63_", "64_", "65_", "66_", "67_", "68_", "69_")
+               "54_", "55_", "56_", "57_", "63_", "64_", "65_", "66_", "67_", "68_", "69_", "70_")
 
 # Live as measured read-only on 2026-11-05: exactly these two older files never ran, 000500 and
 # REVOKE TRUNCATE on inquiries did, and cost_control_sub_categories holds 50 rows with no
