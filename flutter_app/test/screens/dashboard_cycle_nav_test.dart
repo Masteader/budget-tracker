@@ -17,6 +17,7 @@ import 'package:budget_tracker/services/account_service.dart';
 import 'package:budget_tracker/services/commitments_service.dart';
 import 'package:budget_tracker/services/salary_cycle_service.dart';
 import 'package:budget_tracker/widgets/dashboard/household_setup_card.dart';
+import 'package:budget_tracker/widgets/dashboard/payday_checkin_banner.dart';
 import 'package:budget_tracker/widgets/dashboard/salary_cycle_selector_bar.dart';
 import '../support/localized_app.dart';
 
@@ -174,5 +175,8 @@ void main() {
     expect(selectorFinder, findsOneWidget);
     final selectorWidget = tester.widget<SalaryCycleSelectorBar>(selectorFinder);
     expect(selectorWidget.currentCycle?.cycleKey, equals(expectedKey));
+
+    // The payday prompt uses the same household payday as the cycle.
+    expect(tester.widget<PaydayCheckinBanner>(find.byType(PaydayCheckinBanner)).paydayDay, equals(10));
   });
 }
