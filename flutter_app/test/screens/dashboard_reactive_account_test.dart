@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:budget_tracker/models/account.dart';
+import 'package:budget_tracker/models/household_setup.dart';
 import 'package:budget_tracker/providers/account_provider.dart';
 import 'package:budget_tracker/providers/budget_provider.dart';
 import 'package:budget_tracker/providers/installment_provider.dart';
@@ -12,6 +13,7 @@ import 'package:budget_tracker/providers/recurring_bills_provider.dart';
 import 'package:budget_tracker/providers/transaction_provider.dart';
 import 'package:budget_tracker/screens/home/dashboard_screen.dart';
 import 'package:budget_tracker/services/salary_cycle_service.dart';
+import 'package:budget_tracker/widgets/dashboard/household_setup_card.dart';
 import '../support/localized_app.dart';
 
 Widget _wrapWithProviders(Widget child, {AccountProvider? accountProvider}) {
@@ -29,10 +31,20 @@ Widget _wrapWithProviders(Widget child, {AccountProvider? accountProvider}) {
 
 void main() {
   setUp(() {
-    // The setup tutor is marked seen: these tests are about the accounts, and
-    // their old "contains 1" check only ever matched the tutor's step badge.
+    // The setup tutor is marked seen: these tests are about the accounts (the
+    // old "contains 1" check only ever matched the tutor's step badge).
     SharedPreferences.setMockInitialValues({'has_seen_setup_tutor_v3': true});
+    // The setup loads (payday 27, no income figure), so the dashboard renders
+    // its hero card and Quick Access instead of the loading placeholder.
+    HouseholdSetupPrefs.loadOverride = (_) async => const HouseholdSetupData(paydayDay: 27, monthlyIncome: 0);
+    addTearDown(() => HouseholdSetupPrefs.loadOverride = null);
   });
+
+  Future<void> settle(WidgetTester tester) async {
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+  }
 
   testWidgets('Dashboard reactively displays AccountProvider operating cash and account counts', (tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
@@ -80,19 +92,19 @@ void main() {
         accountProvider: accountProvider,
       ),
     );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
+    await settle(tester);
 
-    // The dashboard is still loading its setup here, so check it rendered and
-    // follow the provider below.
-    expect(find.byType(BudgetDashboard), findsOneWidget);
-    expect(accountProvider.accounts.length, 1);
+    // The hero shows the operating cash, and Quick Access counts one account.
+    expect(find.text('7,076.00'), findsOneWidget);
+    expect(find.textContaining('(1)'), findsWidgets);
 
-    // Now deduct 100 SAR via AccountProvider mutation
+    // Now deduct 100 SAR via AccountProvider mutation: the hero follows.
     accountProvider.optimisticUpdateBalance('acc-1', 6976.0);
-    await tester.pump();
+    await settle(tester);
 
     expect(accountProvider.operatingCash, equals(6976.0));
+    expect(find.text('6,976.00'), findsOneWidget);
+    expect(find.text('7,076.00'), findsNothing);
   });
 
   testWidgets('Dashboard respects 0.00 SAR operating cash when hasLoaded is true (CRITICAL-03)', (tester) async {
@@ -128,18 +140,27 @@ void main() {
       _wrapWithProviders(
         BudgetDashboard(
           householdId: 'test-hid',
-          budgetStreamOverride: (_) => Stream.value([]),
+          // One budget, so the hero card (not the setup card) is shown.
+          budgetStreamOverride: (_) => Stream.value([
+            {
+              'id': 'b-1',
+              'category_code': 'OPEX-GROCERY',
+              'allocated_amount': 500.0,
+              'spent_amount': 0.0,
+              'is_active': true,
+              'cycle_key': currentCycleKey,
+              'month': '$currentCycleKey-01',
+            }
+          ]),
         ),
         accountProvider: accountProvider,
       ),
     );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
+    await settle(tester);
 
-    // When hasLoaded is true, liveOperatingCash should be 0.00 SAR (operatingCash)
-    // and total accounts count should be 1
-    expect(find.byType(BudgetDashboard), findsOneWidget);
-    expect(accountProvider.accounts.length, 1);
-    expect(accountProvider.operatingCash, equals(0.0));
+    // When hasLoaded is true, the hero shows 0.00 SAR (not a fallback figure)
+    // and Quick Access counts one account.
+    expect(find.text('0.00'), findsOneWidget);
+    expect(find.textContaining('(1)'), findsWidgets);
   });
 }

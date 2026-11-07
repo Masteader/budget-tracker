@@ -20,6 +20,15 @@ import '../support/localized_app.dart';
 
 final _http = FakeSettingsHttpClient();
 
+class _FakeNavigator extends TutorNavigator {
+  final opened = <TutorAction>[];
+
+  @override
+  Future<void> open(BuildContext context, TutorAction action, String householdId) async => opened.add(action);
+}
+
+var _setupLoads = 0;
+
 const _wifeRoster = HouseholdRoster(
   householdId: 'h-1',
   householdType: kHouseholdTypeFamily,
@@ -43,11 +52,15 @@ void main() {
     final originalApi = ApiService.instance;
     ApiService.instance = FakeSettingsApi();
     addTearDown(() => ApiService.instance = originalApi);
-    HouseholdSetupPrefs.loadOverride = (_) async => const HouseholdSetupData(paydayDay: 27, roster: _wifeRoster);
+    _setupLoads = 0;
+    HouseholdSetupPrefs.loadOverride = (_) async {
+      _setupLoads++;
+      return const HouseholdSetupData(paydayDay: 27, roster: _wifeRoster);
+    };
     addTearDown(() => HouseholdSetupPrefs.loadOverride = null);
   });
 
-  Future<void> pumpDashboard(WidgetTester tester) async {
+  Future<void> pumpDashboard(WidgetTester tester, {TutorNavigator? navigator}) async {
     tester.view.physicalSize = const Size(600, 4000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -59,7 +72,11 @@ void main() {
         ChangeNotifierProvider<InstallmentProvider>(create: (_) => InstallmentProvider()),
       ],
       child: localizedApp(
-        BudgetDashboard(householdId: 'h-1', budgetStreamOverride: (_) => Stream.value(const [])),
+        BudgetDashboard(
+          householdId: 'h-1',
+          budgetStreamOverride: (_) => Stream.value(const []),
+          tutorNavigator: navigator,
+        ),
         lang: 'en',
         scaffold: false,
       ),
@@ -85,6 +102,24 @@ void main() {
 
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getBool(AppSetupTutorDialog.prefKey), isTrue);
+    await disposeDashboard(tester);
+  });
+
+  testWidgets('after a tutor action the dashboard reloads its setup', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final navigator = _FakeNavigator();
+    await pumpDashboard(tester, navigator: navigator);
+    final before = _setupLoads;
+    expect(before, greaterThan(0));
+
+    await tester.tap(find.byKey(const ValueKey('tutor_action_income')));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(navigator.opened, [TutorAction.income]);
+    expect(find.byType(AppSetupTutorDialog), findsNothing);
+    expect(_setupLoads, before + 1);
     await disposeDashboard(tester);
   });
 

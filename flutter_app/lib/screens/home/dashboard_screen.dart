@@ -165,9 +165,13 @@ class BudgetDashboard extends StatefulWidget {
     this.householdId,
     @visibleForTesting this.fetchHouseholdIdOverride,
     @visibleForTesting this.budgetStreamOverride,
+    @visibleForTesting this.tutorNavigator,
   });
 
   final String? householdId;
+
+  /// What the setup tutor's buttons open (tests); the real screens otherwise.
+  final TutorNavigator? tutorNavigator;
   final Future<String> Function()? fetchHouseholdIdOverride;
   final Stream<List<Map<String, dynamic>>> Function(String hid)? budgetStreamOverride;
 
@@ -258,7 +262,8 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
 
   /// The setup tutor, once per phone, after the household has loaded so it
   /// shows the steps for the viewer's role (no extra request: the checklist
-  /// already loaded the members).
+  /// already loaded the members). After a step's screen closes (the payday,
+  /// income and so on may have changed), the setup is loaded again.
   void _showTutorOnce(String hid, HouseholdRoster? roster) {
     if (_tutorChecked || !mounted) return;
     _tutorChecked = true;
@@ -267,6 +272,10 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
       householdId: hid,
       roster: roster,
       loadMissingRoster: false,
+      navigator: widget.tutorNavigator,
+      onActionDone: (_) {
+        if (mounted) unawaited(_fetchSetup(hid));
+      },
     ));
   }
 

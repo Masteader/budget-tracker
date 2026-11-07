@@ -24,6 +24,8 @@ class _FakeNavigator extends TutorNavigator {
   }
 }
 
+final _done = <TutorAction>[];
+
 Widget _app({required String? householdId, required _FakeNavigator navigator}) => MaterialApp(
       locale: const Locale('en'),
       supportedLocales: const [Locale('en'), Locale('ar'), Locale('ur')],
@@ -43,6 +45,7 @@ Widget _app({required String? householdId, required _FakeNavigator navigator}) =
                 navigator: navigator,
                 fallbackIsAdmin: true,
                 loadRoster: (_) async => throw StateError('offline'),
+                onActionDone: _done.add,
               ),
               child: const Text('OPEN TUTOR'),
             ),
@@ -74,7 +77,10 @@ Future<void> _pageTo(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    _done.clear();
+  });
 
   for (final action in TutorAction.values) {
     testWidgets('the ${action.name} button closes the tutor and its screen stays open', (tester) async {
@@ -90,6 +96,11 @@ void main() {
       expect(find.text('OPENED ${action.name}'), findsOneWidget);
       expect(navigator.calls, [(action, 'h1')]);
       expect(navigator.seenAtOpen, isTrue, reason: 'the tutor is marked seen before the screen opens');
+      expect(_done, isEmpty, reason: 'reported once the opened screen is closed');
+
+      Navigator.of(tester.element(find.text('OPENED ${action.name}'))).pop();
+      await tester.pumpAndSettle();
+      expect(_done, [action], reason: 'the caller is told an action ran, to refresh what it shows');
     });
   }
 
@@ -115,6 +126,7 @@ void main() {
     expect(find.byType(AppSetupTutorDialog), findsNothing);
 
     expect(navigator.calls, isEmpty);
+    expect(_done, isEmpty);
     expect(find.text('OPEN TUTOR'), findsOneWidget);
   });
 

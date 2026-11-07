@@ -48,12 +48,16 @@ class AppSetupTutorDialog extends StatefulWidget {
   /// step's button asked for. Without a [roster], it loads the household's
   /// members ([loadRoster]) when [loadMissingRoster]; if that fails, the
   /// cached admin flag ([fallbackIsAdmin], else the role provider) decides.
-  static Future<void> show(
+  ///
+  /// Returns the action that ran (null when none did), once its screen has
+  /// closed; [onActionDone] is told the same, so the caller can refresh.
+  static Future<TutorAction?> show(
     BuildContext context, {
     String? householdId,
     HouseholdRoster? roster,
     bool? fallbackIsAdmin,
     bool loadMissingRoster = true,
+    ValueChanged<TutorAction>? onActionDone,
     @visibleForTesting TutorRosterLoader? loadRoster,
     @visibleForTesting TutorNavigator? navigator,
   }) async {
@@ -85,9 +89,11 @@ class AppSetupTutorDialog extends StatefulWidget {
         ),
       ),
     );
-    if (action == null || !hasHousehold && TutorNavigator.needsHousehold(action)) return;
-    if (!context.mounted) return;
+    if (action == null || !hasHousehold && TutorNavigator.needsHousehold(action)) return null;
+    if (!context.mounted) return null;
     await (navigator ?? const TutorNavigator()).open(context, action, householdId ?? '');
+    onActionDone?.call(action);
+    return action;
   }
 
   /// Shows the tutor once per phone (the first time the dashboard opens).
@@ -96,6 +102,7 @@ class AppSetupTutorDialog extends StatefulWidget {
     String? householdId,
     HouseholdRoster? roster,
     bool loadMissingRoster = true,
+    ValueChanged<TutorAction>? onActionDone,
     @visibleForTesting TutorNavigator? navigator,
   }) async {
     final SharedPreferences prefs;
@@ -113,6 +120,7 @@ class AppSetupTutorDialog extends StatefulWidget {
         householdId: householdId,
         roster: roster,
         loadMissingRoster: loadMissingRoster,
+        onActionDone: onActionDone,
         navigator: navigator,
       );
       return true;
