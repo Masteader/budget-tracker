@@ -139,7 +139,12 @@
 -- prepare_account_purge locks pools, then households FOR UPDATE, then the wife accounts of the
 -- person it deletes, and only then closes requests, so a repayment, approval or reversal in flight
 -- either finishes before the purge or waits for it without holding anything the purge needs.
--- transfer_between_accounts locks pools first, then the other accounts in id order, the same way.
+-- transfer_between_accounts locks pools first, then the household (KEY SHARE), then the other
+-- accounts in id order, the same way (review R3C-03: it used to lock both accounts first and take
+-- the household last, through its insert's foreign key, and could deadlock with the purge). A
+-- transaction written on a wife account (her purchase, an edit of its amount or account, its
+-- deletion) takes the household (KEY SHARE) in a BEFORE trigger (trg_wife_account_household_lock),
+-- before the foreign keys and the AFTER triggers (budgets, then the balance) lock anything of it.
 --
 -- The purge (prepare_account_purge, replaced with 001200's body plus two steps): pending requests of
 -- the wife being deleted, and pending requests in households whose husband (provider) is being
@@ -179,6 +184,7 @@
 --   END $$;
 --   DROP TRIGGER trg_accounts_wife_account_guard ON public.accounts;
 --   DROP TRIGGER trg_wife_account_spending ON public.transactions;
+--   DROP TRIGGER trg_wife_account_household_lock ON public.transactions;
 --   DROP POLICY "accounts_select" ON public.accounts;
 --   CREATE POLICY "accounts_select" ON public.accounts
 --       FOR SELECT
@@ -215,6 +221,7 @@
 --     public.archive_wife_account(uuid, uuid, uuid),
 --     public.nafaqah_guard_wife_account_row(),
 --     public.nafaqah_guard_wife_account_spending(),
+--     public.nafaqah_wife_account_household_lock(),
 --     public.nafaqah_may_see_wife_account(uuid, uuid, uuid, uuid),
 --     public.account_deletion_wife_account_recipient(uuid, uuid);
 --   DROP TRIGGER trg_accounts_keep_repayment_history ON public.accounts;
@@ -2018,8 +2025,13 @@ BEGIN
 
     -- Every household whose ledger the purge can reach: theirs, those of the pools they own
     -- (re-owned below), and those of the wife_personal rows deleted below. Pools, then
-    -- households, then budgets, each by id: an expense locks its account (a BEFORE trigger),
-    -- then its household (the foreign key), then its budget, so this order cannot deadlock with it.
+    -- households, then budgets, each by id. An expense takes its household and its account through
+    -- its foreign keys (KEY SHARE, AFTER triggers fired in trigger-name order), then its budget,
+    -- then its account's balance (the AFTER balance trigger locks the account FOR UPDATE); one
+    -- written on a wife account takes the household first, in a BEFORE trigger
+    -- (trg_wife_account_household_lock, review R3C-03), so it holds nothing of that account while it
+    -- waits for this purge. (An edit or a deletion holds its own row first, which this purge may
+    -- delete: PostgreSQL then ends one of the two, as before.)
     SELECT COALESCE(array_agg(DISTINCT s.household_id), '{}') INTO v_lock_hhs
     FROM (
         SELECT m.household_id FROM public.household_memberships m WHERE m.user_id = v_uid
@@ -2041,8 +2053,10 @@ BEGIN
     ORDER BY h.id
     FOR UPDATE;
 
-    -- Then their wife accounts, in id order: a repayment, a reversal or her spending takes the
-    -- household before a personal account too, so nothing holds one of these while waiting for it.
+    -- Then their wife accounts, in id order: a repayment, a reversal, a transfer into one (review
+    -- R3C-03) and a transaction written on one (her spending, its edit or deletion:
+    -- trg_wife_account_household_lock) take the household before the account too, so nothing holds
+    -- one of these while waiting for the household.
     PERFORM 1 FROM public.accounts a
     WHERE a.account_type = 'wife' AND (a.owner_user_id = v_uid OR a.assigned_wife_id = v_uid)
       AND a.household_id = ANY (v_lock_hhs)
@@ -3281,6 +3295,41 @@ CREATE TRIGGER trg_wife_account_spending
     BEFORE INSERT OR UPDATE OF account_id, nafaqah_class, nafaqah_spouse_id, user_id ON public.transactions
     FOR EACH ROW EXECUTE FUNCTION public.nafaqah_guard_wife_account_spending();
 
+-- The lock order on a wife account (review R3C-03): a transaction written on one (her purchase, an
+-- edit of its amount or account, its deletion, or a move onto or off one) takes its household
+-- (KEY SHARE) before the foreign key checks and the AFTER triggers lock anything of the account (its
+-- budget, then its balance), as the purge, the repayments and transfer_between_accounts do, so it
+-- never holds the account while it waits for a purge holding the household. Other accounts are
+-- left as they were.
+CREATE OR REPLACE FUNCTION public.nafaqah_wife_account_household_lock()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_hh uuid;
+BEGIN
+    SELECT a.household_id INTO v_hh
+    FROM public.accounts a
+    WHERE a.account_type = 'wife'
+      AND a.id IN (CASE WHEN TG_OP <> 'INSERT' THEN OLD.account_id END, CASE WHEN TG_OP <> 'DELETE' THEN NEW.account_id END)
+    LIMIT 1;
+    IF v_hh IS NOT NULL THEN
+        PERFORM 1 FROM public.households WHERE id = v_hh FOR KEY SHARE;
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_wife_account_household_lock ON public.transactions;
+CREATE TRIGGER trg_wife_account_household_lock
+    BEFORE INSERT OR DELETE OR UPDATE OF account_id, amount ON public.transactions
+    FOR EACH ROW EXECUTE FUNCTION public.nafaqah_wife_account_household_lock();
+
 -- 20261101000100's guard, with her wife account among the accounts a wife-class row may use.
 CREATE OR REPLACE FUNCTION public.enforce_wife_class_account()
 RETURNS TRIGGER
@@ -3481,7 +3530,8 @@ CREATE POLICY "transactions_insert_household" ON public.transactions
 -- 20261020400000's transfer, with the wife account: an account the caller does not see is no
 -- account (a wife account is not revealed, also not by a refusal), nothing leaves a wife account,
 -- and only its owner or her ledger's managers put money into one (not an archived one). Locks
--- pools first, then the other accounts in id order: the order of the purge and the repayments.
+-- pools first, then the household (KEY SHARE), then the other accounts in id order: the order of
+-- the purge and the repayments (review R3C-03).
 CREATE OR REPLACE FUNCTION public.transfer_between_accounts(
     p_household_id uuid,
     p_from_account_id uuid,
@@ -3532,9 +3582,16 @@ BEGIN
         RAISE EXCEPTION 'Access denied: caller does not belong to specified household' USING ERRCODE = '42501';
     END IF;
 
-    -- Pools first, then the rest, each in id order.
-    PERFORM 1 FROM public.accounts WHERE id IN (p_from_account_id, p_to_account_id)
-    ORDER BY is_shared_pool DESC, id
+    -- Pools first, then the household (KEY SHARE), then the other accounts, each in id order: the
+    -- purge's order (pools, households FOR UPDATE, her wife accounts) and the repayments' (review
+    -- R3C-03). Taking the household only at the insert below, after both accounts, could deadlock
+    -- with a purge holding the household and waiting for her wife account.
+    PERFORM 1 FROM public.accounts WHERE id IN (p_from_account_id, p_to_account_id) AND is_shared_pool
+    ORDER BY id
+    FOR UPDATE;
+    PERFORM 1 FROM public.households WHERE id = p_household_id FOR KEY SHARE;
+    PERFORM 1 FROM public.accounts WHERE id IN (p_from_account_id, p_to_account_id) AND NOT is_shared_pool
+    ORDER BY id
     FOR UPDATE;
     SELECT * INTO v_from_acc FROM public.accounts WHERE id = p_from_account_id;
     SELECT * INTO v_to_acc FROM public.accounts WHERE id = p_to_account_id;
@@ -3777,6 +3834,7 @@ REVOKE ALL ON FUNCTION public.account_deletion_wife_account_recipient(uuid, uuid
 GRANT EXECUTE ON FUNCTION public.account_deletion_wife_account_recipient(uuid, uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.nafaqah_guard_wife_account_row() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.nafaqah_guard_wife_account_spending() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.nafaqah_wife_account_household_lock() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.create_wife_account(uuid, uuid, text, uuid) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.assign_wife_account(uuid, uuid, uuid, uuid) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.archive_wife_account(uuid, uuid, uuid) FROM PUBLIC, anon;
