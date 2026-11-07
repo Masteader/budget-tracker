@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'package:budget_tracker/screens/settings/help_support_screen.dart';
 import 'package:budget_tracker/services/api/base_api_client.dart';
 import 'package:budget_tracker/services/api/support_api_client.dart';
+import 'package:budget_tracker/widgets/onboarding/app_setup_tutor_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _Recorder {
   final List<http.Request> requests = [];
@@ -52,6 +54,32 @@ void main() {
 
     // Verify FAQ items appear
     expect(find.textContaining('Salary Cycle'), findsWidgets);
+  });
+
+  group('Replay opens the setup tutor', () {
+    testWidgets('the Replay card button', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(const MaterialApp(home: HelpSupportScreen()));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Replay'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AppSetupTutorDialog), findsOneWidget);
+    });
+
+    testWidgets('the AppBar play icon', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(const MaterialApp(home: HelpSupportScreen()));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Replay App Guide'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AppSetupTutorDialog), findsOneWidget);
+    });
   });
 
   group('Contact developer', () {

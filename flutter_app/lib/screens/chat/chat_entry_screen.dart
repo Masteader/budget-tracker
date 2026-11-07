@@ -28,7 +28,7 @@ import '../../services/post_commit_sync.dart';
 import '../../services/account_service.dart';
 import '../home/budget_management_screen.dart';
 import '../settings/settings_screen.dart';
-import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
+import '../../widgets/onboarding/app_setup_tutor_dialog.dart';
 
 /// Key under which a preview keeps the exact text it was parsed from.
 const String _previewMessageKey = 'preview_message';
@@ -124,7 +124,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
   void _handleGuidanceAction(String actionId) {
     switch (actionId) {
       case 'open_tutor':
-        UserGuideWalkthroughDialog.show(context);
+        AppSetupTutorDialog.show(context, householdId: _householdId);
         break;
       case 'open_payday':
         Navigator.of(context).push(

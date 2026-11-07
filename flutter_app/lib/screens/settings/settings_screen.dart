@@ -32,7 +32,7 @@ import '../../widgets/settings/reminder_settings_card.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/dispose_on_unmount.dart';
 import '../../widgets/settings/household_switch_sheet.dart';
-import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
+import '../../widgets/onboarding/app_setup_tutor_dialog.dart';
 import '../../widgets/dashboard/household_setup_card.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
@@ -1206,7 +1206,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12),
                       ),
                       trailing: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
-                      onTap: () => UserGuideWalkthroughDialog.show(context),
+                      onTap: () => AppSetupTutorDialog.show(context, householdId: _householdId),
                     ),
                     Divider(color: context.borderColor, height: 1),
                     ListTile(

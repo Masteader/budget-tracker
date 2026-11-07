@@ -46,7 +46,7 @@ import '../../widgets/lazy_indexed_stack.dart';
 import '../settings/settings_screen.dart';
 import '../settings/help_support_screen.dart';
 import '../../widgets/settings/household_switch_sheet.dart';
-import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
+import '../../widgets/onboarding/app_setup_tutor_dialog.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 import '../../core/widgets/widgets.dart';
@@ -206,7 +206,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        UserGuideWalkthroughDialog.showIfFirstTime(context);
+        AppSetupTutorDialog.showIfFirstTime(context);
       }
     });
   }

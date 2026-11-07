@@ -7,7 +7,7 @@ import '../../services/api_service.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
-import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
+import '../../widgets/onboarding/app_setup_tutor_dialog.dart';
 import '../../widgets/settings/settings_section.dart' show isLargeText;
 
 class HelpSupportScreen extends StatefulWidget {
@@ -292,7 +292,7 @@ User: ${widget.userEmail ?? "N/A"}
               color: context.accentText,
             ),
             tooltip: context.tr('support_replay_guide'),
-            onPressed: () => UserGuideWalkthroughDialog.show(context),
+            onPressed: () => AppSetupTutorDialog.show(context, householdId: widget.householdId),
           ),
         ],
         bottom: TabBar(
@@ -382,7 +382,7 @@ User: ${widget.userEmail ?? "N/A"}
           borderRadius: BorderRadius.circular(10),
         ),
       ),
-      onPressed: () => UserGuideWalkthroughDialog.show(context),
+      onPressed: () => AppSetupTutorDialog.show(context, householdId: widget.householdId),
       child: Text(context.tr('support_replay'),
           style: const TextStyle(fontWeight: FontWeight.bold)),
     );
@@ -425,7 +425,7 @@ User: ${widget.userEmail ?? "N/A"}
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      context.tr('support_walkthrough_title'),
+                      context.tr('tutor_title'),
                       style: GoogleFonts.outfit(
                         color: context.textPrimary,
                         fontWeight: FontWeight.bold,

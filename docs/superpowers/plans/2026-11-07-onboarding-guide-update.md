@@ -60,12 +60,12 @@
 - The existing `ui_l10n_guard_test.dart` checks that every key still used exists and that the three languages have the same keys.
 
 **Checklist**
-- [ ] Write the Help replay test (it opens `AppSetupTutorDialog`)
-- [ ] Repoint the four entry points and pass `householdId` where the screen has it
-- [ ] Delete the widget file and its test
-- [ ] Remove the unused `wt*` keys (keep `wt2_tag2`, `wt3_desc`, `wt5_desc`) and `support_walkthrough_title`, and fix `support_walkthrough_desc`
-- [ ] Gates: `flutter analyze` and `flutter test`
-- [ ] Commit `refactor(onboarding): remove the dead walkthrough, open the tutor everywhere`
+- [x] Write the Help replay test (it opens `AppSetupTutorDialog`)
+- [x] Repoint the four entry points and pass `householdId` where the screen has it
+- [x] Delete the widget file and its test
+- [x] Remove the unused `wt*` keys (keep `wt2_tag2`, `wt3_desc`, `wt5_desc`) and `support_walkthrough_title`, and fix `support_walkthrough_desc`
+- [x] Gates: `flutter analyze` and `flutter test`
+- [x] Commit `refactor(onboarding): remove the dead walkthrough, open the tutor everywhere`
 
 **Size:** S. About −420 / +40 lines, 1–2 hours.
 
