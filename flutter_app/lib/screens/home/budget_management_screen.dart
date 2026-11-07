@@ -388,7 +388,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         return buildCarryForwardRow(
           b: Map<String, dynamic>.from(b as Map),
           householdId: householdId,
-          month: _currentMonthStr,
+          // The cycle's month, not the calendar month: budgets is unique per (household, month,
+          // category), and after payday the calendar month is the previous cycle's month.
+          month: '$_currentCycleKey-01',
           cycleKey: _currentCycleKey,
         );
       }).toList();

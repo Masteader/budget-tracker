@@ -1468,7 +1468,12 @@ def toggle_category_status(household_id: str, category_code: str, is_active: boo
         # cycle's month too (see cycle_budget_rows).
         cycle_key = get_cycle_for_date(today, payday_day=get_household_payday(household_id))["cycle_key"]
         month_str = f"{cycle_key}-01"
-        if not cycle_budget_rows(client, household_id, category_code, cycle_key):
+        open_rows = cycle_budget_rows(client, household_id, category_code, cycle_key)
+        for row in open_rows:
+            if not row.get("cycle_key"):
+                # A legacy row of this cycle: key it, the spending triggers match rows by cycle_key.
+                client.table("budgets").update({"cycle_key": cycle_key}).eq("id", row["id"]).execute()
+        if not open_rows:
             client.table("budgets").insert({
                 "household_id": household_id,
                 "category_code": category_code,
@@ -1537,19 +1542,12 @@ def create_household_custom_category(
     # already created that cycle's row, so update it instead of inserting a duplicate row.
     if allocated_amount > 0:
         current_cycle = current_household_cycle(household_id)
-        existing = (
-            client.table("budgets")
-            .select("id")
-            .eq("household_id", household_id)
-            .eq("category_code", clean_code)
-            .eq("cycle_key", current_cycle["cycle_key"])
-            .execute()
-            .data
-        )
+        existing = cycle_budget_rows(client, household_id, clean_code, current_cycle["cycle_key"])
         if existing:
             client.table("budgets").update({
                 "allocated_amount": allocated_amount,
                 "is_active": True,
+                "cycle_key": current_cycle["cycle_key"],
             }).eq("id", existing[0]["id"]).execute()
         else:
             client.table("budgets").insert({
@@ -1731,18 +1729,27 @@ def replace_household_category(
     except Exception as exc:
         logger.warning("Could not activate category setting for %s: %s", clean_code, exc)
 
-    # 6. Create new budget envelope with transferred allocation (the cycle's month, see
-    # cycle_budget_rows)
+    # 6. Give the new code the transferred allocation in this cycle: update its row when it has one
+    # (e.g. a code archived earlier keeps an inactive row), else insert one in the cycle's month
+    # (see cycle_budget_rows).
     try:
-        client.table("budgets").insert({
-            "household_id": household_id,
-            "month": f"{cycle_key}-01",
-            "cycle_key": cycle_key,
-            "category_code": clean_code,
-            "allocated_amount": allocated_amount,
-            "spent_amount": 0.0,
-            "is_active": True,
-        }).execute()
+        existing_new = cycle_budget_rows(client, household_id, clean_code, cycle_key)
+        if existing_new:
+            client.table("budgets").update({
+                "allocated_amount": allocated_amount,
+                "is_active": True,
+                "cycle_key": cycle_key,
+            }).eq("id", existing_new[0]["id"]).execute()
+        else:
+            client.table("budgets").insert({
+                "household_id": household_id,
+                "month": f"{cycle_key}-01",
+                "cycle_key": cycle_key,
+                "category_code": clean_code,
+                "allocated_amount": allocated_amount,
+                "spent_amount": 0.0,
+                "is_active": True,
+            }).execute()
     except Exception as exc:
         logger.warning("Could not insert new budget envelope for %s: %s", clean_code, exc)
 

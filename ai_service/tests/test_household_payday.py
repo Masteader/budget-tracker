@@ -259,7 +259,52 @@ def test_legacy_open_cycle_row_without_a_cycle_key_is_reused(household):
     rows = _budget_rows(household, "OPEX-DINING")
     assert [(r["id"], r["is_active"], r["allocated_amount"]) for r in rows] == [("b-legacy", False, 0.0)]
     toggle_category_status(HH, "OPEX-DINING", True)
-    assert [r["id"] for r in _budget_rows(household, "OPEX-DINING")] == ["b-legacy"]
+    rows = _budget_rows(household, "OPEX-DINING")
+    # Reused and keyed: the spending triggers match rows by cycle_key.
+    assert [(r["id"], r["cycle_key"], r["is_active"]) for r in rows] == [("b-legacy", CYCLE, True)]
+
+
+def test_reactivation_keys_a_legacy_open_cycle_row(household):
+    from salary_cycle import toggle_category_status
+
+    household.seed("budgets", [
+        {"id": "b-legacy", "household_id": HH, "category_code": "OPEX-DINING", "cycle_key": None,
+         "month": f"{CYCLE}-01", "allocated_amount": 0.0, "spent_amount": 0.0, "is_active": False},
+    ])
+    toggle_category_status(HH, "OPEX-DINING", True)
+    assert [(r["id"], r["cycle_key"], r["is_active"]) for r in _budget_rows(household, "OPEX-DINING")] == [
+        ("b-legacy", CYCLE, True)]
+
+
+def test_custom_category_reuses_a_legacy_open_cycle_row(household):
+    from salary_cycle import create_household_custom_category
+
+    household.seed("budgets", [
+        {"id": "b-legacy", "household_id": HH, "category_code": "CUSTOM-PETS", "cycle_key": None,
+         "month": f"{CYCLE}-01", "allocated_amount": 0.0, "spent_amount": 0.0, "is_active": False},
+    ])
+    create_household_custom_category(HH, "PETS", "Pets", ["cat food"], allocated_amount=80.0)
+    rows = _budget_rows(household, "CUSTOM-PETS")
+    assert [(r["id"], r["cycle_key"], r["allocated_amount"]) for r in rows] == [("b-legacy", CYCLE, 80.0)]
+
+
+def test_replace_into_an_archived_custom_code_keeps_the_allocation(household):
+    """Archive leaves an inactive open-cycle row; replacing into that code must update it, not
+    insert a second row (refused by the unique month constraint, and the amount was lost)."""
+    from salary_cycle import replace_household_category
+
+    household.seed("cost_control_codes", [
+        {"id": "c-new", "code": "CUSTOM-NEW", "category": "New", "keywords": [], "household_id": HH, "is_system": False},
+    ])
+    household.seed("budgets", [
+        {"id": "b-dining", "household_id": HH, "category_code": "OPEX-DINING", "cycle_key": CYCLE,
+         "month": f"{CYCLE}-01", "allocated_amount": 400.0, "spent_amount": 0.0, "is_active": True},
+        {"id": "b-new", "household_id": HH, "category_code": "CUSTOM-NEW", "cycle_key": CYCLE,
+         "month": f"{CYCLE}-01", "allocated_amount": 0.0, "spent_amount": 0.0, "is_active": False},
+    ])
+    replace_household_category(HH, "OPEX-DINING", "New", new_code="CUSTOM-NEW", cycle_key=CYCLE)
+    rows = _budget_rows(household, "CUSTOM-NEW")
+    assert [(r["id"], r["is_active"], r["allocated_amount"]) for r in rows] == [("b-new", True, 400.0)]
 
 
 def test_create_household_custom_category_uses_household_payday(household):
