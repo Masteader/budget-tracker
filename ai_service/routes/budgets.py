@@ -360,9 +360,16 @@ async def update_installment_plan_endpoint(plan_id: str, request: Request):
             raise not_found
         return plan.model_dump()
     except HTTPException:
-        # The plan is not there for this caller (gone, or linked to a purchase on a wife account
-        # they do not see: review R3C-01): 404, not a server error.
         raise
+    except TransactionNotFoundError:
+        # A change of amounts rewrites the linked purchase: one the caller does not read, or on a
+        # wife account they do not see (review R3C-01), is not there for them, and neither is the
+        # plan's edit: 404, as for a plan that does not exist.
+        raise not_found
+    except PermissionDeniedError as exc:
+        # Only the purchase's creator or a household admin rewrites it (DB-18, review CHK-02): the
+        # answer creating a plan on it gives.
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:

@@ -466,8 +466,17 @@ class InstallmentService:
         plan_id: str,
         household_id: str,
         req: "InstallmentPlanUpdate",
-        actor_user_id: Optional[str] = None,
+        actor_user_id: Optional[str],
     ) -> Optional[InstallmentPlan]:
+        """
+        Edit plan ``plan_id`` for ``actor_user_id`` (the verified caller, required; the route has
+        already checked they read the plan). The plan's own fields are edited for whoever reads it,
+        as the installment_plans policy lets them. An edit that changes the amounts of a plan linked
+        to a purchase also rewrites that purchase (and so its account's balance): it needs what
+        linking the plan needed (DB-18, review CHK-02), the purchase's creator or a household admin,
+        and a purchase the actor reads on an account they see. Otherwise TransactionNotFoundError or
+        PermissionDeniedError is raised before anything is written, the plan included.
+        """
         sb = supabase_client.get_client()
         res = sb.table("installment_plans").select("*").eq("id", plan_id).eq("household_id", household_id).execute()
         rows = res.data or []
@@ -530,17 +539,14 @@ class InstallmentService:
         new_total = update_dict.get("total_amount", old_total)
 
         if orig_tx_id and (new_monthly != old_monthly or new_total != old_total):
-            # The adjustment rewrites the linked purchase's amount, and so its account's balance: a
-            # purchase on a wife account the caller does not see is not there for them, and neither
-            # is the plan's edit (review R3C-01).
-            if actor_user_id:
-                from household_permissions import wife_account_hidden_from
+            # The adjustment rewrites the linked purchase's amount, and so its account's balance: an
+            # edit of that purchase, for its creator or a household admin only, as creating the plan
+            # (DB-18; review CHK-02: any member who read the plan rewrote another member's purchase or
+            # a wife's advance). A purchase the actor does not read, or one on a wife account they do
+            # not see (review R3C-01), is not there for them. Checked before anything is written.
+            from household_permissions import assert_can_modify_transaction
 
-                linked = (sb.table("transactions").select("account_id").eq("id", orig_tx_id)
-                          .eq("household_id", household_id).limit(1).execute())
-                linked_rows = (linked.data or []) if linked is not None else []
-                if linked_rows and wife_account_hidden_from(household_id, linked_rows[0].get("account_id"), actor_user_id):
-                    return None
+            assert_can_modify_transaction(household_id, str(orig_tx_id), actor_user_id)
             try:
                 cls._adjust_original_transaction(
                     tx_id=orig_tx_id,

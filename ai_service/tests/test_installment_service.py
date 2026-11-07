@@ -171,12 +171,16 @@ def test_installment_update_adjusts_linked_transaction(fake_supabase):
     hid = "f860188e-23b5-4749-b180-868c956151a6"
     tx_id = "tx-12345678-0000-0000-0000-000000000001"
 
+    buyer = "f860188e-0000-4000-8000-0000000000b1"
     fake_supabase.seed("transactions", [{
         "id": tx_id,
         "household_id": hid,
+        "user_id": buyer,
         "amount": 1000.0,
         "notes": "Purchase at Extra",
     }])
+    # The edit rewrites the purchase: its creator edits it (review CHK-02, DB-18).
+    fake_supabase.seed("household_memberships", [{"user_id": buyer, "household_id": hid, "role": "member"}])
 
     plan_req = InstallmentPlanCreate(
         household_id=hid,
@@ -205,6 +209,7 @@ def test_installment_update_adjusts_linked_transaction(fake_supabase):
         plan_id=plan.id,
         household_id=hid,
         req=update_req,
+        actor_user_id=buyer,
     )
     assert updated_plan is not None
     assert updated_plan.monthly_amount == 300.0
