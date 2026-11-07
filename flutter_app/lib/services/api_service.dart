@@ -513,12 +513,16 @@ class ApiService {
     required String categoryCode,
     required Map<String, dynamic> subAllocations,
     String? cycleKey,
+    double? allocatedAmount,
+    Map<String, dynamic>? sinkingFund,
   }) =>
       budget.saveSubAllocations(
         householdId: householdId,
         categoryCode: categoryCode,
         subAllocations: subAllocations,
         cycleKey: cycleKey,
+        allocatedAmount: allocatedAmount,
+        sinkingFund: sinkingFund,
       );
 
   Future<Map<String, dynamic>> addSubCategory({

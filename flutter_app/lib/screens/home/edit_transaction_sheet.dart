@@ -347,7 +347,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     final code = widget.transaction.categoryCode;
     if (code == null || code.isEmpty || !_unbudgetedInOpenCycle) return;
     final activate = widget.activateCategoryBudget ?? activateAndBudgetCategory;
-    final saved = await activate(context, widget.transaction.householdId, code);
+    // The expense's own cycle (the one just checked is open), so a stale
+    // cached cycle cannot send the budget into a closed one.
+    final saved = await activate(context, widget.transaction.householdId, code, widget.transaction.cycleKey);
     if (saved && mounted) await _loadBudgetCoverage();
   }
 

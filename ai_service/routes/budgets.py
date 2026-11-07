@@ -458,6 +458,11 @@ async def set_sub_allocations(
             category_code=req.category_code,
             sub_allocations=req.sub_allocations,
             cycle_key=req.cycle_key,
+            allocated_amount=req.allocated_amount,
+            sinking_fund=(
+                {code: entry.model_dump() for code, entry in req.sinking_fund.items()}
+                if req.sinking_fund is not None else None
+            ),
         )
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to save sub-allocations.")

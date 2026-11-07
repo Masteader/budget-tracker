@@ -4,18 +4,19 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../l10n/app_localizations.dart';
 import '../../main.dart' show supabase;
 import '../../models/budget_coverage.dart';
-import '../../services/salary_cycle_service.dart';
 import '../../theme/app_themes.dart';
 import '../sub_budget_allocation_dialog.dart';
 
 /// Reads which categories have an active budget in which cycle.
 typedef BudgetCoverageLoader = Future<BudgetCoverage> Function(String householdId);
 
-/// Gives [categoryCode] a budget; true when one was saved.
+/// Gives [categoryCode] a budget in [cycleKey] (the expense's own cycle, or
+/// null for the household's open cycle); true when one was saved.
 typedef CategoryBudgetActivator = Future<bool> Function(
   BuildContext context,
   String householdId,
   String categoryCode,
+  String? cycleKey,
 );
 
 /// The household's budget rows (members read their household's budgets).
@@ -27,16 +28,26 @@ Future<BudgetCoverage> loadBudgetCoverage(String householdId) async {
   return BudgetCoverage.fromRows((rows as List).map((r) => Map<String, dynamic>.from(r as Map)));
 }
 
-/// The existing budget dialog for [categoryCode] in the open cycle. Saving it
-/// gives the category a budget and makes it active; what the cycle already
-/// spent in it counts in that budget at once (migration 20261105001000).
-Future<bool> activateAndBudgetCategory(BuildContext context, String householdId, String categoryCode) async {
+/// The existing budget dialog for [categoryCode] in the expense's cycle.
+/// Saving it gives the category a budget and makes it active; what the cycle
+/// already spent in it counts in that budget at once (migration 20261105001000).
+///
+/// [cycleKey] is the expense's own `cycle_key`, which the server set and the
+/// caller checked is the open cycle. Without one, none is sent and the server
+/// resolves the household's payday cycle. The phone's cached cycles are not
+/// used: they can be stale after payday and would save into a closed cycle.
+Future<bool> activateAndBudgetCategory(
+  BuildContext context,
+  String householdId,
+  String categoryCode,
+  String? cycleKey,
+) async {
   final saved = await SubBudgetAllocationDialog.show(
     context,
     householdId: householdId,
     categoryCode: categoryCode,
     categoryName: context.trCat(categoryCode),
-    cycleKey: SalaryCycleService.currentCycle().key,
+    cycleKey: cycleKey != null && cycleKey.isNotEmpty ? cycleKey : null,
   );
   return saved == true;
 }

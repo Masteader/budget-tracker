@@ -1267,10 +1267,15 @@ def save_sub_allocations(
     category_code: str,
     sub_allocations: Dict[str, float],
     cycle_key: Optional[str] = None,
+    allocated_amount: Optional[float] = None,
+    sinking_fund: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Saves sub-category allocations for a category in the specified cycle.
-    Automatically sets the parent budget's allocated_amount to the sum of sub-allocations.
+    Automatically sets the parent budget's allocated_amount to the sum of sub-allocations;
+    ``allocated_amount`` is the parent amount of a category saved without sub-category amounts.
+    ``sinking_fund`` (when given; ``{}`` clears) replaces ``sub_allocations["_sinking_fund"]``;
+    left out, the stored one is kept for the sub-categories saved only (``_parent`` without them).
 
     ``_``-prefixed keys are metadata kept in the same JSONB (e.g. ``_recurring_config`` of the
     recurring bills): they are ignored in the input (clients cannot write them), excluded from
@@ -1281,7 +1286,10 @@ def save_sub_allocations(
     target_key = cycle_key or current_household_cycle(household_id)["cycle_key"]
 
     clean_sub_allocations = numeric_sub_allocations(sub_allocations)
-    total_allocated = round(sum(clean_sub_allocations.values()), 2)
+    if allocated_amount is not None and not clean_sub_allocations:
+        total_allocated = round(float(allocated_amount), 2)
+    else:
+        total_allocated = round(sum(clean_sub_allocations.values()), 2)
 
     client = get_client()
     activate_household_category(client, household_id, category_code)
@@ -1300,7 +1308,9 @@ def save_sub_allocations(
     
     month_start = f"{target_key}-01"
     
-    incoming_sinking = sub_allocations.get("_sinking_fund") if isinstance(sub_allocations, dict) else None
+    incoming_sinking = sinking_fund if sinking_fund is not None else (
+        sub_allocations.get("_sinking_fund") if isinstance(sub_allocations, dict) else None
+    )
     incoming_meta = {"_sinking_fund": incoming_sinking} if isinstance(incoming_sinking, dict) else {}
 
     if matching:
@@ -1309,6 +1319,19 @@ def save_sub_allocations(
         metadata = (
             {k: v for k, v in stored.items() if is_allocation_metadata_key(k)} if isinstance(stored, dict) else {}
         )
+        if not incoming_meta and "_sinking_fund" in metadata:
+            # A kept sinking fund keeps only the settings of the sub-categories saved ("_parent" on
+            # a parent-only save): a stale key made the rollover take the sinking parent branch.
+            saved_codes = set(clean_sub_allocations) if clean_sub_allocations else {"_parent"}
+            stored_sinking = metadata["_sinking_fund"]
+            kept_sinking = (
+                {k: v for k, v in stored_sinking.items() if k in saved_codes}
+                if isinstance(stored_sinking, dict) else {}
+            )
+            if kept_sinking:
+                metadata["_sinking_fund"] = kept_sinking
+            else:
+                del metadata["_sinking_fund"]
         # Update allocated_amount and sub_allocations (note: remaining_amount is GENERATED ALWAYS)
         update_data = {
             "allocated_amount": total_allocated,
