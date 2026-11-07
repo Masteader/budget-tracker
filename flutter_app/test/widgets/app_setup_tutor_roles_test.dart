@@ -9,6 +9,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -62,7 +63,7 @@ final _rosters = <String, HouseholdRoster>{
 
 class _NoNavigator extends TutorNavigator {
   @override
-  Future<void> open(BuildContext context, TutorAction action, String householdId) async {}
+  Future<void> open(BuildContext context, TutorAction action, String householdId, {int? paydayDay}) async {}
 }
 
 Widget _app({
@@ -275,7 +276,16 @@ void main() {
               size: const Size(640, 1136),
             );
             expect(tester.takeException(), isNull);
-            await _walk(tester, onPage: (_) => expect(tester.takeException(), isNull));
+            await _walk(tester, onPage: (page) {
+              expect(tester.takeException(), isNull);
+              // No text in the tutor is cut off: the step badge, the step
+              // itself and the footer buttons (review R2-4).
+              for (final p in tester.renderObjectList<RenderParagraph>(
+                find.descendant(of: find.byType(AppSetupTutorDialog), matching: find.byType(RichText)),
+              )) {
+                expect(p.didExceedMaxLines, isFalse, reason: 'page $page: "${p.text.toPlainText()}" is cut off');
+              }
+            });
             expect(tester.takeException(), isNull);
           });
         }

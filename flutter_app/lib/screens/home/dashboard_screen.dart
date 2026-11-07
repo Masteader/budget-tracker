@@ -264,19 +264,41 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
   /// shows the steps for the viewer's role (no extra request: the checklist
   /// already loaded the members). After a step's screen closes (the payday,
   /// income and so on may have changed), the setup is loaded again.
+  ///
+  /// If another screen or sheet is on top when the household has loaded (a
+  /// slow network), it waits until the dashboard is showing again.
   void _showTutorOnce(String hid, HouseholdRoster? roster) {
     if (_tutorChecked || !mounted) return;
+    if (ModalRoute.isCurrentOf(context) == false) {
+      _tutorWaiting = (hid, roster);
+      return;
+    }
     _tutorChecked = true;
+    _tutorWaiting = null;
     unawaited(AppSetupTutorDialog.showIfFirstTime(
       context,
       householdId: hid,
       roster: roster,
       loadMissingRoster: false,
+      paydayDay: _setup?.paydayDay,
       navigator: widget.tutorNavigator,
       onActionDone: (_) {
         if (mounted) unawaited(_fetchSetup(hid));
       },
     ));
+  }
+
+  /// The first-run tutor waiting for the dashboard to be on top again.
+  (String, HouseholdRoster?)? _tutorWaiting;
+
+  /// Called from build: once the dashboard's route is current again.
+  void _retryWaitingTutor() {
+    final waiting = _tutorWaiting;
+    if (waiting == null || _tutorChecked) return;
+    _tutorWaiting = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _showTutorOnce(waiting.$1, waiting.$2);
+    });
   }
 
   Future<void> _fetchCycles(String hid) async {
@@ -557,6 +579,10 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    // Depends on whether the route is current, so this runs again when a
+    // screen on top of the dashboard closes.
+    final routeIsCurrent = ModalRoute.isCurrentOf(context) ?? true;
+    if (_tutorWaiting != null && routeIsCurrent) _retryWaitingTutor();
     return FutureBuilder<String>(
       future: _householdId,
       builder: (context, snap) {

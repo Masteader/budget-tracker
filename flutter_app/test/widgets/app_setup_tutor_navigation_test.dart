@@ -11,10 +11,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 class _FakeNavigator extends TutorNavigator {
   final calls = <(TutorAction, String)>[];
   bool? seenAtOpen;
+  int? paydayAtOpen;
 
   @override
-  Future<void> open(BuildContext context, TutorAction action, String householdId) async {
+  Future<void> open(BuildContext context, TutorAction action, String householdId, {int? paydayDay}) async {
     calls.add((action, householdId));
+    paydayAtOpen = paydayDay;
     final prefs = await SharedPreferences.getInstance();
     seenAtOpen = prefs.getBool(AppSetupTutorDialog.prefKey);
     if (!context.mounted) return;
@@ -44,6 +46,7 @@ Widget _app({required String? householdId, required _FakeNavigator navigator}) =
                 householdId: householdId,
                 navigator: navigator,
                 fallbackIsAdmin: true,
+                paydayDay: 25,
                 loadRoster: (_) async => throw StateError('offline'),
                 onActionDone: _done.add,
               ),
@@ -96,6 +99,7 @@ void main() {
       expect(find.text('OPENED ${action.name}'), findsOneWidget);
       expect(navigator.calls, [(action, 'h1')]);
       expect(navigator.seenAtOpen, isTrue, reason: 'the tutor is marked seen before the screen opens');
+      expect(navigator.paydayAtOpen, 25, reason: "the household's payday is passed on (review R2-2)");
       expect(_done, isEmpty, reason: 'reported once the opened screen is closed');
 
       Navigator.of(tester.element(find.text('OPENED ${action.name}'))).pop();

@@ -1,5 +1,7 @@
 // The dashboard opens the setup tutor once per phone, after the household has
 // loaded, with the steps for the viewer's role.
+import 'dart:async';
+
 import 'package:budget_tracker/models/household_membership.dart';
 import 'package:budget_tracker/models/household_setup.dart';
 import 'package:budget_tracker/providers/budget_provider.dart';
@@ -24,7 +26,7 @@ class _FakeNavigator extends TutorNavigator {
   final opened = <TutorAction>[];
 
   @override
-  Future<void> open(BuildContext context, TutorAction action, String householdId) async => opened.add(action);
+  Future<void> open(BuildContext context, TutorAction action, String householdId, {int? paydayDay}) async => opened.add(action);
 }
 
 var _setupLoads = 0;
@@ -120,6 +122,39 @@ void main() {
     expect(navigator.opened, [TutorAction.income]);
     expect(find.byType(AppSetupTutorDialog), findsNothing);
     expect(_setupLoads, before + 1);
+    await disposeDashboard(tester);
+  });
+
+  testWidgets('a slow first load does not open the tutor over another screen; it opens on return', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final setup = Completer<HouseholdSetupData>();
+    HouseholdSetupPrefs.loadOverride = (_) => setup.future;
+    await pumpDashboard(tester);
+    expect(find.byType(AppSetupTutorDialog), findsNothing);
+
+    // The person opens another screen before the household has loaded.
+    unawaited(tester.state<NavigatorState>(find.byType(Navigator)).push(MaterialPageRoute<void>(
+      builder: (_) => const Scaffold(body: Text('OTHER SCREEN')),
+    )));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    setup.complete(const HouseholdSetupData(paydayDay: 27, roster: _wifeRoster));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(find.text('OTHER SCREEN'), findsOneWidget);
+    expect(find.byType(AppSetupTutorDialog), findsNothing);
+    expect((await SharedPreferences.getInstance()).getBool(AppSetupTutorDialog.prefKey), isNot(true),
+        reason: 'not marked seen while it was not shown');
+
+    // Back on the dashboard, it opens.
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(find.byType(AppSetupTutorDialog), findsOneWidget);
+    expect((await SharedPreferences.getInstance()).getBool(AppSetupTutorDialog.prefKey), isTrue);
     await disposeDashboard(tester);
   });
 

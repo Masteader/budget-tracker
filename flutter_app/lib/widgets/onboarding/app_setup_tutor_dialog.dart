@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -57,6 +59,7 @@ class AppSetupTutorDialog extends StatefulWidget {
     HouseholdRoster? roster,
     bool? fallbackIsAdmin,
     bool loadMissingRoster = true,
+    int? paydayDay,
     ValueChanged<TutorAction>? onActionDone,
     @visibleForTesting TutorRosterLoader? loadRoster,
     @visibleForTesting TutorNavigator? navigator,
@@ -76,6 +79,10 @@ class AppSetupTutorDialog extends StatefulWidget {
       return TutorViewer.from(roster: r, fallbackIsAdmin: fallback);
     }
 
+    // Made once: a rebuild above the navigator rebuilds the dialog, and must
+    // not ask for the member list again (review R2-3).
+    final viewerFuture =
+        roster != null ? Future.value(TutorViewer.from(roster: roster, fallbackIsAdmin: fallback)) : viewer();
     final action = await showDialog<TutorAction>(
       context: context,
       barrierDismissible: true,
@@ -83,25 +90,37 @@ class AppSetupTutorDialog extends StatefulWidget {
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         child: _TutorLoader(
-          viewer: roster != null ? Future.value(TutorViewer.from(roster: roster, fallbackIsAdmin: fallback)) : viewer(),
+          viewer: viewerFuture,
           householdId: householdId,
           onClose: (action) => Navigator.of(ctx).pop(action),
         ),
       ),
     );
+    // Seen however it closed: a button, the barrier or back.
+    await _markSeen();
     if (action == null || !hasHousehold && TutorNavigator.needsHousehold(action)) return null;
     if (!context.mounted) return null;
-    await (navigator ?? const TutorNavigator()).open(context, action, householdId ?? '');
+    await (navigator ?? const TutorNavigator()).open(context, action, householdId ?? '', paydayDay: paydayDay);
     onActionDone?.call(action);
     return action;
   }
 
+  static Future<void> _markSeen() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(prefKey, true);
+    } catch (_) {}
+  }
+
   /// Shows the tutor once per phone (the first time the dashboard opens).
+  /// Returns whether it was shown; it is neither shown nor marked seen while
+  /// another screen or sheet is on top of [context]'s route.
   static Future<bool> showIfFirstTime(
     BuildContext context, {
     String? householdId,
     HouseholdRoster? roster,
     bool loadMissingRoster = true,
+    int? paydayDay,
     ValueChanged<TutorAction>? onActionDone,
     // What the buttons open; the real screens when null (a seam for tests,
     // passed on by the dashboard).
@@ -114,7 +133,7 @@ class AppSetupTutorDialog extends StatefulWidget {
       return false;
     }
     final hasSeen = prefs.getBool(prefKey) ?? false;
-    if (!hasSeen && context.mounted) {
+    if (!hasSeen && context.mounted && ModalRoute.of(context)?.isCurrent != false) {
       await prefs.setBool(prefKey, true);
       if (!context.mounted) return false;
       await show(
@@ -122,6 +141,7 @@ class AppSetupTutorDialog extends StatefulWidget {
         householdId: householdId,
         roster: roster,
         loadMissingRoster: loadMissingRoster,
+        paydayDay: paydayDay,
         onActionDone: onActionDone,
         navigator: navigator,
       );
@@ -333,17 +353,16 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
     }
   }
 
-  /// Marks the tutor seen, then closes it with [action].
-  Future<void> _close(TutorAction? action) async {
-    if (_closing) return;
+  /// Closes the tutor with [action] at once and marks it seen (not awaited:
+  /// [AppSetupTutorDialog.show] awaits the flag on every way out). Nothing
+  /// happens once its route has already been closed by the barrier or back,
+  /// so a late close never pops the screen underneath (review R2-1).
+  void _close(TutorAction? action) {
+    if (_closing || !mounted) return;
+    if (ModalRoute.of(context)?.isCurrent == false) return;
     _closing = true;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(AppSetupTutorDialog.prefKey, true);
-    } catch (_) {}
-    if (mounted) {
-      widget.onClose?.call(action);
-    }
+    unawaited(AppSetupTutorDialog._markSeen());
+    widget.onClose?.call(action);
   }
 
   ButtonStyle get _primaryStyle => ElevatedButton.styleFrom(
@@ -472,6 +491,74 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
     );
   }
 
+  /// Skip / Previous and Next / Finish. Their labels wrap instead of being
+  /// cut off; at large text the two buttons stack, each the full width.
+  Widget _footer(int count, bool isLast) {
+    final back = TextButton(
+      key: ValueKey(_currentPage > 0 ? 'tutor_prev' : 'tutor_skip'),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      onPressed: _currentPage > 0 ? _prev : () => _close(null),
+      child: Text(
+        context.tr(_currentPage > 0 ? 'tutor_btn_prev' : 'tutor_btn_skip'),
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: context.textSecondary,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+          fontFamilyFallback: VelvetBurgundyTheme.arabicFallback,
+        ),
+      ),
+    );
+    final next = ElevatedButton(
+      key: const ValueKey('tutor_next'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: context.primaryButtonBg,
+        foregroundColor: context.primaryButtonFg,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        elevation: 0,
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      onPressed: () => _next(count),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              context.tr(isLast ? 'tutor_btn_finish' : 'tutor_btn_next'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                fontFamilyFallback: VelvetBurgundyTheme.arabicFallback,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(isLast ? Icons.check_circle_rounded : Icons.arrow_forward_rounded, size: 14),
+        ],
+      ),
+    );
+    if (MediaQuery.textScalerOf(context).scale(12) > 18) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [next, const SizedBox(height: 6), back],
+      );
+    }
+    return Row(
+      children: [
+        Flexible(child: back),
+        const SizedBox(width: 8),
+        Expanded(child: Align(alignment: AlignmentDirectional.centerEnd, child: next)),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final steps = _steps;
@@ -500,28 +587,29 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
               padding: const EdgeInsetsDirectional.fromSTEB(20, 16, 12, 4),
               child: Row(
                 children: [
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                      decoration: BoxDecoration(
-                        gradient: context.icedHeroGradient,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        context.trArgs('tutor_step_badge', {
-                          'current': '${_currentPage + 1}',
-                          'total': '${steps.length}',
-                        }),
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.outfit(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: context.heroText,
+                  Expanded(
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                        decoration: BoxDecoration(
+                          gradient: context.icedHeroGradient,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          context.trArgs('tutor_step_badge', {
+                            'current': '${_currentPage + 1}',
+                            'total': '${steps.length}',
+                          }),
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: context.heroText,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                  const Spacer(),
                   IconButton(
                     tooltip: context.tr('close'),
                     icon: Icon(Icons.close_rounded, color: context.textSecondary, size: 20),
@@ -562,68 +650,7 @@ class _AppSetupTutorDialogState extends State<AppSetupTutorDialog> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Flexible(
-                        child: TextButton(
-                          key: ValueKey(_currentPage > 0 ? 'tutor_prev' : 'tutor_skip'),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          onPressed: _currentPage > 0 ? _prev : () => _close(null),
-                          child: Text(
-                            context.tr(_currentPage > 0 ? 'tutor_btn_prev' : 'tutor_btn_skip'),
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: context.textSecondary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                              fontFamilyFallback: VelvetBurgundyTheme.arabicFallback,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Align(
-                          alignment: AlignmentDirectional.centerEnd,
-                          child: ElevatedButton(
-                            key: const ValueKey('tutor_next'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: context.primaryButtonBg,
-                              foregroundColor: context.primaryButtonFg,
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              elevation: 0,
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            onPressed: () => _next(steps.length),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    context.tr(isLast ? 'tutor_btn_finish' : 'tutor_btn_next'),
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                      fontFamilyFallback: VelvetBurgundyTheme.arabicFallback,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Icon(isLast ? Icons.check_circle_rounded : Icons.arrow_forward_rounded, size: 14),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                  _footer(steps.length, isLast),
                 ],
               ),
             ),
