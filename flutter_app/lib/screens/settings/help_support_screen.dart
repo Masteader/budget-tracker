@@ -96,6 +96,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
         _FaqItem(questionKey: 'faq_nafaqah_q1', answerKey: 'faq_nafaqah_a1'),
         _FaqItem(questionKey: 'faq_nafaqah_q2', answerKey: 'faq_nafaqah_a2'),
         _FaqItem(questionKey: 'faq_nafaqah_q3', answerKey: 'faq_nafaqah_a3'),
+        _FaqItem(questionKey: 'faq_nafaqah_q4', answerKey: 'faq_nafaqah_a4'),
       ],
     ),
     _FaqCategory(
@@ -133,6 +134,17 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
       faqs: const [
         _FaqItem(questionKey: 'faq_household_q1', answerKey: 'faq_household_a1'),
         _FaqItem(questionKey: 'faq_household_q2', answerKey: 'faq_household_a2'),
+        _FaqItem(questionKey: 'faq_household_q3', answerKey: 'faq_household_a3'),
+        _FaqItem(questionKey: 'faq_household_q4', answerKey: 'faq_household_a4'),
+      ],
+    ),
+    _FaqCategory(
+      titleKey: 'faq_cat_privacy',
+      icon: Icons.lock_outline_rounded,
+      color: context.accentText,
+      faqs: const [
+        _FaqItem(questionKey: 'faq_privacy_q1', answerKey: 'faq_privacy_a1'),
+        _FaqItem(questionKey: 'faq_privacy_q2', answerKey: 'faq_privacy_a2'),
       ],
     ),
   ];

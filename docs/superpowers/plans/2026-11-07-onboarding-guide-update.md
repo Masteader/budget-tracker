@@ -265,11 +265,11 @@
 - `help_support_screen_test.dart`: the privacy group and its two questions are listed (ar), and a search for the en word "delete" finds `faq_privacy_q2`.
 
 **Checklist**
-- [ ] Write the accuracy tests and see them fail
-- [ ] Rewrite the changed FAQ values in en, ar and ur
-- [ ] Add the five FAQs and the privacy group
-- [ ] Gates: `flutter analyze` and `flutter test`
-- [ ] Commit `fix(help): accurate FAQ answers and new FAQs on roles, accounts, repayments, privacy and deletion`
+- [x] Write the accuracy tests and see them fail
+- [x] Rewrite the changed FAQ values in en, ar and ur
+- [x] Add the five FAQs and the privacy group
+- [x] Gates: `flutter analyze` and `flutter test`
+- [x] Commit `fix(help): accurate FAQ answers and new FAQs on roles, accounts, repayments, privacy and deletion`
 
 **Size:** M. 5 new FAQs plus 1 group, 13 changed keys × 3 languages, about +30 code / +120 test lines, about 3 hours.
 
