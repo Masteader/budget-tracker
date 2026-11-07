@@ -246,36 +246,55 @@ class AccountService {
   }
 
   /// Link a budget category to an account, creating the budget row if one doesn't exist yet.
+  ///
+  /// The cycle's rows are found the way the backend's `cycle_budget_rows` finds them: rows keyed
+  /// by [cycleKey], or legacy rows without a `cycle_key` whose `month` is the cycle's month.
+  /// budgets is UNIQUE (household_id, month, category_code), so missing a legacy row would make
+  /// the insert below fail. Every row of the cycle is linked (and keyed) in one update, so
+  /// whichever row a reader picks shows the same account.
   Future<void> linkCategoryAccount({
     required String householdId,
     required String categoryCode,
     required String cycleKey,
     required String? accountId,
   }) async {
-    final existing = await _client
+    final month = '${cycleKey.length >= 7 ? cycleKey.substring(0, 7) : cycleKey}-01';
+    final rows = await _client
         .from('budgets')
-        .select('id')
+        .select('id, cycle_key, month')
         .eq('household_id', householdId)
-        .eq('category_code', categoryCode)
-        .eq('cycle_key', cycleKey)
-        .maybeSingle();
+        .eq('category_code', categoryCode);
 
-    if (existing != null) {
+    final cycleRowIds = <String>[
+      for (final row in rows)
+        if (row['cycle_key'] == cycleKey ||
+            (((row['cycle_key'] as String?) ?? '').isEmpty && _monthPrefix(row['month']) == month))
+          row['id'] as String,
+    ];
+
+    if (cycleRowIds.isNotEmpty) {
       await _client.from('budgets').update({
         'account_id': accountId,
-      }).eq('id', existing['id']);
+        'cycle_key': cycleKey,
+      }).inFilter('id', cycleRowIds);
     } else {
       await _client.from('budgets').insert({
         'household_id': householdId,
         'category_code': categoryCode,
         'cycle_key': cycleKey,
-        'month': '${cycleKey.length >= 7 ? cycleKey.substring(0, 7) : cycleKey}-01',
+        'month': month,
         'allocated_amount': 0.0,
         'spent_amount': 0.0,
         'account_id': accountId,
         'is_active': true,
       });
     }
+  }
+
+  /// The `YYYY-MM-DD` part of a budget row's `month` (it may come back with a time part).
+  static String _monthPrefix(Object? month) {
+    final s = month?.toString() ?? '';
+    return s.length >= 10 ? s.substring(0, 10) : s;
   }
 
   /// Get total remaining unspent committed budgets per account for a cycle.
