@@ -12,12 +12,20 @@
 /// only after stripping comments: AppDelegate.swift, SceneDelegate.swift and
 /// the Podfile (pinned statement by statement), plus single values read from
 /// build.gradle.kts, .metadata and supabase_config.dart.
+///
+/// The app icon PNGs are decoded here (chunks, zlib and row filters) because
+/// App Store icons must be opaque and must be the Portions logo, not
+/// Flutter's template icon.
 library;
 
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xml/xml.dart';
+
+import '../support/brand_names.dart';
 
 const _expectedBundleId = 'com.budgettracker';
 const _usageKeys = {
@@ -27,6 +35,11 @@ const _usageKeys = {
   'NSSpeechRecognitionUsageDescription',
 };
 const _localizedNames = {'en': 'Qawam Money', 'ar': 'قوام المال', 'ur': 'Qawam Money'};
+
+/// No iOS text means "household budget", so the former Arabic name is banned
+/// outright here.
+bool _hasOldOrWithdrawnName(String text) =>
+    withdrawnAppName.hasMatch(text) || formerAppName.hasMatch(text) || text.contains(formerArabicAppName);
 
 String _read(String path) => File(path).readAsStringSync();
 
@@ -350,6 +363,94 @@ Set<String> _permissionGroupsUsed() => Directory('lib')
     .map((match) => match.group(1)!)
     .toSet();
 
+// ── App icon PNGs ────────────────────────────────────────────────────────────
+
+const _appIconSet = 'ios/Runner/Assets.xcassets/AppIcon.appiconset';
+
+/// A PNG's header fields, chunk types and, for 8-bit RGB, its decoded pixels.
+class _Png {
+  _Png(this.width, this.height, this.bitDepth, this.colorType, this.interlace, this.chunkTypes, this._idat);
+
+  final int width;
+  final int height;
+  final int bitDepth;
+  final int colorType;
+  final int interlace;
+  final List<String> chunkTypes;
+  final List<int> _idat;
+
+  static const _signature = [137, 80, 78, 71, 13, 10, 26, 10];
+
+  static _Png read(String path) {
+    final bytes = File(path).readAsBytesSync();
+    if (bytes.length < 8 || !List.generate(8, (i) => bytes[i] == _signature[i]).every((ok) => ok)) {
+      throw FormatException('$path is not a PNG');
+    }
+    final data = ByteData.sublistView(bytes);
+    final types = <String>[];
+    final idat = <int>[];
+    late ByteData ihdr;
+    var offset = 8;
+    while (offset + 8 <= bytes.length) {
+      final length = data.getUint32(offset);
+      final type = ascii.decode(bytes.sublist(offset + 4, offset + 8));
+      final body = bytes.sublist(offset + 8, offset + 8 + length);
+      types.add(type);
+      if (type == 'IHDR') ihdr = ByteData.sublistView(body);
+      if (type == 'IDAT') idat.addAll(body);
+      offset += 12 + length;
+      if (type == 'IEND') break;
+    }
+    if (types.first != 'IHDR' || types.last != 'IEND') throw FormatException('$path: malformed chunks $types');
+    return _Png(ihdr.getUint32(0), ihdr.getUint32(4), ihdr.getUint8(8), ihdr.getUint8(9), ihdr.getUint8(12), types, idat);
+  }
+
+  /// RGB rows of an 8-bit, non-interlaced truecolor PNG, with the row filters undone.
+  late final Uint8List rgb = () {
+    if (bitDepth != 8 || colorType != 2 || interlace != 0) throw StateError('only 8-bit RGB is decoded');
+    final raw = zlib.decode(_idat);
+    final stride = width * 3;
+    final out = Uint8List(stride * height);
+    for (var y = 0; y < height; y++) {
+      final filter = raw[y * (stride + 1)];
+      final src = y * (stride + 1) + 1;
+      final row = y * stride;
+      for (var x = 0; x < stride; x++) {
+        final a = x >= 3 ? out[row + x - 3] : 0;
+        final b = y > 0 ? out[row - stride + x] : 0;
+        final c = x >= 3 && y > 0 ? out[row - stride + x - 3] : 0;
+        final int predictor;
+        switch (filter) {
+          case 0:
+            predictor = 0;
+          case 1:
+            predictor = a;
+          case 2:
+            predictor = b;
+          case 3:
+            predictor = (a + b) >> 1;
+          case 4:
+            final p = a + b - c;
+            final pa = (p - a).abs(), pb = (p - b).abs(), pc = (p - c).abs();
+            predictor = pa <= pb && pa <= pc ? a : (pb <= pc ? b : c);
+          default:
+            throw FormatException('unknown PNG filter $filter');
+        }
+        out[row + x] = (raw[src + x] + predictor) & 0xFF;
+      }
+    }
+    return out;
+  }();
+
+  /// The pixel at a position given as a fraction of the 1024-point master.
+  List<int> at(double x1024, double y1024) {
+    final x = (x1024 / 1024 * width).floor().clamp(0, width - 1);
+    final y = (y1024 / 1024 * height).floor().clamp(0, height - 1);
+    final i = (y * width + x) * 3;
+    return rgb.sublist(i, i + 3);
+  }
+}
+
 void main() {
   group('identifiers', () {
     test('the Android applicationId is unchanged', () {
@@ -435,6 +536,18 @@ void main() {
       expect(_info['CFBundleName'], 'Qawam Money');
     });
 
+    test('no string value has an old or withdrawn name', () {
+      Iterable<String> strings(Object? value) sync* {
+        if (value is String) yield value;
+        if (value is List) yield* value.expand(strings);
+        if (value is Map) yield* value.values.expand(strings);
+      }
+
+      final values = strings(_info).toList();
+      expect(values, containsAll(['Qawam Money', _info['NSCameraUsageDescription']]));
+      expect(values.where(_hasOldOrWithdrawnName), isEmpty);
+    });
+
     test('declares exactly the usage descriptions the plugins need', () {
       final declared = _info.keys.where((key) => key.endsWith('UsageDescription')).toSet();
       expect(declared, _usageKeys);
@@ -480,11 +593,23 @@ void main() {
         }
       });
 
-      test('$lang has no withdrawn names', () {
-        final withdrawn = RegExp('wafeer|budget tracker', caseSensitive: false);
-        expect(_strings(lang).values.where(withdrawn.hasMatch), isEmpty);
+      test('$lang has no old or withdrawn names', () {
+        expect(_strings(lang).values.where(_hasOldOrWithdrawnName), isEmpty);
       });
     }
+
+    test('the name guard catches every script of the old and withdrawn names', () {
+      const caught = [
+        'Wafeer', 'Budget Tracker', 'يستخدم وفيير الكاميرا', 'يستخدم وفير الكاميرا', 'وفیر', 'لوفير', 'بوفيير', //
+        'ميزانية الأسرة', 'بجٹ ٹریکر کیمرا استعمال کرتا ہے',
+      ];
+      for (final text in caught) {
+        expect(_hasOldOrWithdrawnName(text), isTrue, reason: text);
+      }
+      for (final text in ['توفير الوقت', 'توفیر', 'Qawam Money', 'قوام المال']) {
+        expect(_hasOldOrWithdrawnName(text), isFalse, reason: text);
+      }
+    });
 
     test('English matches the Info.plist defaults', () {
       _strings('en').forEach((key, value) => expect(_info[key], value, reason: key));
@@ -499,6 +624,23 @@ void main() {
           expect(table[key], isNot(en[key]), reason: '$lang $key');
           expect(table[key], matches(arabicScript), reason: '$lang $key');
         }
+      }
+    });
+
+    test('Urdu permission text opens with one RLM, so iOS lays it out right to left', () {
+      // Each starts with the Latin name; without the mark iOS takes the paragraph direction
+      // from that first strong character and shows the Urdu sentence left to right.
+      const rlm = '‏';
+      final ur = _strings('ur');
+      for (final key in _usageKeys) {
+        expect(ur[key], startsWith('${rlm}Qawam Money '), reason: key);
+        expect(rlm.allMatches(ur[key]!), hasLength(1), reason: key);
+      }
+      for (final key in ['CFBundleDisplayName', 'CFBundleName']) {
+        expect(ur[key], 'Qawam Money', reason: key);
+      }
+      for (final lang in ['en', 'ar']) {
+        expect(_strings(lang).values.where((value) => value.contains(rlm)), isEmpty, reason: lang);
       }
     });
 
@@ -597,5 +739,60 @@ void main() {
         'GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)',
       ]);
     });
+  });
+
+  group('app icon', () {
+    final images = _list(_map(jsonDecode(_read('$_appIconSet/Contents.json')))['images']).map(_map).toList();
+
+    test('Contents.json and the folder list the same PNGs', () {
+      final listed = images.map((image) => image['filename']! as String).toSet();
+      final files = Directory(_appIconSet)
+          .listSync()
+          .whereType<File>()
+          .map((file) => file.uri.pathSegments.last)
+          .where((name) => name.endsWith('.png'))
+          .toSet();
+      expect(files, listed);
+      expect(images.where((image) => image['idiom'] == 'ios-marketing').single['size'], '1024x1024');
+    });
+
+    // iPhone and iPad share some files; each file must have the pixel size every entry asks for.
+    final pixelsByFile = <String, Set<int>>{};
+    for (final image in images) {
+      final points = double.parse((image['size']! as String).split('x').first);
+      final pixels = (points * int.parse((image['scale']! as String).replaceAll('x', ''))).round();
+      pixelsByFile.putIfAbsent(image['filename']! as String, () => {}).add(pixels);
+    }
+
+    for (final MapEntry(key: name, value: sizes) in pixelsByFile.entries) {
+      final pixels = sizes.first;
+
+      group(name, () {
+        late final png = _Png.read('$_appIconSet/$name');
+
+        test('is $pixels px square, 8-bit RGB with no alpha channel or transparency', () {
+          expect(sizes, hasLength(1), reason: 'Contents.json asks for $sizes px from one file');
+          expect([png.width, png.height], [pixels, pixels]);
+          expect(png.bitDepth, 8);
+          expect(png.colorType, 2, reason: 'App Store icons must be opaque: color type 2 is RGB without alpha');
+          expect(png.chunkTypes, isNot(contains('tRNS')));
+          expect(png.interlace, 0);
+        });
+
+        test('is the Portions logo on the full-bleed cream tile', () {
+          bool cream(List<int> p) => p[0] >= 230 && p[1] >= 222 && p[2] >= 205 && p[0] - p[2] >= 3 && p[0] - p[2] <= 30;
+          // All four corners are the warm cream tile (Flutter's template icon is pure white).
+          for (final corner in [(4.0, 4.0), (1020.0, 4.0), (4.0, 1020.0), (1020.0, 1020.0)]) {
+            expect(cream(png.at(corner.$1, corner.$2)), isTrue, reason: 'corner $corner is ${png.at(corner.$1, corner.$2)}');
+          }
+          final coral = png.at(778, 429);
+          expect(coral[0] >= 200 && coral[0] - coral[2] >= 100, isTrue, reason: 'pulled-out slice is coral: $coral');
+          final teal = png.at(510, 700);
+          expect(teal[1] - teal[0] >= 40 && teal[2] - teal[0] >= 40, isTrue, reason: 'bottom slice is teal: $teal');
+          final indigo = png.at(370, 500);
+          expect(indigo[2] - indigo[0] >= 40 && indigo[2] - indigo[1] >= 40, isTrue, reason: 'left slice is indigo: $indigo');
+        });
+      });
+    }
   });
 }

@@ -1,7 +1,7 @@
 # Social Engine Design
 
 **Date:** 2026-11-03, owner decisions applied 2026-11-04
-**Status:** Owner-reviewed design. The ten open decisions were accepted on 2026-11-04 and are now in the decision log (Section 2). The implementation plan is `docs/PLAN.md`. **Brand name chosen (Qawam Money / قوام المال) but not shown as vetted, and no logo yet: nothing public can happen until the launch gate in Section 13 is met.**
+**Status:** Owner-reviewed design. The ten open decisions were accepted on 2026-11-04 and are now in the decision log (Section 2). The implementation plan is `docs/PLAN.md`. **Brand name chosen (Qawam Money / قوام المال) but not shown as vetted. The Portions logo was approved on 2026-11-04 (`docs/brand/qawam_money_logo.svg`). Nothing public can happen until the launch gate in Section 13 is met.**
 **Author:** Claude Code (Opus 5.5), from the recovered Antigravity brainstorm plus corrections verified on 2026-11-03.
 **Location:** Everything for this project lives in `marketing/social_engine/`. Heavy media and runtime data live outside OneDrive (Section 4).
 
@@ -46,7 +46,7 @@ Market: Saudi Arabia is where we launch, not the only audience. Content mix is 5
 
 | # | Decision | By | Source | Status |
 |---|---|---|---|---|
-| D1 | **Brand name is `Qawam Money` / `قوام المال`.** Meaning: قوام is moderate spending, between waste and stinginess. Tagline: لا إسراف ولا تقتير / Spend in balance. There is no Urdu-script form; Urdu uses the English letters. Always use the full name (G18). History: the earlier name `Wafeer وفيير` and its V4 logo (`flutter_app/assets/images/wafeer_logo.png`) were withdrawn on 2026-11-03, because a licensed Saudi personal finance app already uses that name. Neither that logo nor the withdrawn launcher icons may be used as assets, even in tests. The new logo is not ready. Display names change while identifiers such as `com.budgettracker` stay. | Owner, relayed from session `budget-tracker-02` | Replaces the transcript's name | Name chosen. Vetting not shown as done and logo pending, so the launch gate stays closed |
+| D1 | **Brand name is `Qawam Money` / `قوام المال`.** Meaning: قوام is moderate spending, between waste and stinginess. Tagline: لا إسراف ولا تقتير / Spend in balance. There is no Urdu-script form; Urdu uses the English letters. Always use the full name (G18). History: the earlier name (withdrawn on 2026-11-03 because another licensed Saudi finance app uses it) and its logo must not be used as assets, even in tests, and neither may the withdrawn launcher icons. The Portions logo (`docs/brand/qawam_money_logo.svg`) was approved on 2026-11-04. Display names change while identifiers such as `com.budgettracker` stay. | Owner, relayed from session `budget-tracker-02` | Replaces the transcript's name | Name chosen and logo approved. Vetting (store and SAIP clearance) not shown as done, so the launch gate stays closed |
 | D2 | Hybrid architecture: Python automates and orchestrates; Remotion (React) renders. Chosen for modern, eye-catching visuals and a strong hook. | Owner | Transcript | Final |
 | D3 | Approval over Telegram bot. Nothing publishes without an explicit per-post tap. | Owner | Transcript | Final |
 | D4 | Saudi/GCC Arabic voiceover, English on-screen text and subtitles, sometimes English audio. | Owner | Transcript | Final |
@@ -1107,7 +1107,7 @@ brand:
   tagline_ar: "لا إسراف ولا تقتير"
   handles: {instagram: "", facebook: "", tiktok: "", youtube: ""}   # unset until vetted
   hashtags: []         # unset until vetted
-  logo_path: ""        # unset: old logo withdrawn, new one not ready
+  logo_path: ""        # unset: old logo withdrawn; the Portions logo (docs/brand/qawam_money_logo.svg) was approved on 2026-11-04
   tokens: "assets/branding/brand_tokens.json"
   clearance:           # empty: no evidence of vetting yet; the owner records it
     google_play_checked_on: null
@@ -1200,7 +1200,7 @@ Before review, each batch runs the suites above. Rule 06 section 6 applies as wr
 
 ### Launch gate (hard)
 
-Qawam Money / قوام المال is chosen. **No evidence yet shows it has been vetted, and the logo is not ready.**
+Qawam Money / قوام المال is chosen. **No evidence yet shows it has been vetted.** The Portions logo was approved on 2026-11-04 (`docs/brand/qawam_money_logo.svg`).
 
 **Name clearance status, 2026-11-03.** Reported by the rename session and not re-checked for this spec. **The name is not cleared. Only the owner can clear it, and every `brand.clearance.*` field stays empty until then.**
 

@@ -1,12 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../../context/useAuth';
-import type { TranslationDictionary, Language } from '../../i18n/translations';
+import type { TranslationDictionary } from '../../i18n/translations';
 import { supabase } from '../../lib/supabaseClient';
 import { formatSAR, currentCycleKey } from '../../lib/cycleUtils';
 
 interface BudgetsViewProps {
   dict: TranslationDictionary;
-  lang: Language;
 }
 
 interface BudgetCategory {
@@ -16,24 +15,25 @@ interface BudgetCategory {
   spent: number;
 }
 
-export const BudgetsView: React.FC<BudgetsViewProps> = ({ dict, lang }) => {
+export const BudgetsView: React.FC<BudgetsViewProps> = ({ dict }) => {
   const { householdId, household } = useAuth();
   const [loading, setLoading] = useState(true);
   const [budgets, setBudgets] = useState<BudgetCategory[]>([]);
   const [wifeAllowance, setWifeAllowance] = useState({ allocated: 2000, spent: 450 });
 
   const cycleKey = currentCycleKey(household?.paydayDay || 27);
+  const names = dict.portal.budgetCategories;
 
   const defaultCategories: BudgetCategory[] = useMemo(() => [
-    { code: 'OPEX-GROCERY', name: lang === 'ar' ? 'البقالة والتموين' : 'Groceries & Staples', allocated: 3500, spent: 0 },
-    { code: 'OPEX-UTILITIES', name: lang === 'ar' ? 'الفواتير والخدمات' : 'Bills & Utilities', allocated: 2000, spent: 0 },
-    { code: 'OPEX-DINING', name: lang === 'ar' ? 'المطاعم والكافيهات' : 'Dining & Cafes', allocated: 1500, spent: 0 },
-    { code: 'OPEX-FUEL', name: lang === 'ar' ? 'الوقود وصيانة السيارة' : 'Fuel & Transport', allocated: 1000, spent: 0 },
-    { code: 'OPEX-HEALTH', name: lang === 'ar' ? 'الصحة والصيدلية' : 'Health & Pharmacy', allocated: 800, spent: 0 },
-    { code: 'OPEX-SHOPPING', name: lang === 'ar' ? 'التسوق والملابس' : 'Shopping & Fashion', allocated: 1200, spent: 0 },
-    { code: 'OPEX-EDUCATION', name: lang === 'ar' ? 'التعليم ومصاريف المدارس' : 'Education & School', allocated: 1500, spent: 0 },
-    { code: 'OPEX-MISC', name: lang === 'ar' ? 'المصاريف العامة والطوارئ' : 'Miscellaneous', allocated: 1000, spent: 0 },
-  ], [lang]);
+    { code: 'OPEX-GROCERY', name: names.grocery, allocated: 3500, spent: 0 },
+    { code: 'OPEX-UTILITIES', name: names.utilities, allocated: 2000, spent: 0 },
+    { code: 'OPEX-DINING', name: names.dining, allocated: 1500, spent: 0 },
+    { code: 'OPEX-FUEL', name: names.fuel, allocated: 1000, spent: 0 },
+    { code: 'OPEX-HEALTH', name: names.health, allocated: 800, spent: 0 },
+    { code: 'OPEX-SHOPPING', name: names.shopping, allocated: 1200, spent: 0 },
+    { code: 'OPEX-EDUCATION', name: names.education, allocated: 1500, spent: 0 },
+    { code: 'OPEX-MISC', name: names.misc, allocated: 1000, spent: 0 },
+  ], [names]);
 
   useEffect(() => {
     let ignore = false;
@@ -108,9 +108,7 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({ dict, lang }) => {
           {dict.portal.budgetsTitle}
         </h2>
         <p className="text-xs sm:text-sm text-muted mt-1">
-          {lang === 'ar'
-            ? 'مخصصات الميزانية الشهرية وتوزيع البنود للأسرة وفق دورة الراتب الحالية'
-            : 'Monthly budget category limits and sub-allocations for the current salary cycle'}
+          {dict.portal.budgetsSubtitle}
         </p>
       </div>
 
@@ -128,9 +126,7 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({ dict, lang }) => {
               {dict.portal.wifeAllowanceSubtitle}
             </h3>
             <p className="text-xs text-muted max-w-xl leading-relaxed">
-              {lang === 'ar'
-                ? 'مخصص شهري خالص للزوجة يخصم منه ما تشتريه لنفسها (أحكام النفقة الشرعية)، ولا يعتبر ديناً ولا تشترك في مصاريف البيت المشتركة.'
-                : "A protected monthly personal allowance for the wife. Personal expenses are deducted from this allowance according to family expense rules."}
+              {dict.portal.wifeAllowanceDesc}
             </p>
           </div>
 
@@ -160,7 +156,7 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({ dict, lang }) => {
       {/* Category Budgets Grid */}
       <div>
         <h3 className="text-lg font-black text-ink mb-4">
-          {lang === 'ar' ? 'بنود الميزانية المعتمدة' : 'Approved Budget Categories'}
+          {dict.portal.approvedCategoriesTitle}
         </h3>
 
         {loading ? (
@@ -235,26 +231,24 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({ dict, lang }) => {
           {dict.portal.subAllocationsTitle}
         </h3>
         <p className="text-xs text-muted mb-6">
-          {lang === 'ar'
-            ? 'توزيع المخصصات المحددة للأبناء والمصاريف المستقلة ضمن ميزانية الأسرة'
-            : 'Sub-allocations defined for children and independent line-items within the household budget'}
+          {dict.portal.subAllocationsDesc}
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="p-4 rounded-2xl bg-bg border border-line/70">
-            <div className="text-xs font-bold text-ink">{lang === 'ar' ? 'مصاريف الأبناء والمدارس' : 'Children & School'}</div>
-            <div className="text-lg font-black text-ink font-mono mt-1">1,200.00 ر.س</div>
-            <div className="text-[11px] text-muted mt-1">{lang === 'ar' ? 'مخصص دوري معتمد' : 'Monthly approved'}</div>
+            <div className="text-xs font-bold text-ink">{dict.portal.subAllocationsChildren}</div>
+            <div className="text-lg font-black text-ink font-mono mt-1">{formatSAR(1200)}</div>
+            <div className="text-[11px] text-muted mt-1">{dict.portal.subAllocationsMonthly}</div>
           </div>
           <div className="p-4 rounded-2xl bg-bg border border-line/70">
-            <div className="text-xs font-bold text-ink">{lang === 'ar' ? 'السائق والوقود المشترك' : 'Driver & Fuel'}</div>
-            <div className="text-lg font-black text-ink font-mono mt-1">600.00 ر.س</div>
-            <div className="text-[11px] text-muted mt-1">{lang === 'ar' ? 'مخصص دوري معتمد' : 'Monthly approved'}</div>
+            <div className="text-xs font-bold text-ink">{dict.portal.subAllocationsDriver}</div>
+            <div className="text-lg font-black text-ink font-mono mt-1">{formatSAR(600)}</div>
+            <div className="text-[11px] text-muted mt-1">{dict.portal.subAllocationsMonthly}</div>
           </div>
           <div className="p-4 rounded-2xl bg-bg border border-line/70">
-            <div className="text-xs font-bold text-ink">{lang === 'ar' ? 'طوارئ وصيانة المنزل' : 'Home Repairs & Emergencies'}</div>
-            <div className="text-lg font-black text-ink font-mono mt-1">1,000.00 ر.س</div>
-            <div className="text-[11px] text-muted mt-1">{lang === 'ar' ? 'مخصص دوري معتمد' : 'Monthly approved'}</div>
+            <div className="text-xs font-bold text-ink">{dict.portal.subAllocationsHome}</div>
+            <div className="text-lg font-black text-ink font-mono mt-1">{formatSAR(1000)}</div>
+            <div className="text-[11px] text-muted mt-1">{dict.portal.subAllocationsMonthly}</div>
           </div>
         </div>
       </div>

@@ -43,4 +43,5 @@ docs/review/MASTER_CODEBASE_AUDIT.md
 docs/review/audit_spend.json
 
 # Agent & CLI worktrees
-.claude/
+.claude/worktrees/
+.claude/settings.local.json

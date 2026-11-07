@@ -37,6 +37,7 @@ export const PortalHeader: React.FC<PortalHeaderProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('dashboard')}
+            aria-label={`${dict.brand.shortName} · ${dict.portal.dashboard}`}
             className="flex items-center gap-2 text-left rtl:text-right group focus:outline-none"
           >
             <Logo className="w-8 h-8 shrink-0" />

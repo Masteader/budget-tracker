@@ -12,7 +12,7 @@ Building needs only the Mac steps in section 4. These items stop an App Store re
 
 | # | Blocker | Evidence | Who |
 |---|---|---|---|
-| 1 | **App icon.** Flutter's default icon is still in place. The Wafeer logo is withdrawn, and a new logo isn't chosen. The launch screen is also the blank template. | `ios/Runner/Assets.xcassets/AppIcon.appiconset` | Owner picks the logo |
+| 1 | **App icon.** Resolved. The Portions logo (`docs/brand/qawam_money_logo.svg`) was approved on 2026-11-04 and is now installed at every size `Contents.json` lists: the full-bleed cream tile, opaque RGB with no alpha channel. `flutter_app/test/ios/ios_project_config_test.dart` checks the sizes, the missing alpha and the logo itself. The launch screen is still Flutter's blank template, white with a transparent 1x1 image, which shows no Flutter branding. | `ios/Runner/Assets.xcassets/AppIcon.appiconset` | Done. `[verify]` on a device (section 4) |
 | 2 | **No in-app account deletion.** The app creates accounts, so guideline 5.1.1(v) requires it. It must delete the account record and personal data, not just deactivate it. | No account deletion found in `flutter_app/lib/` or `ai_service/` | Needs a sensitive feature |
 | 3 | **No privacy policy link in the app.** Guideline 5.1.1(i) requires one in the app and in App Store Connect metadata. | No privacy policy text in `flutter_app/lib/` | Owner and dev |
 | 4 | **No third-party AI consent.** Receipts and chat text go to an AI model through `ai_service`. Guideline 5.1.2(i) requires clear disclosure and explicit permission for sharing with third-party AI. | No consent screen found in `flutter_app/lib/`. `[verify]` with the owner which providers receive data | Owner and dev |
@@ -20,7 +20,7 @@ Building needs only the Mac steps in section 4. These items stop an App Store re
 | 6 | **Bundle ID availability.** `com.budgettracker` is short and generic, and Apple's bundle IDs are unique across all developers. If someone else holds it, the iOS ID must differ from Android's, which is an owner decision. `[verify]` by registering it. | | Owner |
 | 7 | **Offline financial data is backed up.** The offline ledger database and receipt images sit under `getDatabasesPath()`, which is the Documents folder on iOS, so iCloud and Finder back them up. Android deliberately sets `allowBackup=false` for this data. The fix needs `lib/` and native work in its own task. | `flutter_app/lib/services/offline_queue_manager.dart:63,71`, `SqflitePlugin.m:766` | Dev, in its own task |
 
-The Flutter strings still say `Budget Tracker` (`MaterialApp.title`, `app_localizations.dart`). The rename is owned by `feat/qawam-money-branding`.
+The Flutter strings say `Qawam Money` / `قوام المال` (`onGenerateTitle` reads `app_title_short` from `app_localizations.dart`).
 
 ## 2. What is done
 
@@ -151,6 +151,7 @@ Upload `build/ios/ipa/*.ipa` with Transporter or Xcode ([Flutter guide](https://
 
 - [ ] `flutter build ios --debug --no-codesign` succeeds
 - [ ] Home screen shows `قوام المال` with the device in Arabic and `Qawam Money` in English and Urdu
+- [ ] Home screen, Settings and Spotlight show the Portions icon, with the rim and the coral slice clear of the rounded corners
 - [ ] Permission prompts show the text for the device language
 - [ ] `xcrun simctl openurl booted "budgettracker://login"` opens the app, with no route error in the log
 - [ ] `xcrun simctl openurl booted "io.supabase.budgettracker://x"` opens the app
