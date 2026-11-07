@@ -442,9 +442,10 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
     final slug = name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '-').toLowerCase();
     final subCode = 'sub-$slug';
 
-    // Persist to cost_control_sub_categories via ApiService
+    // Persist to cost_control_sub_categories via ApiService. A refused or failed add is not shown
+    // as added: the item would vanish on the next load and its amount would never be saved.
     try {
-      await ApiService.instance.addSubCategory(
+      final saved = await ApiService.instance.addSubCategory(
         householdId: widget.householdId,
         parentCode: widget.categoryCode,
         nameEn: name,
@@ -452,7 +453,13 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         subCode: subCode,
         cycleKey: widget.cycleKey,
       );
-    } catch (_) {}
+      if (saved['status'] != 'success') throw StateError('add sub-category: ${saved['status']}');
+    } catch (e) {
+      debugPrint('Add sub-category failed: $e');
+      if (mounted) AppSnackBar.showError(context, context.tr('bm_add_failed'));
+      return;
+    }
+    if (!mounted) return;
 
     final ctrl = TextEditingController(text: amount > 0 ? amount.toStringAsFixed(2) : '');
     ctrl.addListener(_recomputeTotal);

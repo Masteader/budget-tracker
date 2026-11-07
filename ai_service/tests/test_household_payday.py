@@ -132,6 +132,25 @@ def test_save_sub_allocations_leaves_an_inactive_row_alone_when_the_setting_fail
     assert [(r["is_active"], r["allocated_amount"]) for r in _budget_rows(household, "OPEX-FUEL")] == [(False, 0.0)]
 
 
+def test_switching_on_reports_a_failed_setting_and_writes_no_budget(household):
+    """A failed settings write is reported, not logged as a success: no hidden active row."""
+    from salary_cycle import toggle_category_status
+
+    household.schemas["household_category_settings"] = {"id"}  # every write to it fails
+    with pytest.raises(Exception):
+        toggle_category_status(HH, "OPEX-FUEL", True)
+    assert _budget_rows(household, "OPEX-FUEL") == []
+
+
+def test_switching_off_reports_a_failed_budget_sync(household):
+    """Switched off in the settings but the budget rows still active would be hidden yet counted."""
+    from salary_cycle import toggle_category_status
+
+    household.schemas["budgets"] = {"id"}  # every write to budgets fails
+    with pytest.raises(Exception):
+        toggle_category_status(HH, "OPEX-DINING", False)
+
+
 def test_create_household_custom_category_uses_household_payday(household):
     from salary_cycle import create_household_custom_category
 

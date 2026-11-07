@@ -527,7 +527,7 @@ def sub_category_write_allowed(parent_code: str, sub_code: Optional[str], househ
     ownership = get_category_owner_households(parent_code)
     if ownership["shared"]:
         return bool(sub_code) and (parent_code, sub_code) in SYSTEM_SUB_CATEGORIES
-    return ownership["owners"] == [str(household_id)]
+    return ownership["owners"] == [canonical_household_id(household_id)]
 
 
 def sub_category_sole_owner(parent_code: str) -> Optional[str]:
@@ -582,7 +582,7 @@ def match_sub_category(
             ownership = get_category_owner_households(category_code)
             if ownership["shared"]:
                 subs = [s for s in subs if (category_code, s.get("sub_code")) in SYSTEM_SUB_CATEGORIES]
-            elif not (household_id and ownership["owners"] == [str(household_id)]):
+            elif not (household_id and ownership["owners"] == [canonical_household_id(household_id)]):
                 subs = []
     except Exception:
         return None
@@ -832,12 +832,20 @@ def category_usable_by_household(category_code: str, household_id: str) -> bool:
     ownership = get_category_owner_households(category_code)
     if ownership["shared"]:
         return True
-    # Postgres reads an uppercase UUID as the same household; compare canonical forms.
+    canonical = canonical_household_id(household_id)
+    return canonical is not None and canonical in ownership["owners"]
+
+
+def canonical_household_id(value: Any) -> Optional[str]:
+    """
+    A household id in the form Postgres returns (lowercase, hyphenated), or None if it is not a
+    UUID. Postgres reads an uppercase UUID as the same household, so ownership checks compare this
+    form, never the raw request string.
+    """
     try:
-        canonical = str(uuid.UUID(str(household_id)))
-    except ValueError:
-        return False
-    return canonical in {o.lower() for o in ownership["owners"]}
+        return str(uuid.UUID(str(value)))
+    except (ValueError, TypeError, AttributeError):
+        return None
 
 
 def get_category_owner_households(category_code: str) -> Dict[str, Any]:
@@ -846,7 +854,9 @@ def get_category_owner_households(category_code: str) -> Dict[str, Any]:
 
     Returns {"shared": bool, "owners": [household_id, ...]} where ``shared`` is True when a
     global/system row (household_id NULL) exists. Shared definitions are visible to every
-    household, so household members must never be allowed to mutate them.
+    household, so household members must never be allowed to mutate them. A row with a
+    household is that household's even if flagged is_system, as the database trigger reads it
+    (validate_category_code_exists). Owners are in canonical form (canonical_household_id).
     """
     client = get_client()
     rows = (
@@ -857,8 +867,8 @@ def get_category_owner_households(category_code: str) -> Dict[str, Any]:
         .data
         or []
     )
-    shared = any(r.get("household_id") is None or r.get("is_system") for r in rows)
-    owners = sorted({str(r["household_id"]) for r in rows if r.get("household_id")})
+    shared = any(r.get("household_id") is None for r in rows)
+    owners = sorted({h for h in (canonical_household_id(r["household_id"]) for r in rows if r.get("household_id")) if h})
     return {"shared": shared, "owners": owners}
 
 
@@ -951,7 +961,7 @@ def sub_category_parent_visible(parent_code: str, household_ids: Iterable[str]) 
     ownership = get_category_owner_households(parent_code)
     if ownership["shared"]:
         return True
-    return bool(set(ownership["owners"]) & {str(h) for h in household_ids})
+    return bool(set(ownership["owners"]) & {canonical_household_id(h) for h in household_ids})
 
 
 def get_sub_categories_for_parent(
@@ -1197,7 +1207,7 @@ def remove_sub_category_for_household(
     #    category. Definitions under shared/system parents are used by every household; deleting
     #    them because *this* household has no transactions removed them for everyone.
     ownership = get_category_owner_households(parent_code)
-    owned_here = (not ownership["shared"]) and ownership["owners"] == [household_id]
+    owned_here = (not ownership["shared"]) and ownership["owners"] == [canonical_household_id(household_id)]
     if owned_here and not (tx_check.data or []):
         try:
             client.table("cost_control_sub_categories").delete().eq("parent_code", parent_code).eq("sub_code", sub_code).execute()
@@ -1408,45 +1418,43 @@ def toggle_category_status(household_id: str, category_code: str, is_active: boo
     """
     Toggles active/inactive status for a household category.
     Updates household_category_settings AND synchronizes budgets table is_active.
+
+    A failed write raises (the route answers 500, the app says so) instead of being logged and
+    reported as success: settings and budget rows that disagree leave a budget the budget screen
+    hides while the dashboard still counts it.
     """
     client = get_client()
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    try:
-        client.table("household_category_settings").upsert({
-            "household_id": household_id,
-            "category_code": category_code,
-            "is_active": is_active,
-            "updated_at": now_iso,
-        }, on_conflict="household_id,category_code").execute()
-    except Exception as exc:
-        logger.warning("Could not persist household_category_settings: %s", exc)
+    client.table("household_category_settings").upsert({
+        "household_id": household_id,
+        "category_code": category_code,
+        "is_active": is_active,
+        "updated_at": now_iso,
+    }, on_conflict="household_id,category_code").execute()
 
-    try:
-        update_res = client.table("budgets").update({
-            "is_active": is_active,
-        }).eq("household_id", household_id).eq("category_code", category_code).execute()
+    update_res = client.table("budgets").update({
+        "is_active": is_active,
+    }).eq("household_id", household_id).eq("category_code", category_code).execute()
 
-        # If activating and no budget row existed for this category yet, create an initial budget row
-        if is_active and (not update_res.data or len(update_res.data) == 0):
-            existing_check = client.table("budgets").select("id").eq("household_id", household_id).eq("category_code", category_code).execute()
-            if not existing_check.data or len(existing_check.data) == 0:
-                from supabase_client import get_household_payday
-                today = riyadh_today()
-                month_str = today.replace(day=1).isoformat()
-                # Salary-cycle key (27th → next month), not the calendar month.
-                cycle_key = get_cycle_for_date(today, payday_day=get_household_payday(household_id))["cycle_key"]
-                client.table("budgets").insert({
-                    "household_id": household_id,
-                    "category_code": category_code,
-                    "allocated_amount": 0.0,
-                    "spent_amount": 0.0,
-                    "is_active": True,
-                    "month": month_str,
-                    "cycle_key": cycle_key,
-                }).execute()
-    except Exception as exc:
-        logger.warning("Could not sync budgets is_active for %s: %s", category_code, exc)
+    # If activating and no budget row existed for this category yet, create an initial budget row
+    if is_active and (not update_res.data or len(update_res.data) == 0):
+        existing_check = client.table("budgets").select("id").eq("household_id", household_id).eq("category_code", category_code).execute()
+        if not existing_check.data or len(existing_check.data) == 0:
+            from supabase_client import get_household_payday
+            today = riyadh_today()
+            month_str = today.replace(day=1).isoformat()
+            # Salary-cycle key (27th → next month), not the calendar month.
+            cycle_key = get_cycle_for_date(today, payday_day=get_household_payday(household_id))["cycle_key"]
+            client.table("budgets").insert({
+                "household_id": household_id,
+                "category_code": category_code,
+                "allocated_amount": 0.0,
+                "spent_amount": 0.0,
+                "is_active": True,
+                "month": month_str,
+                "cycle_key": cycle_key,
+            }).execute()
 
     return {
         "status": "success",

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/account_provider.dart';
 import '../../providers/household_role_provider.dart';
+import '../../providers/budget_provider.dart';
 import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -476,13 +477,22 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
               amount: amt,
               merchant: store,
               onReactivate: () async {
-                if (_householdId != null) {
-                  await ApiService.instance.toggleCategoryStatus(
-                    householdId: _householdId!,
-                    categoryCode: catCode,
-                    isActive: true,
-                  );
+                final hid = _householdId;
+                if (hid == null) return;
+                final ok = await ApiService.instance.toggleCategoryStatus(
+                  householdId: hid,
+                  categoryCode: catCode,
+                  isActive: true,
+                );
+                if (!mounted) return;
+                if (!ok) {
+                  AppSnackBar.showError(context, context.tr('bm_toggle_failed'));
+                  return;
                 }
+                // Screens judging categories from the cached list must see it active.
+                try {
+                  context.read<BudgetProvider>().invalidateCategoriesCache();
+                } catch (_) {}
               },
               onChangeCategory: () {
                 res['category_code'] = 'OPEX-MISC';

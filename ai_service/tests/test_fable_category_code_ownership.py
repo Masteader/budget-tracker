@@ -100,6 +100,28 @@ def test_an_uppercase_household_id_still_owns_its_codes(households):
     assert not category_usable_by_household("CUSTOM-SECRET", a.hid.upper())
 
 
+def test_sub_category_ownership_checks_read_the_household_id_in_canonical_form(households):
+    from salary_cycle import sub_category_parent_visible, sub_category_write_allowed
+
+    _, a, b = households
+    assert sub_category_write_allowed("CUSTOM-PETS", "cat_food", a.hid.upper())
+    assert sub_category_parent_visible("CUSTOM-PETS", [a.hid.upper()])
+    assert not sub_category_write_allowed("CUSTOM-PETS", "cat_food", b.hid.upper())
+
+
+def test_a_household_row_flagged_system_is_not_shared(households):
+    """Only rows without a household are shared, as the database trigger reads it
+    (validate_category_code_exists): a household's row flagged is_system stays that household's."""
+    from salary_cycle import category_usable_by_household
+
+    fake, a, b = households
+    fake.seed("cost_control_codes", [
+        {"id": "c4", "code": "CUSTOM-FLAGGED", "category": "Flagged", "household_id": a.hid, "is_system": True},
+    ])
+    assert category_usable_by_household("CUSTOM-FLAGGED", a.hid)
+    assert not category_usable_by_household("CUSTOM-FLAGGED", b.hid)
+
+
 def test_switching_off_is_not_restricted(api, households):
     """Switching off only touches the household's own rows, so any code may be switched off."""
     fake, a, _ = households

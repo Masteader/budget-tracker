@@ -1308,40 +1308,17 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         activeCategories: catData['active'] ?? [],
         inactiveCategories: catData['inactive'] ?? [],
         onToggle: (cat, isActive) async {
-          await ApiService.instance.toggleCategoryStatus(
+          // The backend writes the setting and the budget rows (in the household's own cycle) and
+          // reports a failure; nothing is written here directly.
+          final ok = await ApiService.instance.toggleCategoryStatus(
             householdId: data.householdId,
             categoryCode: cat.code,
             isActive: isActive,
           );
-          try {
-            final existing = await supabase
-                .from('budgets')
-                .select('id')
-                .eq('household_id', data.householdId)
-                .eq('category_code', cat.code);
-            if (existing.isEmpty && isActive) {
-              await supabase.from('budgets').insert({
-                'household_id': data.householdId,
-                'category_code': cat.code,
-                'allocated_amount': 0.0,
-                'spent_amount': 0.0,
-                'is_active': true,
-                'month': _currentMonthStr,
-                'cycle_key': _currentCycleKey.length > 7 ? _currentCycleKey.substring(0, 7) : _currentCycleKey,
-              });
-            } else {
-              await supabase
-                  .from('budgets')
-                  .update({'is_active': isActive})
-                  .eq('household_id', data.householdId)
-                  .eq('category_code', cat.code);
-            }
-          } catch (e) {
-            debugPrint('Toggle category status failed: $e');
-            if (mounted) {
-              AppSnackBar.showError(context, context.tr('bm_toggle_failed'));
-            }
-            return;
+          if (!ok) {
+            if (mounted) AppSnackBar.showError(context, context.tr('bm_toggle_failed'));
+            // The sheet moves the category back to where it was when the toggle throws.
+            throw StateError('Category toggle refused for ${cat.code}');
           }
           if (mounted) {
             context.read<BudgetProvider>().invalidateCategoriesCache();
