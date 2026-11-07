@@ -359,6 +359,10 @@ async def update_installment_plan_endpoint(plan_id: str, request: Request):
         if not plan:
             raise not_found
         return plan.model_dump()
+    except HTTPException:
+        # The plan is not there for this caller (gone, or linked to a purchase on a wife account
+        # they do not see: review R3C-01): 404, not a server error.
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:

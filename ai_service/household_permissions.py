@@ -268,19 +268,40 @@ def member_role(household_id: str, user_id: str) -> Optional[str]:
     return ADMIN if row.get("role") == ADMIN else MEMBER
 
 
+def wife_account_hidden_from(household_id: str, account_id: Optional[str], actor_user_id: Optional[str]) -> bool:
+    """True when ``account_id`` is a wife account the actor may not see (review R3C-01, owner
+    decision 2026-11-07; ``nafaqah_service.can_view_wife_account``, the database's
+    ``nafaqah_may_see_wife_account``): a transaction on it is edited or deleted only by her, its
+    owner and her ledger's managers, so for anyone else it is not there."""
+    if not account_id:
+        return False
+    account = first_row(
+        supabase_client.get_client()
+        .table("accounts")
+        .select("id, household_id, owner_user_id, assigned_wife_id, account_type")
+        .eq("id", account_id)
+    )
+    if not account or str(account.get("account_type") or "") != "wife":
+        return False
+    from nafaqah_service import can_view_wife_account, load_family_context
+
+    return not can_view_wife_account(load_family_context(household_id), actor_user_id, account)
+
+
 def assert_can_modify_transaction(household_id: str, transaction_id: str, actor_user_id: Optional[str]) -> Dict[str, Any]:
     """
     Load ``transaction_id`` inside ``household_id`` and check the actor may edit or delete it.
-    Raises TransactionNotFoundError (not in this household, or a wife's personal purchase the actor
+    Raises TransactionNotFoundError (not in this household, a wife's personal purchase the actor
     does not read: a caller who cannot read a row cannot have it edited either, review R3B-01, as
-    the database's UPDATE and DELETE policies) or PermissionDeniedError.
+    the database's UPDATE and DELETE policies; or a row on a wife account the actor does not see,
+    review R3C-01) or PermissionDeniedError.
     """
     if not actor_user_id:
         raise PermissionDeniedError(TRANSACTION_FORBIDDEN)
     tx = first_row(
         supabase_client.get_client()
         .table("transactions")
-        .select("id, household_id, user_id, nafaqah_class, nafaqah_spouse_id")
+        .select("id, household_id, user_id, nafaqah_class, nafaqah_spouse_id, account_id")
         .eq("id", transaction_id)
         .eq("household_id", household_id)
     )
@@ -291,6 +312,8 @@ def assert_can_modify_transaction(household_id: str, transaction_id: str, actor_
 
         if not can_view_personal_purchase(load_family_context(household_id), actor_user_id, tx):
             raise TransactionNotFoundError("Transaction not found in this household.")
+    if wife_account_hidden_from(household_id, tx.get("account_id"), actor_user_id):
+        raise TransactionNotFoundError("Transaction not found in this household.")
     role = member_role(household_id, actor_user_id)
     if not can_modify_transaction(actor_user_id, role, tx.get("user_id")):
         raise PermissionDeniedError(TRANSACTION_FORBIDDEN)
