@@ -56,7 +56,6 @@ class BudgetRepairService {
               'category_code': catCode,
               'allocated_amount': r['allocated_amount'],
               'spent_amount': 0.0,
-              'remaining_amount': r['allocated_amount'],
               'month': curMonthStr,
               'cycle_key': curCycleKey,
               'account_id': r['account_id'],

@@ -875,7 +875,19 @@ def add_category_and_budget(req: Any) -> Dict[str, Any]:
             "household_id": req.household_id,
         }).execute()
     # A shared/system code is used as-is: its definition is never rewritten from a household request.
-    
+
+    # The category list follows household_category_settings, so an active budget must come with
+    # an active setting. Otherwise a code the household had deactivated (typing "Fuel" builds the
+    # system OPEX-FUEL) gets an active budget row the budget screen hides. Written before the
+    # budget so a failure here leaves no hidden row behind; only the setting is written, past-cycle
+    # rows stay as they are.
+    client.table("household_category_settings").upsert({
+        "household_id": req.household_id,
+        "category_code": req.code,
+        "is_active": True,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }, on_conflict="household_id,category_code").execute()
+
     current_cycle = current_household_cycle(req.household_id)
     today = riyadh_today()
     month_str = today.replace(day=1).isoformat()
@@ -906,7 +918,6 @@ def add_category_and_budget(req: Any) -> Dict[str, Any]:
             "is_active": True,
         }
         client.table("budgets").insert(budget_payload).execute()
-    activate_household_category(client, req.household_id, req.code)
 
     return {
         "status": "success",

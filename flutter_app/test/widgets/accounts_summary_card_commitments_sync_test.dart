@@ -18,8 +18,12 @@ class _FakeAccountService extends AccountService {
   @override
   Stream<List<Account>> streamAccounts(String householdId) => _controller.stream;
 
+  /// When true, fetches never complete, like a slow network for a new household.
+  bool holdFetches = false;
+
   @override
-  Future<List<Account>> getAccounts(String householdId) async => [];
+  Future<List<Account>> getAccounts(String householdId) =>
+      holdFetches ? Completer<List<Account>>().future : Future.value(<Account>[]);
 
   void emit(List<Account> accounts) => _controller.add(accounts);
   void close() => _controller.close();
@@ -46,6 +50,9 @@ class _TestAccountProvider extends ChangeNotifier implements AccountProvider {
 
   @override
   bool get hasLoaded => _hasLoaded;
+
+  @override
+  String? get householdId => 'h1';
 
   @override
   List<Account> get accounts => _accounts;
@@ -205,6 +212,126 @@ void main() {
       // Available = 5000 - 1162 = 3838
       expect(find.textContaining('3,838.00'), findsOneWidget);
       expect(find.textContaining('1,162.00'), findsOneWidget);
+    });
+
+    testWidgets(
+        'AccountsSummaryCard follows AccountProvider balances after a transaction '
+        'even when the realtime stream never emits', (tester) async {
+      Account acc(String id, String name, double balance) => Account(
+            id: id,
+            householdId: 'h1',
+            ownerUserId: 'u1',
+            name: name,
+            accountType: AccountType.bank,
+            balance: balance,
+          );
+
+      final provider = AccountProvider(accounts: fakeService)
+        ..setAccountsForTesting(
+          [acc('a1', 'Bank', 1000), acc('a2', 'Cash', 200)],
+          householdId: 'h1',
+          cycleKey: '2026-11',
+          commitments: const [],
+          cycleIncomeHalalas: 0,
+        );
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AccountProvider>.value(
+          value: provider,
+          child: const MaterialApp(
+            localizationsDelegates: [
+              AppLocalizationsDelegate(),
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            locale: Locale('en'),
+            home: Scaffold(body: AccountsSummaryCard(householdId: 'h1')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('1,200.00', findRichText: true), findsOneWidget);
+
+      // Expense of 150 from Bank: provider refreshes, realtime stays silent.
+      provider.setAccountsForTesting(
+        [acc('a1', 'Bank', 850), acc('a2', 'Cash', 200)],
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('1,050.00', findRichText: true), findsOneWidget);
+      expect(find.textContaining('1,200.00', findRichText: true), findsNothing);
+    });
+
+    Account acc(String id, String hid, String name, double balance) => Account(
+          id: id,
+          householdId: hid,
+          ownerUserId: 'u1',
+          name: name,
+          accountType: AccountType.bank,
+          balance: balance,
+        );
+
+    Widget app(AccountProvider provider, String hid) => ChangeNotifierProvider<AccountProvider>.value(
+          value: provider,
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizationsDelegate(),
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            locale: const Locale('en'),
+            home: Scaffold(body: AccountsSummaryCard(householdId: hid)),
+          ),
+        );
+
+    testWidgets('AccountsSummaryCard ignores AccountProvider bound to another household '
+        'and shows its own household from the fallback stream', (tester) async {
+      final provider = AccountProvider(accounts: fakeService)
+        ..setAccountsForTesting(
+          [acc('x1', 'other', 'Other', 9999)],
+          householdId: 'other',
+          cycleKey: '2026-11',
+          commitments: const [],
+          cycleIncomeHalalas: 0,
+        );
+
+      await tester.pumpWidget(app(provider, 'h1'));
+      await tester.pump();
+      fakeService.emit([acc('a1', 'h1', 'Bank', 300)]);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('300.00', findRichText: true), findsWidgets);
+      expect(find.textContaining('9,999.00', findRichText: true), findsNothing);
+    });
+
+    testWidgets('AccountsSummaryCard falls back to its stream while AccountProvider has not loaded',
+        (tester) async {
+      final provider = AccountProvider(accounts: fakeService);
+      expect(provider.hasLoaded, isFalse);
+
+      await tester.pumpWidget(app(provider, 'h1'));
+      await tester.pump();
+      fakeService.emit([acc('a1', 'h1', 'Bank', 500)]);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('500.00', findRichText: true), findsWidgets);
+    });
+
+    testWidgets('AccountsSummaryCard drops the previous household balances on household switch',
+        (tester) async {
+      final provider = AccountProvider(accounts: fakeService);
+
+      await tester.pumpWidget(app(provider, 'h1'));
+      await tester.pump();
+      fakeService.emit([acc('a1', 'h1', 'Bank', 700)]);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('700.00', findRichText: true), findsWidgets);
+
+      fakeService.holdFetches = true; // h2 is still loading
+      await tester.pumpWidget(app(provider, 'h2'));
+      await tester.pump();
+
+      expect(find.textContaining('700.00', findRichText: true), findsNothing);
     });
   });
 }

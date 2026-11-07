@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/models.dart';
 import '../../theme/app_themes.dart';
+import '../../utils/household_categories.dart';
 
 /// The overspent categories right under the hero (UX-08): the three furthest
 /// over budget with the amount over, and "Show all" to the category list.
@@ -57,7 +58,7 @@ class OverBudgetAlerts extends StatelessWidget {
               padding: const EdgeInsetsDirectional.only(start: 24, bottom: 6, end: 8),
               child: Text(
                 context.trArgs('over_budget_row', {
-                  'category': context.trCat(b.categoryCode),
+                  'category': context.categoryLabel(b.categoryCode),
                   'amount': context.sar(b.overspentAmount),
                 }),
                 key: const Key('over_budget_row'),

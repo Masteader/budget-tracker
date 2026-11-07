@@ -12,6 +12,7 @@ import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
 import '../card_error_state.dart';
+import '../../utils/household_categories.dart';
 
 /// Interactive dashboard card displaying recurring monthly bills, payment status
 /// in the active salary cycle, reserved fund allowance, and category inclusion settings.
@@ -811,7 +812,7 @@ class _BillRowItem extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  context.trCat(bill.categoryCode),
+                  context.categoryLabel(bill.categoryCode),
                   style: TextStyle(color: context.textSecondary, fontSize: 10),
                 ),
                 if (large) ...[
@@ -994,7 +995,7 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                                     crossAxisAlignment: WrapCrossAlignment.center,
                                     children: [
                                       Text(
-                                        '${context.trCat(c.categoryCode)} • ${context.sar(c.allocatedAmount)}',
+                                        '${context.categoryLabel(c.categoryCode)} • ${context.sar(c.allocatedAmount)}',
                                         style: TextStyle(color: context.textSecondary, fontSize: 11),
                                       ),
                                       if (c.isRecurring)

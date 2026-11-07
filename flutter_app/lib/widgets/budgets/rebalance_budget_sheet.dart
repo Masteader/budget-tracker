@@ -117,7 +117,6 @@ class _RebalanceBudgetSheetState extends State<RebalanceBudgetSheet> {
                 .from('budgets')
                 .update({
                   'allocated_amount': entry.value,
-                  'remaining_amount': entry.value - b.spentAmount,
                 })
                 .eq('id', b.id),
           );

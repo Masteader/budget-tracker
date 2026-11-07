@@ -272,7 +272,6 @@ class AccountService {
         'month': '${cycleKey.length >= 7 ? cycleKey.substring(0, 7) : cycleKey}-01',
         'allocated_amount': 0.0,
         'spent_amount': 0.0,
-        'remaining_amount': 0.0,
         'account_id': accountId,
         'is_active': true,
       });

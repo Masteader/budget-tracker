@@ -8,6 +8,7 @@ import '../main.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import 'sub_budget_allocation_dialog.dart';
+import '../utils/household_categories.dart';
 
 class SubBudgetBreakdownSheet extends StatefulWidget {
   final String householdId;
@@ -250,7 +251,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                 _categoryData!.categoryName.trim().isNotEmpty &&
                 _categoryData!.categoryName != widget.categoryCode)
             ? _categoryData!.categoryName
-            : context.trCat(widget.categoryCode);
+            : context.categoryLabel(widget.categoryCode);
 
     return SafeArea(
       child: Container(

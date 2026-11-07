@@ -1685,7 +1685,13 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                   const SizedBox(width: 8),
                                   Builder(
                                     builder: (context) {
-                                      final setCodes = budgets.where((b) => b.isActive).map((b) => b.categoryCode).toSet();
+                                      // Count only categories listed on this screen, so a stray budget row
+                                      // for a deactivated category cannot read as 12/11.
+                                      final listedCodes = staticData.allCodes.map((c) => c['code']).toSet();
+                                      final setCodes = budgets
+                                          .where((b) => b.isActive && listedCodes.contains(b.categoryCode))
+                                          .map((b) => b.categoryCode)
+                                          .toSet();
                                       return Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                         decoration: BoxDecoration(

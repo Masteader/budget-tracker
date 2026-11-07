@@ -64,6 +64,51 @@ def test_add_category_and_budget_updates_the_budget_of_the_household_cycle(house
     assert len(rows) == 1 and rows[0]["allocated_amount"] == 120.0
 
 
+def test_add_category_and_budget_reactivates_a_deactivated_category(household):
+    """Typing "Fuel" in Add Category builds OPEX-FUEL, the system code the household had
+    deactivated. The budget it creates must make the category visible again, never leave an
+    active budget row behind a category the budget screen hides (stray 12/11 row, 2026-11-02)."""
+    from salary_cycle import add_category_and_budget, get_household_categories
+
+    household.seed("cost_control_codes", [{"code": "OPEX-FUEL", "category": "Fuel & Transport",
+                                           "is_system": True, "household_id": None}])
+    household.seed("household_category_settings", [{"household_id": HH, "category_code": "OPEX-FUEL",
+                                                    "is_active": False}])
+    req = SimpleNamespace(household_id=HH, code="OPEX-FUEL", category="Fuel", keywords=None,
+                          is_flexible=False, allocated_amount=0.0)
+    add_category_and_budget(req)
+
+    rows = _budget_rows(household, "OPEX-FUEL")
+    assert [(r["cycle_key"], r["is_active"]) for r in rows] == [(CYCLE, True)]
+    cats = get_household_categories(HH)
+    assert "OPEX-FUEL" in [c["code"] for c in cats["active"]]
+    assert "OPEX-FUEL" not in [c["code"] for c in cats["inactive"]]
+
+
+def test_add_category_and_budget_writes_an_active_setting_when_none_exists(household):
+    from salary_cycle import add_category_and_budget
+
+    req = SimpleNamespace(household_id=HH, code="CUSTOM-GYM", category="Gym", keywords=None,
+                          is_flexible=False, allocated_amount=120.0)
+    add_category_and_budget(req)
+
+    settings = [s for s in household.tables.get("household_category_settings", [])
+                if s["household_id"] == HH and s["category_code"] == "CUSTOM-GYM"]
+    assert [s["is_active"] for s in settings] == [True]
+
+
+def test_add_category_and_budget_writes_no_budget_when_the_setting_fails(household):
+    """The setting is written first: if it fails, no hidden active budget row is left behind."""
+    from salary_cycle import add_category_and_budget
+
+    household.schemas["household_category_settings"] = {"id"}  # every write to it fails
+    req = SimpleNamespace(household_id=HH, code="OPEX-FUEL", category="Fuel", keywords=None,
+                          is_flexible=False, allocated_amount=0.0)
+    with pytest.raises(Exception):
+        add_category_and_budget(req)
+    assert _budget_rows(household, "OPEX-FUEL") == []
+
+
 def test_create_household_custom_category_uses_household_payday(household):
     from salary_cycle import create_household_custom_category
 

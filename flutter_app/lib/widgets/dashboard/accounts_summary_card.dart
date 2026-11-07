@@ -87,6 +87,8 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
   void didUpdateWidget(covariant AccountsSummaryCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.householdId != widget.householdId) {
+      // Never show the previous household's balances while the new ones load.
+      _cachedAccounts = [];
       _initStream();
       _fetchDirectly();
     }
@@ -96,6 +98,18 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
   void dispose() {
     _accountsSub?.cancel();
     super.dispose();
+  }
+
+  /// Accounts from [AccountProvider] when it is loaded for this household,
+  /// otherwise null. Watching it rebuilds the card on every balance change.
+  List<Account>? _providerAccounts(BuildContext context) {
+    try {
+      final provider = Provider.of<AccountProvider>(context, listen: true);
+      if (provider.hasLoaded && provider.householdId == widget.householdId) {
+        return provider.accounts;
+      }
+    } catch (_) {}
+    return null;
   }
 
   @override
@@ -109,7 +123,13 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
         color: context.accentText,
       ),
     );
-    final accounts = _cachedAccounts.where((a) => !a.isArchived).toList();
+    // AccountProvider is the source of truth the hero card and the accounts
+    // screen use: it is refreshed and optimistically updated after every
+    // transaction. The card's own realtime stream is only a fallback for
+    // trees without a loaded provider, since realtime does not always emit.
+    final accounts = (_providerAccounts(context) ?? _cachedAccounts)
+        .where((a) => !a.isArchived)
+        .toList();
     if (accounts.isEmpty || accounts.length < widget.minAccounts) return const SizedBox.shrink();
 
         final totalLiquidity =
@@ -145,7 +165,9 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
             accountProvider = Provider.of<AccountProvider>(context, listen: true);
           } catch (_) {}
 
-          if (accountProvider != null && accountProvider.hasLoaded) {
+          if (accountProvider != null &&
+              accountProvider.hasLoaded &&
+              accountProvider.householdId == widget.householdId) {
             totalCommitments = accountProvider.snapshot.pendingCommitments;
           } else {
             RecurringBillsSummary? billsSummary;

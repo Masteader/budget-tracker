@@ -7,6 +7,7 @@ import '../../models/category_catalog.dart';
 import '../../models/models.dart';
 import '../../theme/app_themes.dart';
 import '../sub_budget_breakdown_sheet.dart';
+import '../../utils/household_categories.dart';
 
 /// Interactive 3D budget card per category displaying spent vs allocated,
 /// usage progress bar with alert coloring, rollover badge, and sub-category chips.
@@ -76,7 +77,7 @@ class CategoryBudgetCard extends StatelessWidget {
                         children: [
                           Flexible(
                             child: Text(
-                              context.trCat(budget.categoryCode),
+                              context.categoryLabel(budget.categoryCode),
                               style: GoogleFonts.outfit(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14,

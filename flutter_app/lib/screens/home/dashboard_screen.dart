@@ -22,6 +22,7 @@ import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/salary_cycle_service.dart';
+import '../../utils/household_categories.dart';
 import '../../widgets/dashboard/budget_hero_card.dart';
 import '../../widgets/dashboard/category_budget_card.dart';
 import '../../widgets/dashboard/over_budget_alerts.dart';
@@ -303,7 +304,11 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
 
   /// The selected cycle's active budgets from the budgets stream,
   /// reconciled with real transactions from [TransactionProvider].
-  List<Budget> _cycleBudgets(List<Map<String, dynamic>> rows, [TransactionProvider? txProvider]) {
+  List<Budget> _cycleBudgets(
+    BuildContext ctx,
+    List<Map<String, dynamic>> rows, [
+    TransactionProvider? txProvider,
+  ]) {
     final list = <Budget>[];
     for (final r in rows) {
       try {
@@ -315,8 +320,18 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
         debugPrint('[DashboardScreen] Failed to parse budget row: $e\n$st');
       }
     }
-    if (txProvider == null || txProvider.isLoading) return list;
-    return reconcileCycleBudgets(list, txProvider, _currentCycleKey, _paydayDay);
+    final reconciled = (txProvider == null || txProvider.isLoading)
+        ? list
+        : reconcileCycleBudgets(list, txProvider, _currentCycleKey, _paydayDay);
+    // Match the budget screen: an empty budget row for a category the
+    // household deactivated is not shown (it carries no money either way).
+    // [ctx] is the calling Builder's context: only that subtree rebuilds,
+    // and only when the categories change.
+    final inactive = inactiveCategoryCodes(
+      ctx.select<BudgetProvider, Map<String, List<CategoryItem>>?>((p) => p.cachedCategories),
+    );
+    if (inactive.isEmpty) return reconciled;
+    return reconciled.where((b) => !isEmptyInactiveCategoryBudget(b, inactive)).toList();
   }
 
   /// The open cycle's spending in categories without an active budget
@@ -667,7 +682,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
                                   final txProvider = ctx.watch<TransactionProvider>();
                                   return Column(
                                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: _buildTop(hid, _cycleBudgets(budgetSnap.data!, txProvider), txProvider),
+                                    children: _buildTop(hid, _cycleBudgets(ctx, budgetSnap.data!, txProvider), txProvider),
                                   );
                                 },
                               ),
@@ -733,7 +748,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
                         sliver: Builder(
                           builder: (context) {
                             final txProvider = context.watch<TransactionProvider>();
-                            final cycleBudgets = Budget.sortByRisk(_cycleBudgets(budgetSnap.data!, txProvider));
+                            final cycleBudgets = Budget.sortByRisk(_cycleBudgets(context, budgetSnap.data!, txProvider));
                             if (cycleBudgets.isEmpty) {
                               // The running cycle's empty state is the setup
                               // card at the top (UX-02); it no longer points
