@@ -223,7 +223,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
   }
 
   Widget _buildTargetedClaimBanner(HouseholdInvite invite) {
-    Color bannerColor = AppThemes.success;
+    Color bannerColor = context.accentText;
     IconData roleIcon = Icons.stars_rounded;
     String roleLabel = context.tr('member');
 
@@ -239,7 +239,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
 
     return Container(
       key: const Key('targeted_claim_banner'),
-      margin: const EdgeInsets.only(top: 10, bottom: 4),
+      margin: const EdgeInsetsDirectional.only(top: 10, bottom: 4),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: bannerColor.withValues(alpha: 0.12),
@@ -285,12 +285,73 @@ class _HouseholdScreenState extends State<HouseholdScreen>
     );
   }
 
+  /// The Create tab's fields and button.
+  Widget _createTab(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _createNameCtrl,
+            onChanged: (_) {
+              if (_showNameRequired) setState(() => _showNameRequired = false);
+            },
+            decoration: InputDecoration(
+              hintText: context.tr('hh_name_hint'),
+              prefixIcon: const Icon(Icons.home_outlined),
+              errorText: _showNameRequired ? context.tr('hh_name_required') : null,
+            ),
+          ),
+          const SizedBox(height: 16),
+          HouseholdTypeChooser(
+            value: _householdType,
+            showRequired: _showTypeRequired,
+            onChanged: (type) => setState(() => _householdType = type),
+          ),
+          const SizedBox(height: 24),
+          _BigButton(
+            label: context.tr('hh_create_household'),
+            icon: Icons.add_home_outlined,
+            loading: _loading,
+            onTap: _createHousehold,
+          ),
+        ],
+      );
+
+  /// The Join tab's code field, the invite banner and the button.
+  Widget _joinTab(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _joinCodeCtrl,
+            textCapitalization: TextCapitalization.characters,
+            maxLength: 16,
+            decoration: InputDecoration(
+              hintText: context.tr('hh_invite_code_hint'),
+              prefixIcon: const Icon(Icons.qr_code_outlined),
+            ),
+          ),
+          if (_inspectedInvite != null &&
+              _inspectedInvite!.targetMemberName != null &&
+              _inspectedInvite!.targetMemberName!.isNotEmpty)
+            _buildTargetedClaimBanner(_inspectedInvite!),
+          const SizedBox(height: 24),
+          _BigButton(
+            label: context.tr('join_household'),
+            icon: Icons.group_add_outlined,
+            loading: _loading,
+            onTap: _joinHousehold,
+          ),
+        ],
+      );
+
   @override
   Widget build(BuildContext context) {
     final canPop = Navigator.of(context).canPop();
+    // One scroll view for the whole page, so it fits a small phone at large
+    // text with the keyboard open. The tabs switch by tap (owner decision D3).
     return Scaffold(
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.all(28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -316,81 +377,21 @@ class _HouseholdScreenState extends State<HouseholdScreen>
                   style: TextStyle(color: context.textSecondary)),
               const SizedBox(height: 32),
 
-              // Tab bar
               TabBar(
                 controller: _tab,
-                indicatorColor: AppThemes.success,
-                labelColor: AppThemes.success,
+                indicatorColor: context.accentText,
+                labelColor: context.accentText,
                 unselectedLabelColor: context.textSecondary,
                 tabs: [Tab(text: context.tr('create')), Tab(text: context.tr('join'))],
               ),
               const SizedBox(height: 28),
 
-              Expanded(
-                child: TabBarView(
-                  controller: _tab,
-                  children: [
-                    // ── Create ───────────────────────────────────────────
-                    SingleChildScrollView(
-                      child: Column(
-                      children: [
-                        TextField(
-                          controller: _createNameCtrl,
-                          onChanged: (_) {
-                            if (_showNameRequired) setState(() => _showNameRequired = false);
-                          },
-                          decoration: InputDecoration(
-                            hintText: context.tr('hh_name_hint'),
-                            prefixIcon: const Icon(Icons.home_outlined),
-                            errorText: _showNameRequired ? context.tr('hh_name_required') : null,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        HouseholdTypeChooser(
-                          value: _householdType,
-                          showRequired: _showTypeRequired,
-                          onChanged: (type) => setState(() => _householdType = type),
-                        ),
-                        const SizedBox(height: 24),
-                        _BigButton(
-                          label: context.tr('hh_create_household'),
-                          icon: Icons.add_home_outlined,
-                          loading: _loading,
-                          onTap: _createHousehold,
-                        ),
-                      ],
-                    ),
-                    ),
-
-                    // ── Join ─────────────────────────────────────────────
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TextField(
-                          controller: _joinCodeCtrl,
-                          textCapitalization: TextCapitalization.characters,
-                          maxLength: 16,
-                          decoration: InputDecoration(
-                            hintText: context.tr('hh_invite_code_hint'),
-                            prefixIcon: const Icon(Icons.qr_code_outlined),
-                          ),
-                        ),
-                        if (_inspectedInvite != null &&
-                            _inspectedInvite!.targetMemberName != null &&
-                            _inspectedInvite!.targetMemberName!.isNotEmpty)
-                          _buildTargetedClaimBanner(_inspectedInvite!),
-                        const SizedBox(height: 24),
-                        _BigButton(
-                          label: context.tr('join_household'),
-                          icon: Icons.group_add_outlined,
-                          loading: _loading,
-                          onTap: _joinHousehold,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              ListenableBuilder(
+                listenable: _tab,
+                builder: (context, _) => _tab.index == 0 ? _createTab(context) : _joinTab(context),
               ),
+              const SizedBox(height: 16),
+
               // Settings is out of reach without a household, and deleting an
               // account or cancelling a deletion must not depend on having one.
               Builder(
@@ -403,6 +404,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
                       onPressed: () => AccountDeletionFlowScreen.open(context),
                       child: Text(
                         context.tr(deletion.isPending ? 'del_cancel_button' : 'del_delete_account'),
+                        textAlign: TextAlign.center,
                         style: TextStyle(color: context.dangerColor, fontSize: 12),
                       ),
                     ),
@@ -432,21 +434,23 @@ class _BigButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
+    // At least 52 high, taller when a large-text label wraps.
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: double.infinity, minHeight: 52),
       child: ElevatedButton.icon(
         icon: loading
-            ? const SizedBox(
+            ? SizedBox(
                 width: 18, height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.onSuccessFill))
+                child: CircularProgressIndicator(strokeWidth: 2, color: context.primaryButtonFg))
             : Icon(icon),
         label: Text(label,
+            textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         onPressed: loading ? null : onTap,
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppThemes.success,
-          foregroundColor: AppThemes.onSuccessFill,
+          backgroundColor: context.primaryButtonBg,
+          foregroundColor: context.primaryButtonFg,
+          padding: const EdgeInsetsDirectional.fromSTEB(16, 14, 16, 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),

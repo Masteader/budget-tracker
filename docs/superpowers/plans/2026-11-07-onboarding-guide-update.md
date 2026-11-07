@@ -299,10 +299,10 @@
 - The existing back-button and claim tests still pass.
 
 **Checklist**
-- [ ] Write the layout and theme tests and see them fail
-- [ ] Make the page scroll as one, replace the fixed button height, swap the colours
-- [ ] Gates: `flutter analyze` and `flutter test`
-- [ ] Commit `fix(onboarding): household screen scrolls at large text and uses the burgundy theme`
+- [x] Write the layout and theme tests and see them fail
+- [x] Make the page scroll as one, replace the fixed button height, swap the colours
+- [x] Gates: `flutter analyze` and `flutter test`
+- [x] Commit `fix(onboarding): household screen scrolls at large text and uses the burgundy theme`
 
 **Size:** S–M. About +60 code / +120 test lines, about 2 hours.
 
