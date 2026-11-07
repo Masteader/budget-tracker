@@ -8,9 +8,10 @@ live in the root [`README.md`](../README.md).
 
 ## Quick Links
 
+- 🧭 **[How the App Works](HOW_IT_WORKS.md)** — start here: roles, households, accounts and the wife account, expense kinds, repayments, who sees what, account deletion, accepted limits.
 - 📋 **[Full Project Details](PROJECT_DETAILS.md)** — architecture, features, API endpoints, migrations and test suites.
 - 🍎 **[iOS Readiness](IOS_READINESS.md)** — what is done, Mac build steps, release blockers and everything still unverified.
-- 🔐 **[Operational Runbooks](runbooks/)** — secret rotation.
+- 🔐 **[Operational Runbooks](runbooks/)** — secret rotation, the account deletion purge.
 - 🔎 **[Review & Audit](review/)** — audit reports, fix log, owner actions, live DB pre-flight and rollback snapshots.
 - 📜 **[Project Rules](../.agents/rules/)** — engineering, design, security and fintech standards.
 - 📐 **[Design Specifications](superpowers/specs/)** and 🛠️ **[Implementation Plans](superpowers/plans/)** — historical; the code and the rules above win where they differ.
@@ -22,9 +23,11 @@ live in the root [`README.md`](../README.md).
 ```
 docs/
 ├── README.md                    # This index
+├── HOW_IT_WORKS.md              # How the app behaves today, for the owner and new developers
 ├── PROJECT_DETAILS.md           # Project dossier (features, API, migrations, tests)
 ├── IOS_READINESS.md             # iOS status, Mac steps, release blockers, unverified items
 ├── runbooks/
+│   ├── account-deletion-purge.md
 │   └── security-secret-rotation.md
 ├── review/                      # Audit work (maintained by the review agents)
 │   ├── FIX_LOG.md               # Finding → proof test → fix → applied to live?
@@ -105,3 +108,4 @@ Later security, database and permission work (October 19–20) is recorded in
 - **[03. UI/UX & Design System](../.agents/rules/03-ui-ux-and-design-system.md)**
 - **[04. Security & Privacy](../.agents/rules/04-security-and-privacy.md)**
 - **[05. Code Quality & Testing](../.agents/rules/05-code-quality-and-testing.md)**
+- **[06. PR & Multi-Agent Audit Pipeline](../.agents/rules/06-pr-and-audit-pipeline.md)** (with the owner's testing and review scope waiver of 2026-11-06)

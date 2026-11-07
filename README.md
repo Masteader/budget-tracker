@@ -37,12 +37,16 @@ Android / iOS Phone                 Python AI Service              Supabase
 - 📅 **Salary Cycles & Recurring Bills**: cycles follow the household payday
   (`households.payday_day`, default 27th, Asia/Riyadh dates), bill reserves and BNPL installments.
 - 👪 **Family & Wife Expenses / Roommate Settlements**: no spousal percentage splits, wife reimbursement
-  ledger and personal allowance; multi-roommate debt simplification.
+  ledger (repayments move money into her wife account; she can request, he approves) and personal
+  allowance; multi-roommate debt simplification.
+- 🗑️ **Account deletion**: in the app or at `/delete-account`, with 30 days to cancel.
 - 🛡️ **Admin / co-admin permissions**: the database and the API enforce who may move shared money
   and edit other members' transactions.
 - ✉️ **Support & VIP early-access email**: in-app and web forms are emailed to the team.
 - 🔒 **Zero SMS Interception**: no SMS permissions, listeners or SMS ingestion anywhere.
 
+How the app works today (roles, households, accounts and the wife account, repayments, who sees
+what, account deletion): [`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md).
 Full feature, API and schema reference: [`docs/PROJECT_DETAILS.md`](docs/PROJECT_DETAILS.md).
 
 ---

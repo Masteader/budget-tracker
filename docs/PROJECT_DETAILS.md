@@ -1,12 +1,14 @@
 # Full Project Details — Budget Tracker
 
 > **Document Version:** 1.1.0  
-> **Last verified against code:** October 20, 2026 (branch `audit/claude-comprehensive-review`)  
+> **Last verified against code:** November 7, 2026 (branch `release/2026-11-07`)  
 > **Project Repository:** `Masteader/budget-tracker`  
 > **Primary Target Market:** Saudi Arabia (KSA) & GCC Households  
 
 Setup, environment variables, test commands and the deployment order are in the root
-[`README.md`](../README.md); this document describes what the system does.
+[`README.md`](../README.md); this document describes what the system does. For a plain walk-through of
+roles, households, accounts, the wife ledger, who sees what and account deletion, read
+[`HOW_IT_WORKS.md`](HOW_IT_WORKS.md).
 
 ---
 
@@ -50,8 +52,8 @@ roommate homes in the GCC. It addresses realities that generic budgeting tools i
 │          Flutter Mobile App          │     React Web App (web_app/)         │
 │    (iOS / Android - Sovereign OS)    │   (Daylight Coastal Exploding Flow)  │
 │  • Dart 3.x                          │  • React 19, TypeScript, Vite        │
-│  • Provider / ChangeNotifier         │  • TailwindCSS, Framer Motion        │
-│  • Camera, Speech, Google Fonts      │  • Payday Simulator, VIP form        │
+│  • Provider / ChangeNotifier         │  • TailwindCSS                       │
+│  • Camera, Speech, Google Fonts      │  • Landing, portal, /delete-account  │
 │  • SQLite Offline Queue (`sqflite`)  │  • Served by ai_service at `/`       │
 └──────┬──────────────────────┬────────┴──────────────────┬───────────────────┘
        │ publishable key,     │ HTTPS + user JWT          │ POST /public/inquiries
@@ -66,7 +68,7 @@ roommate homes in the GCC. It addresses realities that generic budgeting tools i
        ▼                                   ▼ secret key + explicit membership/admin checks
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ Supabase: PostgreSQL + RLS on every table · SECURITY DEFINER RPCs · Storage │
-│ (private `receipts` bucket) · Realtime · 41 migrations in supabase/migrations│
+│ (private `receipts` bucket) · Realtime · 69 migrations in supabase/migrations│
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -75,10 +77,12 @@ roommate homes in the GCC. It addresses realities that generic budgeting tools i
 ## 3. Applied Features
 
 ### 3.1 Multi-Source Income, Accounts & Balances Ledger
-- **Account Types:** `bank`, `e_wallet`, `crypto`, `cash`, `shared_pool`.
+- **Account Types:** `bank`, `e_wallet`, `crypto`, `cash`, `savings`, `shared_pool`, and `wife` (a
+  husband's account assigned to one wife, §3.6).
 - **Liquid Asset Dashboard Card:** total household liquidity with a privacy eye toggle.
 - **Inter-Account Transfers:** atomic `transfer_between_accounts` RPC with fee recording. Only
-  admins move money out of a shared pool; a personal account is debited only by its owner.
+  admins move money out of a shared pool; a personal account is debited only by its owner. A wife
+  account is funded only by its owner or her ledger's managers, and nothing is transferred out of it.
 - **Multi-Source Income Logging:** `income_records.source_type` is `salary`, `overtime`, `bonus`,
   `side_gig`, `roommate_share` or `other`, with deductions; income records are append-only.
 - **Account Reconciliation:** compares the app balance with the bank and records an adjustment.
@@ -89,7 +93,9 @@ roommate homes in the GCC. It addresses realities that generic budgeting tools i
 - **Cycle key:** with payday 27 the cycle 27 Oct → 26 Nov 2026 is `2026-11` (payday > 15 names the
   month the cycle ends in; payday ≤ 15 the month it starts in; payday 1 is the calendar month).
   SQL, Python and Dart produce the same key and triggers keep `transactions.cycle_key` consistent.
-- **Payday Check-in:** on payday the app prompts for the net salary, overtime and bonuses.
+- **Payday Check-in:** from the household's payday the dashboard prompts for the net salary,
+  overtime and bonuses, for up to 8 days (it closes 7 days after payday, counted on a 31-day month,
+  so payday 27 runs to the 3rd), unless a salary was logged in the last 20 days.
 - **Salary Distribution Assistant:** proposes transfers from the salary account to under-funded accounts.
 - **Rollover rule** (`households.rollover_rule`, `GET|PUT /households/{id}/rollover-rule`):
   `send_to_savings` (default), `rollover_to_categories` (adds `previous_cycle_delta`) or `fresh_start`.
@@ -130,11 +136,11 @@ roommate homes in the GCC. It addresses realities that generic budgeting tools i
 ### 3.6 Islamic Family Nafaqah & Multi-Roommate Settlements
 - **Family mode, rules 1–4 in [`.agents/rules/02-…`](../.agents/rules/02-saudi-fintech-and-islamic-compliance.md):**
   - No 50/50 or any percentage split between the spouses: shared family expenses are the husband's Nafaqah.
-  - The wife paying for something shared from her own money is tagged `transactions.nafaqah_class = 'wife_reimbursable'` and becomes a debt the husband owes her; the app shows the outstanding balance and history and records partial or full repayments (overpayment rejected).
+  - The wife paying for something shared from her own money is tagged `transactions.nafaqah_class = 'wife_reimbursable'` and becomes a debt the husband owes her; the app shows the outstanding balance and history and records partial or full repayments (overpayment rejected). Each repayment moves the amount from an account of his (or a pool, if he is an admin) into her wife account; she can instead mark "I received X", a pending request he approves or declines; corrections are reversals, never edits or deletions (migration `20261105001300`).
   - Her personal purchases are tagged `wife_personal` and charged to her **personal allowance ("مصروفها")** per salary cycle, set by the husband or an admin (never by a wife, not even a co-wife who is an admin) and seen only by her, her husband and the admins who are not wives; allocated / spent / remaining is shown, overspend goes negative and is never blocked. The same people alone read her personal purchases themselves (the rows, their receipt photos and any total that includes them; owner decision 2026-11-06), the transfers of her personal accounts and the installment plans of her personal purchases: a co-wife, even an admin, and an ordinary member do not (balances are unchanged). The owner of an account still reads the transfers of his own account with her, and a plan stays hers after her purchase is deleted; after her account is deleted her plans are read only by her husband and the admins who are not wives. Nobody updates or deletes a row they cannot read (owner decision 2026-11-06, review R3B). A repayment's own transfer rows are read only by her, her ledger's managers and the owner of the account it left; only her ledger's manager reverses a repayment, so a replaced husband or a demoted admin no longer reverses even his own; and only her ledger's managers (or she, clearing her own) change the wife or class of her advance.
   - **The wife account** (owner decisions 2026-11-06, migration `20261105001300` section 12): her husband creates an account of kind `wife`, his, assigned to one wife ("Add wife account" on his accounts screen). She spends from it (her personal purchases and her advances); he funds it and does not spend from it; nothing is transferred out of it. Every repayment to her moves the amount from his account into one of her wife accounts (his pick; on her request, hers, which he may switch to another of hers), and a reversal takes it back (refused when she has spent it, or the account is archived). With none, the app offers him to create one (`wife_account_required`). Only she, its owner and her ledger's managers see it. Her account deletion archives it (his, naming nobody); his passes it to the household's primary admin, or to her when that admin is a co-wife.
   - Expense entry (manual, chat review, edit) offers "Husband paid", "Shared for family (husband reimburses)" or "Personal (from my/her allowance)".
-  - API: see [§5](#5-api-endpoints) (`/households/{id}/nafaqah…`). All require the caller's JWT and household membership; `POST /households/{id}/reimbursements` writes the Nafaqah ledger in family households.
+  - API: see [§5](#5-api-endpoints) (`/households/{id}/nafaqah…`). All require the caller's JWT and household membership. In a family household the older `POST /households/{id}/reimbursements` records only the husband's repayment to his wife, with the account it is paid from (without one it answers 426 `app_update_required`; a wife gets 403 `wife_must_request`).
 - **Multi-Roommate Settlement Engine:** equal splits between roommates, graph-based debt
   simplification (`settlement_engine.simplify_debts`), shared pool accounts (`is_shared_pool = true`),
   and a settle message that can be copied for WhatsApp.
@@ -149,14 +155,15 @@ roommate homes in the GCC. It addresses realities that generic budgeting tools i
 - **Roles:** `household_memberships.role` is `admin` or `member`. The **primary admin**
   (`households.owner_user_id`) and any number of **co-admins** share admin rights; co-admins cannot
   demote or remove the primary admin. Members edit only their own transactions; admins any
-  transaction of the household. Role changes go only through RPCs
+  transaction of the household that they can read (a row hidden from them, such as a wife's
+  personal purchase from a co-wife admin, is out of their reach). Role changes go only through RPCs
   (`promote_member_to_admin`, `revoke_admin`, `transfer_primary_admin`); details in
   [`.agents/rules/04-security-and-privacy.md`](../.agents/rules/04-security-and-privacy.md) §4.
 - **Dependents** (children, elderly) are `household_dependents` profiles with allowances, not app users.
 - **Placeholder members & claim-on-join:** an invite with `target_member_id` lets the person who joins
   claim the placeholder's history and allowance.
 - **Multiple households:** a user can belong to several households and switch the active one
-  (`switch_active_household`).
+  (`switch_active_household`). Creating a household is refused once the user is admin of 5.
 
 ### 3.9 Grocery Price Intelligence & Smart Basket
 - **Price history** of grocery items from scanned receipts across Saudi chains (Panda, Lulu, Danube,
@@ -174,7 +181,9 @@ roommate homes in the GCC. It addresses realities that generic budgeting tools i
 ### 3.12 React Daylight Coastal Landing Page & Payday Simulator
 - **Stack:** React 19, Vite, TypeScript, TailwindCSS; the production build is committed in
   `ai_service/static/` and served at `/`.
-- **One page, plain copy (Arabic first):** hero with an illustrative payday card (pick a payday,
+- **Pages:** the landing page at `/`, a signed-in portal, and the public account deletion page
+  `/delete-account` (Arabic, English and Urdu, the same RPCs as the app; see §3.16).
+- **Landing, plain copy (Arabic first):** hero with an illustrative payday card (pick a payday,
   see the real cycle dates and days left, with sample amounts), four benefits (salary cycle,
   chat/receipt entry, Nafaqah, roommate split), a Nafaqah explainer, a privacy section that names
   the AI processor (Google Gemini), FAQ, early access and footer. No invented metrics.
@@ -201,6 +210,21 @@ roommate homes in the GCC. It addresses realities that generic budgeting tools i
 - `POST /public/inquiries` (anonymous, web/landing) and `POST /support/inquiries` (in-app, JWT) email
   the team through Resend or SMTP; without a provider they answer 503 and never fake success.
 - `POST /support/chat` and `POST /agent/support-chat` answer in-app questions with the support agent.
+
+### 3.16 Account Deletion
+- **Request and cancel** in the app (Settings) or on the web page `/delete-account`, only through the
+  `request_account_deletion`, `cancel_account_deletion`, `get_account_deletion_status` and
+  `get_account_deletion_preflight` RPCs, which act on the signed-in user alone. A request needs a
+  sign-in from the last 15 minutes and a typed word; the account is deleted 30 days later; Cancel
+  works until the purge starts deleting data; signing in cancels nothing.
+- **Households:** a primary admin with other members hands each household over or deletes it; a
+  marked household takes no new members or invites and shows every member a banner with the date and
+  an export hint. A wife's deletion leaves an anonymous `former_member_debts` line for what is still
+  owed to her, closed by a payment or her waiver.
+- **Purge:** only `ai_service/account_deletion_worker.py`, off until `ACCOUNT_DELETION_PURGE_ENABLED=1`;
+  deletion emails also need `ACCOUNT_DELETION_EMAILS_ENABLED=1`. Rules: [rule 04 §6](../.agents/rules/04-security-and-privacy.md#6-account-deletion);
+  operations: [`runbooks/account-deletion-purge.md`](runbooks/account-deletion-purge.md); walk-through:
+  [`HOW_IT_WORKS.md` §7](HOW_IT_WORKS.md#7-account-deletion).
 
 ---
 
@@ -244,28 +268,29 @@ routes also check membership, and settings changes need an admin.
 
 | Area | Endpoints |
 |---|---|
-| ops (public) | `GET /`, `GET /health`, `GET /auth/confirm`, `GET /auth/callback`, static assets; `/docs`, `/redoc`, `/openapi.json` only when `ENV` is non-production |
-| budgets | `GET /budgets/salary-cycle-forecast`, `GET /budgets/cycles`, `POST /budgets/recalculate`, `GET /budgets/breakdown`, `POST /budgets/categories`, `DELETE /budgets/categories/{category_code}`, `POST /budgets/sub-allocations`, `GET\|POST\|PATCH\|DELETE /budgets/sub-categories`, `POST /budgets/simulate-affordability` |
-| recurring & installments | `GET /budgets/recurring-bills`, `POST /budgets/recurring-bills/toggle`, `GET /budgets/recurring-bills/candidates`, `GET\|POST /budgets/installments`, `POST /budgets/installments/{plan_id}/pay` |
-| households | `GET\|PUT /households/{id}/payday`, `GET\|PUT /households/{id}/income`, `GET\|PUT /households/{id}/rollover-rule`, `GET /households/{id}/savings-summary`, `POST /households/{id}/invites`, `GET /households/invites/{invite_code}`, `POST /households/invites/{invite_code}/claim` |
-| members & admins | `GET /households/{id}/members`, `POST\|DELETE /households/{id}/members/{member_user_id}/admin`, `POST /households/{id}/primary-admin` |
+| ops (public) | `GET /`, `GET /health`, `GET /auth/confirm`, `GET /auth/callback`, `GET /delete-account`, `GET /favicon.svg`, static assets; `/docs`, `/redoc`, `/openapi.json` only when `ENV` is non-production |
+| budgets | `GET /budgets/salary-cycle-forecast`, `GET /budgets/cycles`, `POST /budgets/recalculate`, `GET /budgets/breakdown`, `POST /budgets/categories`, `POST /budgets/categories/replace`, `DELETE /budgets/categories/{category_code}`, `POST /budgets/sub-allocations`, `GET\|POST\|PATCH\|DELETE /budgets/sub-categories`, `POST /budgets/simulate-affordability` |
+| recurring & installments | `GET /budgets/recurring-bills`, `POST /budgets/recurring-bills/toggle`, `GET /budgets/recurring-bills/candidates`, `GET\|POST /budgets/installments`, `PUT /budgets/installments/{plan_id}`, `POST /budgets/installments/{plan_id}/pay` |
+| households | `GET\|PUT /households/{id}/payday`, `PUT /households/{id}/type`, `GET\|PUT /households/{id}/income`, `GET\|PUT /households/{id}/rollover-rule`, `GET /households/{id}/savings-summary`, `POST /households/{id}/invites`, `GET /households/invites/{invite_code}`, `POST /households/invites/{invite_code}/claim` |
+| members & admins | `GET /households/{id}/members`, `POST\|DELETE /households/{id}/members/{member_user_id}/admin`, `PUT /households/{id}/members/{member_user_id}/financial-role`, `POST /households/{id}/primary-admin` |
 | dependents & categories | `GET\|POST /households/{id}/dependents`, `DELETE /households/{id}/dependents/{dependent_id}`, `GET /households/{id}/categories`, `POST /households/{id}/categories/toggle`, `POST /households/{id}/categories/custom` |
 | settlement | `GET /households/{id}/settlement`, `GET /households/{id}/settlement-v2`, `POST /households/{id}/reimbursements` |
-| nafaqah | `GET /households/{id}/nafaqah`, `GET\|POST /households/{id}/nafaqah/reimbursements`, `GET\|PUT /households/{id}/nafaqah/allowance`, `GET\|POST /households/{id}/nafaqah/wife-accounts`, `PUT .../wife-accounts/{account_id}/assignment`, `POST .../wife-accounts/{account_id}/archive` |
+| nafaqah | `GET /households/{id}/nafaqah`, `PUT /households/{id}/nafaqah/provider`, `GET\|POST /households/{id}/nafaqah/reimbursements`, `POST .../reimbursements/{reimbursement_id}/reversal`, `GET\|POST /households/{id}/nafaqah/reimbursement-requests`, `POST .../reimbursement-requests/{request_id}/approve\|decline\|cancel`, `POST .../former-member-debts/{debt_id}/payments`, `POST .../former-member-debts/{debt_id}/payments/{event_id}/reversal`, `POST .../former-member-debts/{debt_id}/waiver`, `GET\|PUT /households/{id}/nafaqah/allowance`, `GET\|POST /households/{id}/nafaqah/wife-accounts`, `PUT .../wife-accounts/{account_id}/assignment`, `POST .../wife-accounts/{account_id}/archive` |
 | AI | `POST /agent/scan-receipt`, `POST /agent/chat-transaction` |
 | analytics & reports | `GET /analytics/price-history`, `POST /analytics/shopping-basket-optimize`, `GET /reports/statement-pdf` |
 | support & inquiries | `POST /support/chat`, `POST /agent/support-chat`, `POST /support/inquiries`, `POST /public/inquiries` (anonymous) |
 
-There is no SMS or webhook ingestion route.
+There is no SMS or webhook ingestion route, and no HTTP route deletes or purges an account: deletion
+is requested through Supabase RPCs and carried out by the worker (§3.16).
 
 ---
 
 ## 6. Database Schema & Migrations Index
 
-Base schema: `supabase/schema.sql` + `supabase/seed.sql`, then 41 migrations in
+Base schema: `supabase/schema.sql` + `supabase/seed.sql`, then 69 migrations in
 `supabase/migrations/`, applied in filename order (exception: `20261018_multi_source_income_and_accounts.sql`
-before `20261018_membership_sync_and_shared_account_policies.sql`). Proof tests for the October 19–20
-batches are in `supabase/tests/`.
+before `20261018_membership_sync_and_shared_account_policies.sql`; `supabase/tests/run_tests.py`
+holds the exact replay order and the production rollout order). Proof tests are in `supabase/tests/`.
 
 | Migration File | Objects | Purpose |
 |---|---|---|
@@ -310,6 +335,34 @@ batches are in `supabase/tests/`.
 | `20261020200000_remove_sms_artifacts.sql` | `transactions`, schema | API-25: SMS leftovers removed; `source = 'sms'` rejected. |
 | `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` | `transactions.nafaqah_class` / `nafaqah_spouse_id`, `member_allowances`, `spouse_reimbursements`, Nafaqah RPCs | UI-24: wife reimbursement ledger (append-only, overpayment rejected under an advisory lock) and per-cycle wife allowance; writes only via pinned `SECURITY DEFINER` RPCs. |
 | `20261020400000_admin_permissions_and_co_admins.sql` | `households.owner_user_id`, `transactions.user_id`, role RPCs | DB-16/18: primary admin, co-admins, creator-bound transactions, admin-only shared pool debits. |
+| `20261020500000_review_lock_financial_role.sql` | `users.financial_role` | FR-B-04: clients cannot set their own financial role. |
+| `20261020600000_e2e_helper_rpcs_and_sub_category_visibility.sql` | helper RPCs, sub-categories | E2E-04/05: helper grants, sub-category visibility. |
+| `20261020700000_fable_db_hardening.sql` | several | Independent review hardening (section B). |
+| `20261020750000_installment_pay_atomic.sql` | installment payments | FABLE-API-10: atomic installment payment. |
+| `20261020800000_household_roles_and_nafaqah_integrity.sql` | memberships, Nafaqah RPCs | Per-household roles and Nafaqah ledger integrity. |
+| `20261020900000_household_type_and_round2_fixes.sql` | `households.household_type`, `nafaqah_provider_user_id` | Family or roommates type, explicit Nafaqah provider. |
+| `20261021000000_saudi_taxonomy_and_bnpl_schedule.sql` | categories, `installment_plans` | Saudi category taxonomy, BNPL schedules. |
+| `20261024000000_create_inquiries_table.sql` | `inquiries` | Stored support and early-access inquiries. |
+| `20261026000000_add_savings_account_type.sql` | `accounts` | `savings` account type. |
+| `20261026120000_household_autonomous_taxonomy.sql` | templates, sub-categories, replace RPC | Household category catalog and category replacement. |
+| `20261101000000_nafaqah_wife_no_account.sql` | `transactions` | Unlink legacy wife rows from accounts that are not hers. |
+| `20261101000100_nafaqah_wife_account_owner_guard.sql` | `trg_enforce_wife_class_account` | Wife-class rows only on her own accounts or none. |
+| `20261102000000_cleanup_database_jargon_and_zombie_columns.sql` | `transactions` | `raw_sms` renamed to `notes`; unused columns dropped. |
+| `20261102010000_void_income_record_rpc.sql` | `void_income_record` | Void an income record with its balance reversal. |
+| `20261105000000_account_deletion_ledger_fks.sql` | ledger foreign keys | Account deletion task 1: ledgers survive a deleted user. |
+| `20261105000100_account_deletion_schema.sql` | deletion tables, guards | Account deletion task 2: requests, queues, pending-user blocks. |
+| `20261105000200_account_deletion_rpcs.sql` | deletion RPCs | Account deletion task 3: request, cancel, status, preflight. |
+| `20261105000300_account_deletion_purge.sql` | purge functions | Account deletion task 4: the service-only purge. |
+| `20261105000400_account_deletion_worker_support.sql` | worker functions | Account deletion task 5: leases, runs, alerts. |
+| `20261105000500_void_income_single_subtraction.sql` | `void_income_record` | Subtract a voided income once. |
+| `20261105000600_limit_anonymous_contact_form.sql` | `inquiries`, grants | The anonymous contact form goes through the API only; `anon` gets nothing in `public`. |
+| `20261105000700_sub_categories_household_scope.sql` | sub-categories | Household-scoped sub-category reads. |
+| `20261105000800_account_deletion_operator_request.sql` | operator functions | Operator path for people who cannot sign in. |
+| `20261105000900_account_deletion_notice_windows.sql` | notices | Deletion notice and reminder windows. |
+| `20261105001000_inactive_category_budgets.sql` | budgets | Expenses in an inactive category still count under it. |
+| `20261105001100_last_admin_household_lock.sql` | memberships | A household is never left with members and no admin. |
+| `20261105001200_account_deletion_former_member_debt.sql` | `former_member_debts` | What a deleted wife is still owed: payment, waiver, reversal. |
+| `20261105001300_wife_repayment_debit.sql` | wife account, requests, reversals, read policies | Tracked repayments from an account into her wife account, requests, reversals, and who sees her ledger and private rows. |
 
 Do not use `supabase db push` on an existing project until the history is re-baselined (DB-15).
 
@@ -317,13 +370,14 @@ Do not use `supabase db push` on an existing project until the history is re-bas
 
 ## 7. Test Suites & Quality Verification
 
-Commands and flags: root [`README.md`](../README.md#running-the-tests). Counts as of 2026-10-20:
+Commands and flags: root [`README.md`](../README.md#running-the-tests). Counts as of 2026-11-07
+(branch `release/2026-11-07`):
 
 | Suite | Location | Result |
 |---|---|---|
-| Flutter unit/widget tests | `flutter_app/test/` | 511 passed; `flutter analyze`: no issues |
-| API (pytest, hermetic) | `ai_service/tests/` | 584 passed |
-| Database (SQL proof tests) | `supabase/tests/NN_*.sql` via `run_tests.py` | 20 files passed on a fresh local rebuild |
+| Flutter unit/widget tests | `flutter_app/test/` | 2,902 passed; `flutter analyze`: no issues |
+| API (pytest, hermetic) | `ai_service/tests/` | 3,092 passed, 4 skipped (peak-memory checks) |
+| Database (SQL proof tests) | `supabase/tests/NN_*.sql` via `run_tests.py --rebuild` | 71 files passed on a fresh PostgreSQL 17 rebuild, and again in the rollout (71), drift (28) and live (71) orders |
 | Web | `web_app/` | `npm run lint` clean, `npm run build` OK (no unit tests) |
 | End-to-end | `tests/e2e/` | Local services and mocks only |
 
@@ -337,6 +391,7 @@ Commands and flags: root [`README.md`](../README.md#running-the-tests). Counts a
 - **[03. UI/UX & Design System](../.agents/rules/03-ui-ux-and-design-system.md)**: palette, web theme, trilingual RTL rules.
 - **[04. Security & Privacy](../.agents/rules/04-security-and-privacy.md)**: zero SMS, key segregation, RLS, admin/co-admin model, JWT auth.
 - **[05. Code Quality & Testing](../.agents/rules/05-code-quality-and-testing.md)**: TDD, all suites, analyzer.
+- **[06. PR & Multi-Agent Audit Pipeline](../.agents/rules/06-pr-and-audit-pipeline.md)**: review rounds, sensitive tasks, the owner's scope waiver (2026-11-06).
 
 ### 8.2 Review & Audit (`docs/review/`)
 - [Master audit report](review/audit/MASTER_AUDIT_REPORT.md), [fix log](review/FIX_LOG.md), [owner actions](review/OWNER_ACTIONS.md), [live DB pre-flight](review/audit/live_db_preflight.md).
