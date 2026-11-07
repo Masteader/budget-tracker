@@ -202,8 +202,8 @@ void main() {
                 {'category_code': 'OPEX-HOUSING', 'cycle_key': '2026-11', 'is_active': true},
               ])
             : _coverage,
-        activate: (context, householdId, categoryCode) async {
-          calls.add('$householdId/$categoryCode');
+        activate: (context, householdId, categoryCode, cycleKey) async {
+          calls.add('$householdId/$categoryCode/$cycleKey');
           budgeted = true;
           return true;
         },
@@ -215,7 +215,8 @@ void main() {
       await tester.ensureVisible(action);
       await tester.tap(action);
       await tester.pumpAndSettle();
-      expect(calls, ['h1/OPEX-HOUSING']);
+      // The expense's own cycle, which the server stamped on it.
+      expect(calls, ['h1/OPEX-HOUSING/2026-11']);
       // Budgeted now: the notice goes.
       expect(find.byKey(const Key('edit_unbudgeted_notice')), findsNothing);
     });
@@ -298,7 +299,7 @@ void main() {
       await pumpSheet(
         tester,
         row('then', previous.key, previous.start.add(const Duration(hours: 2))),
-        activate: (context, householdId, code) async {
+        activate: (context, householdId, code, cycleKey) async {
           opened++;
           return true;
         },

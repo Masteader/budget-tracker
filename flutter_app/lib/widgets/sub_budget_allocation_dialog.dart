@@ -750,6 +750,10 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
   }
 
   Future<void> _handleSave() async {
+    // Nothing is saved before the stored amounts are loaded (an empty sheet
+    // would clear them), and only once at a time: a second tap in the same
+    // frame reaches here before the button is rebuilt disabled.
+    if (_isSaving || _isLoading) return;
     setState(() {
       _isSaving = true;
       _errorMessage = null;
@@ -832,6 +836,20 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // While saving, the sheet stays open (back button, barrier tap and swipe
+    // down), so the refresh and [SubBudgetAllocationDialog.onSaved] always run
+    // after the server saved. The swipe closes the sheet without asking the
+    // route, so the drag is taken here instead.
+    return PopScope(
+      canPop: !_isSaving,
+      child: GestureDetector(
+        onVerticalDragStart: _isSaving ? (_) {} : null,
+        child: _buildSheet(context),
+      ),
+    );
+  }
+
+  Widget _buildSheet(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Container(
@@ -892,7 +910,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                   ),
                   IconButton(
                     tooltip: context.tr('close'),
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _isSaving ? null : () => Navigator.pop(context),
                     icon: Icon(Icons.close_rounded, color: context.textSecondary),
                   ),
                 ],
@@ -1323,7 +1341,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                   Expanded(
                     flex: 2,
                     child: ElevatedButton(
-                      onPressed: _isSaving ? null : _handleSave,
+                      onPressed: _isSaving || _isLoading ? null : _handleSave,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: context.primaryButtonBg,
                         foregroundColor: context.primaryButtonFg,

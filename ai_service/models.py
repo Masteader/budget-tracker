@@ -140,6 +140,18 @@ class SubAllocationsRequest(BaseModel):
             raise ValueError("allocated_amount is only for a category without sub-category amounts")
         return self
 
+    @model_validator(mode="after")
+    def sinking_fund_only_for_sent_sub_categories(self) -> "SubAllocationsRequest":
+        # Rollover reads every key of the stored settings, so a key with no amount (a sub-category
+        # not sent, or "_parent" next to sub-category amounts) would change the next cycle's budget.
+        if not self.sinking_fund:
+            return self
+        sub_codes = {k for k in self.sub_allocations if not k.startswith("_")}
+        allowed = sub_codes if sub_codes else {"_parent"}
+        if any(code not in allowed for code in self.sinking_fund):
+            raise ValueError("sinking_fund keys must be the sub-categories sent, or _parent without them")
+        return self
+
 
 class SubCategoryCreateRequest(BaseModel):
     household_id: str

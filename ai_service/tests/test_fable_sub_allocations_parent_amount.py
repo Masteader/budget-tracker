@@ -167,3 +167,23 @@ def test_a_member_cannot_save_a_parent_amount(api, fake_supabase, w):
     r = _post(api, w, {"category_code": "OPEX-CHARITY", "sub_allocations": {}, "allocated_amount": 300}, who="omar")
     assert r.status_code == 403
     assert _rows(fake_supabase, w, "OPEX-CHARITY") == []
+
+
+@pytest.mark.parametrize("body", [
+    # A parent-only save: only "_parent" is a sub-category of the category itself.
+    {"category_code": "OPEX-CHARITY", "sub_allocations": {}, "allocated_amount": 300,
+     "sinking_fund": {"ghost": {"accumulate": True, "base_amount": 0}}},
+    {"category_code": "OPEX-CHARITY", "sub_allocations": {}, "allocated_amount": 300,
+     "sinking_fund": {"_parent": {"accumulate": True, "base_amount": 300},
+                      "ghost": {"accumulate": True, "base_amount": 0}}},
+    # With sub-category amounts, every key is one of them.
+    {"category_code": "OPEX-GROCERY", "sub_allocations": {"meat": 100},
+     "sinking_fund": {"dairy_eggs": {"accumulate": True, "base_amount": 50}}},
+    {"category_code": "OPEX-GROCERY", "sub_allocations": {"meat": 100},
+     "sinking_fund": {"_parent": {"accumulate": True, "base_amount": 100}}},
+])
+def test_sinking_fund_for_a_sub_category_not_sent_is_refused(api, fake_supabase, w, body):
+    # A key with no amount changed the next cycle's rollover (the parent got its base amount added).
+    r = _post(api, w, body)
+    assert r.status_code == 422, r.text
+    assert _rows(fake_supabase, w, body["category_code"]) == []

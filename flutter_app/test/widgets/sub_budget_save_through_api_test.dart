@@ -139,6 +139,33 @@ class _FakeApi extends ApiService {
       {'active': const [], 'inactive': const []};
 }
 
+/// Holds the sub-category load or the save until its gate completes.
+class _GatedApi extends _FakeApi {
+  _GatedApi({super.subCategories});
+  Completer<void>? subsGate;
+  Completer<void>? saveGate;
+
+  @override
+  Future<List<Map<String, dynamic>>> getSubCategories(String parentCode, {String? householdId}) async {
+    if (subsGate != null) await subsGate!.future;
+    return subCategories;
+  }
+
+  @override
+  Future<Map<String, dynamic>> saveSubAllocations({
+    required String householdId,
+    required String categoryCode,
+    required Map<String, dynamic> subAllocations,
+    String? cycleKey,
+    double? allocatedAmount,
+    Map<String, dynamic>? sinkingFund,
+  }) async {
+    calls.add(_SaveCall(householdId, categoryCode, subAllocations, cycleKey, allocatedAmount, sinkingFund));
+    if (saveGate != null) await saveGate!.future;
+    return {'status': 'success'};
+  }
+}
+
 final _http = _WritesClient();
 
 class _Run {
@@ -477,10 +504,108 @@ void main() {
     });
   });
 
-  // The unbudgeted badge saves into the server's open cycle, or lets the
-  // server pick it; never into the phone's cached-payday cycle.
+  // A save in flight or before the sheet has loaded must not write the wrong
+  // amounts, write twice, or lose its refresh.
+  group('saving', () {
+    const groceries = [
+      {'sub_code': 'meat', 'name_en': 'Meat', 'name_ar': 'لحوم'},
+      {'sub_code': 'dairy_eggs', 'name_en': 'Dairy', 'name_ar': 'ألبان'},
+    ];
+    const stored = Budget(
+      id: 'b-1',
+      householdId: fakeSettingsHouseholdId,
+      month: '2026-11-01',
+      categoryCode: 'OPEX-GROCERY',
+      allocatedAmount: 150,
+      spentAmount: 0,
+      remainingAmount: 150,
+      cycleKey: '2026-11',
+      subAllocations: {'meat': 100, 'dairy_eggs': 50},
+    );
+
+    Future<void> pumpFrames(WidgetTester tester) async {
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    testWidgets('Save is off while the sub-categories load, so the stored amounts are not cleared',
+        (tester) async {
+      final api = _GatedApi(subCategories: groceries)..subsGate = Completer<void>();
+      ApiService.instance = api;
+      _http.budgetRows = [
+        {'id': 'b-1', 'household_id': fakeSettingsHouseholdId, 'category_code': 'OPEX-GROCERY',
+         'cycle_key': '2026-11', 'month': '2026-11-01', 'sub_allocations': {'meat': 100, 'dairy_eggs': 50}},
+      ];
+      await _open(tester, categoryCode: 'OPEX-GROCERY', cycleKey: '2026-11', existingBudget: stored, settle: false);
+      await pumpFrames(tester);
+      final save = find.byType(ElevatedButton).last;
+      expect(tester.widget<ElevatedButton>(save).onPressed, isNull);
+      await tester.ensureVisible(save);
+      await tester.tap(save, warnIfMissed: false);
+      await tester.pump();
+      api.subsGate!.complete();
+      await tester.pumpAndSettle();
+      expect(api.calls, isEmpty);
+
+      await _save(tester);
+      expect(api.calls.single.subAllocations, {'meat': 100.0, 'dairy_eggs': 50.0});
+      expect(api.calls.single.allocatedAmount, isNull);
+    });
+
+    testWidgets('two taps in one frame send one save', (tester) async {
+      final api = _GatedApi()..saveGate = Completer<void>();
+      ApiService.instance = api;
+      await _open(tester, categoryCode: 'OPEX-CHARITY', cycleKey: '2026-11');
+      await tester.enterText(find.byType(TextField).first, '300');
+      await tester.pump();
+      final save = find.byType(ElevatedButton).last;
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.tap(save);
+      await tester.pump();
+      api.saveGate!.complete();
+      await tester.pumpAndSettle();
+      expect(api.calls, hasLength(1));
+    });
+
+    testWidgets('the sheet cannot be closed while saving, so the save is reported and refreshed', (tester) async {
+      final api = _GatedApi()..saveGate = Completer<void>();
+      ApiService.instance = api;
+      final run = await _open(tester, categoryCode: 'OPEX-CHARITY', cycleKey: '2026-11');
+      await tester.enterText(find.byType(TextField).first, '300');
+      await tester.pump();
+      final save = find.byType(ElevatedButton).last;
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pump();
+
+      final close = find.byTooltip(AppLocalizations(const Locale('en')).get('close'));
+      expect(tester.widget<IconButton>(find.ancestor(of: close, matching: find.byType(IconButton))).onPressed,
+          isNull);
+      await tester.tapAt(const Offset(10, 10)); // the barrier
+      await pumpFrames(tester);
+      await tester.binding.handlePopRoute(); // the system back button
+      await pumpFrames(tester);
+      await tester.drag(find.text('Category').first, const Offset(0, 1500)); // swiped down
+      await pumpFrames(tester);
+      expect(run.closed, isFalse);
+
+      api.saveGate!.complete();
+      await tester.pumpAndSettle();
+      expect(api.calls, hasLength(1));
+      expect(run.result, isTrue);
+      expect(run.onSavedCalls, 1);
+    });
+  });
+
+  // The unbudgeted badge saves into the expense's own cycle, the one the
+  // server stamped on it and the edit sheet checked is open, or lets the server
+  // pick the household's open cycle. Never the phone's cached cycles, which can
+  // be stale after payday.
   group('the unbudgeted badge', () {
-    Future<_FakeApi> budgetFromBadge(WidgetTester tester, List<Map<String, dynamic>> cycles) async {
+    Future<_FakeApi> budgetFromBadge(WidgetTester tester, String? transactionCycleKey,
+        {List<Map<String, dynamic>> cycles = const []}) async {
       final api = _FakeApi()..cycles = cycles;
       ApiService.instance = api;
       final provider = BudgetProvider(api: api);
@@ -489,7 +614,8 @@ void main() {
         tester,
         categoryCode: 'OPEX-CHARITY',
         budgetProvider: provider,
-        opener: (context) => activateAndBudgetCategory(context, fakeSettingsHouseholdId, 'OPEX-CHARITY'),
+        opener: (context) =>
+            activateAndBudgetCategory(context, fakeSettingsHouseholdId, 'OPEX-CHARITY', transactionCycleKey),
       );
       await tester.enterText(find.byType(TextField).first, '300');
       await tester.pump();
@@ -498,20 +624,21 @@ void main() {
       return api;
     }
 
-    testWidgets("passes the server's open cycle", (tester) async {
-      final cached = SalaryCycleService.currentCycle().key;
-      final serverKey = cached == '2031-01' ? '2031-02' : '2031-01';
-      final api = await budgetFromBadge(tester, [
-        {'cycle_key': '2030-12', 'is_current': false},
-        {'cycle_key': serverKey, 'is_current': true},
+    testWidgets("passes the expense's own cycle, not the cached current one", (tester) async {
+      final api = await budgetFromBadge(tester, '2031-02', cycles: [
+        {'cycle_key': '2031-01', 'is_current': true}, // loaded before payday: stale
       ]);
-      expect(api.calls.single.cycleKey, serverKey);
-      expect(api.calls.single.cycleKey, isNot(cached));
+      expect(api.calls.single.cycleKey, '2031-02');
     });
 
-    testWidgets("no server cycle yet: passes no cycle, so the server picks the household's", (tester) async {
-      final api = await budgetFromBadge(tester, const []);
-      expect(api.calls.single.cycleKey, isNull);
-    });
+    for (final none in [null, '']) {
+      testWidgets("an expense without a cycle (${none == null ? 'null' : 'empty'}): passes none, "
+          "so the server picks the household's", (tester) async {
+        final api = await budgetFromBadge(tester, none, cycles: [
+          {'cycle_key': '2031-01', 'is_current': true},
+        ]);
+        expect(api.calls.single.cycleKey, isNull);
+      });
+    }
   });
 }
