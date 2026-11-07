@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Annotated, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # Monetary inputs: finite, non-negative, bounded. Pydantic floats accept NaN/Infinity by default
 # (and Starlette's JSON parser accepts the NaN/Infinity literals), which Postgres numeric stores,
@@ -110,16 +110,35 @@ class CategoryCreateRequest(BaseModel):
         return _uuid_validator(v)
 
 
+class SinkingFundEntry(BaseModel):
+    """Accumulate setting of one sub-category (``_parent``: the category itself)."""
+    model_config = ConfigDict(extra="forbid")
+
+    accumulate: bool
+    base_amount: Money
+
+
 class SubAllocationsRequest(BaseModel):
     household_id: str
     category_code: Code
     cycle_key: Optional[str] = Field(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
     sub_allocations: dict[Code, Money] = Field(max_length=200)
+    # The parent amount of a category budgeted without sub-category amounts; with them, their
+    # sum is the parent amount, so both together are refused.
+    allocated_amount: Optional[Money] = None
+    # Stored as sub_allocations["_sinking_fund"]; {} clears it, None keeps the stored settings.
+    sinking_fund: Optional[dict[Code, SinkingFundEntry]] = Field(default=None, max_length=201)
 
     @field_validator("household_id")
     @classmethod
     def validate_household_uuid(cls, v: str) -> str:
         return _uuid_validator(v)
+
+    @model_validator(mode="after")
+    def parent_amount_only_without_sub_amounts(self) -> "SubAllocationsRequest":
+        if self.allocated_amount is not None and any(not k.startswith("_") for k in self.sub_allocations):
+            raise ValueError("allocated_amount is only for a category without sub-category amounts")
+        return self
 
 
 class SubCategoryCreateRequest(BaseModel):

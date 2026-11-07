@@ -420,11 +420,18 @@ class BudgetApiClient {
     return ApiRequestException.check(res);
   }
 
+  /// Saves a category's budget for [cycleKey] (none: the household's payday
+  /// cycle). The parent amount is the sum of [subAllocations];
+  /// [allocatedAmount] is the parent amount of a category saved without
+  /// sub-category amounts. [sinkingFund] replaces the stored accumulate
+  /// settings (`{}` clears them, null keeps them).
   Future<Map<String, dynamic>> saveSubAllocations({
     required String householdId,
     required String categoryCode,
     required Map<String, dynamic> subAllocations,
     String? cycleKey,
+    double? allocatedAmount,
+    Map<String, dynamic>? sinkingFund,
   }) async {
     return baseClient.post(
       '/budgets/sub-allocations',
@@ -433,6 +440,8 @@ class BudgetApiClient {
         'category_code': categoryCode,
         'sub_allocations': subAllocations,
         if (cycleKey != null && cycleKey.isNotEmpty) 'cycle_key': cycleKey,
+        if (allocatedAmount != null) 'allocated_amount': allocatedAmount,
+        if (sinkingFund != null) 'sinking_fund': sinkingFund,
       },
       shouldSign: false,
       timeout: const Duration(seconds: 10),

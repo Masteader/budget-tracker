@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../theme/app_themes.dart';
 import '../l10n/app_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../main.dart';
@@ -710,10 +709,15 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
       _errorMessage = null;
     });
 
+    // Saved by the server (POST /budgets/sub-allocations): it checks the
+    // category is the household's, switches it on before writing, keeps the
+    // row's metadata (e.g. recurring bills) and, with no cycle key, uses the
+    // household's payday cycle, never the phone's calendar month.
     try {
+      final allocMap = <String, dynamic>{};
+      final sfMap = <String, dynamic>{};
+      double? parentAmount;
       if (_subItems.isNotEmpty) {
-        final allocMap = <String, dynamic>{};
-        final sfMap = <String, dynamic>{};
         for (final item in _subItems) {
           final val = parseMoneyInput(item.controller.text.trim()) ?? 0.0;
           allocMap[item.subCode] = val;
@@ -725,27 +729,10 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
             };
           }
         }
-
-        if (sfMap.isNotEmpty) {
-          allocMap['_sinking_fund'] = sfMap;
-        }
-
-        final res = await ApiService.instance.saveSubAllocations(
-          householdId: widget.householdId,
-          categoryCode: widget.categoryCode,
-          subAllocations: allocMap,
-          cycleKey: widget.cycleKey,
-        );
-
-        if (res['status'] != 'success') {
-          throw Exception(res['message'] ?? 'Failed to save sub-allocations');
-        }
       } else {
-        // Fallback for single category without sub-categories
+        // A category without sub-categories: one parent amount.
         final amount = parseMoneyInput(_fallbackParentController.text.trim()) ?? 0.0;
-        final cycleKey = widget.cycleKey ?? DateFormat('yyyy-MM').format(DateTime.now());
-        final monthStr = '$cycleKey-01';
-        final sfMap = <String, dynamic>{};
+        parentAmount = amount;
         if (_parentIsSinkingFund) {
           final base = _parentBaseAmount > 0 ? _parentBaseAmount : amount;
           sfMap['_parent'] = {
@@ -753,58 +740,21 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
             'base_amount': base > 0 ? base : amount,
           };
         }
-        final Map<String, dynamic> subAllocsPayload = sfMap.isNotEmpty
-            ? {'_sinking_fund': sfMap}
-            : {};
+      }
 
-        // A budgeted category is active for the household (the sub-allocation
-        // API does the same); its open-cycle spending counts in the budget.
-        // Activated first: if this fails nothing is written, so the error below
-        // is true, and no budget row waits on a category that stays inactive.
-        await supabase.from('household_category_settings').upsert(
-          {'household_id': widget.householdId, 'category_code': widget.categoryCode, 'is_active': true},
-          onConflict: 'household_id,category_code',
-        );
+      // The sinking fund is always sent, empty when switched off, so a
+      // switched-off one is cleared.
+      final res = await ApiService.instance.saveSubAllocations(
+        householdId: widget.householdId,
+        categoryCode: widget.categoryCode,
+        subAllocations: allocMap,
+        cycleKey: widget.cycleKey,
+        allocatedAmount: parentAmount,
+        sinkingFund: sfMap,
+      );
 
-        if (widget.existingBudget != null) {
-          await supabase.from('budgets').update({
-            'allocated_amount': amount,
-            'cycle_key': cycleKey,
-            'is_active': true,
-            'sub_allocations': subAllocsPayload,
-          }).eq('id', widget.existingBudget!.id);
-        } else {
-          // This cycle's row only (by key, or by month for a legacy row): another
-          // cycle's row keeps its cycle and history.
-          final existingCheck = await supabase
-              .from('budgets')
-              .select('id')
-              .eq('household_id', widget.householdId)
-              .eq('category_code', widget.categoryCode)
-              .or('cycle_key.eq.$cycleKey,month.eq.$monthStr')
-              .limit(1)
-              .maybeSingle();
-
-          if (existingCheck != null) {
-            await supabase.from('budgets').update({
-              'allocated_amount': amount,
-              'cycle_key': cycleKey,
-              'is_active': true,
-              'sub_allocations': subAllocsPayload,
-            }).eq('id', existingCheck['id']);
-          } else {
-            await supabase.from('budgets').insert({
-              'household_id': widget.householdId,
-              'category_code': widget.categoryCode,
-              'allocated_amount': amount,
-              'spent_amount': 0.0,
-              'month': monthStr,
-              'cycle_key': cycleKey,
-              'is_active': true,
-              'sub_allocations': subAllocsPayload,
-            });
-          }
-        }
+      if (res['status'] != 'success') {
+        throw Exception(res['message'] ?? 'Failed to save sub-allocations');
       }
 
       if (mounted) {
