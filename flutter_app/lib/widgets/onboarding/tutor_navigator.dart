@@ -1,28 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../models/tutor_viewer.dart';
 import '../../screens/accounts/accounts_overview_screen.dart';
 import '../../screens/home/budget_management_screen.dart';
 import '../accounts/record_income_sheet.dart';
 import '../dashboard/household_setup_card.dart';
 import '../settings/household_roles_card.dart';
-
-/// What a setup tutor step's button opens.
-enum TutorAction {
-  /// The household's payday editor (admins).
-  payday,
-
-  /// **Record Income**.
-  income,
-
-  /// **Accounts & Balances**.
-  accounts,
-
-  /// The Budgets screen (admins).
-  budgets,
-
-  /// **Members & Admins** (admins).
-  roles,
-}
 
 /// Opens the screen or sheet of a [TutorAction] from the context of the
 /// screen that showed the tutor, after the tutor dialog has closed.
@@ -30,7 +13,7 @@ class TutorNavigator {
   const TutorNavigator();
 
   /// Whether [action] needs the household's id.
-  static bool needsHousehold(TutorAction action) => action != TutorAction.budgets;
+  static bool needsHousehold(TutorAction action) => tutorActionNeedsHousehold(action);
 
   Future<void> open(BuildContext context, TutorAction action, String householdId) async {
     switch (action) {

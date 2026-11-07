@@ -5,67 +5,56 @@ import 'package:budget_tracker/widgets/onboarding/app_setup_tutor_dialog.dart';
 
 import '../support/localized_app.dart';
 
+const _admin = TutorViewer(isAdmin: true);
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('AppSetupTutorDialog renders 5-stage setup wizard with direct action buttons', (tester) async {
+  testWidgets('an admin walks the five setup steps with their buttons', (tester) async {
     await tester.pumpWidget(localizedApp(
-      const AppSetupTutorDialog(householdId: 'h1'),
+      const AppSetupTutorDialog(householdId: 'h1', viewer: _admin),
       lang: 'en',
     ));
     await tester.pumpAndSettle();
 
-    // Stage 1 elements
-    expect(find.text('1. Payday Cycle & Liquid Pool'), findsOneWidget);
-    expect(find.text('Set Payday & Income'), findsOneWidget);
+    expect(find.text('Step 1 of 5'), findsOneWidget);
+    expect(find.text('Payday & Income'), findsOneWidget);
+    expect(find.text('Set Payday'), findsOneWidget);
+    expect(find.text('Record Income'), findsOneWidget);
 
-    // Tap Next
-    final nextBtn = find.text('Next Step');
-    expect(nextBtn, findsOneWidget);
-    await tester.tap(nextBtn);
+    await tester.tap(find.text('Next Step'));
     await tester.pumpAndSettle();
-
-    // Stage 2 elements
-    expect(find.text('2. Operating Accounts vs. Savings Vaults'), findsOneWidget);
+    expect(find.text('Operating Accounts vs. Savings Vaults'), findsOneWidget);
     expect(find.text('Set Up Bank & Savings'), findsOneWidget);
 
-    // Tap Next
     await tester.tap(find.text('Next Step'));
     await tester.pumpAndSettle();
-
-    // Stage 3 elements
-    expect(find.text('3. Envelope Budgeting & Mid-Cycle Joining'), findsOneWidget);
+    expect(find.text('Envelope Budgeting & Joining Mid-Cycle'), findsOneWidget);
     expect(find.text('Configure Envelopes'), findsOneWidget);
 
-    // Tap Next
     await tester.tap(find.text('Next Step'));
     await tester.pumpAndSettle();
+    expect(find.text('Living Model: Family & Roommates'), findsOneWidget);
+    expect(find.text('Members & Admins'), findsOneWidget);
 
-    // Stage 4 elements
-    expect(find.text('4. Living Model: Family & Roommates'), findsOneWidget);
-    expect(find.text('Configure Household Mode'), findsOneWidget);
-
-    // Tap Next
     await tester.tap(find.text('Next Step'));
     await tester.pumpAndSettle();
-
-    // Stage 5 elements
-    expect(find.text('5. Three Frictionless Ways to Record'), findsOneWidget);
+    expect(find.text('Three Ways to Record'), findsOneWidget);
     expect(find.text('Start Using Qawam Money'), findsOneWidget);
     expect(find.text('Finish & Start Tracking'), findsOneWidget);
   });
 
-  testWidgets('AppSetupTutorDialog renders localized in Arabic', (tester) async {
+  testWidgets('renders localized in Arabic', (tester) async {
     await tester.pumpWidget(localizedApp(
-      const AppSetupTutorDialog(householdId: 'h1'),
+      const AppSetupTutorDialog(householdId: 'h1', viewer: _admin),
       lang: 'ar',
     ));
     await tester.pumpAndSettle();
 
-    expect(find.text('١. دورة الراتب والسيولة النقدية'), findsOneWidget);
-    expect(find.text('تحديد يوم الراتب والدخل'), findsOneWidget);
+    expect(find.text('يوم الراتب والدخل'), findsOneWidget);
+    expect(find.text('تحديد يوم الراتب'), findsOneWidget);
     expect(find.text('الخطوة التالية'), findsOneWidget);
   });
 
@@ -75,6 +64,7 @@ void main() {
     await tester.pumpWidget(localizedApp(
       AppSetupTutorDialog(
         householdId: 'h1',
+        viewer: _admin,
         onClose: (action) {
           closed = true;
           closedWith = action;

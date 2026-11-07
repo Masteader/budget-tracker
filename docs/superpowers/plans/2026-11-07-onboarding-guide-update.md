@@ -204,14 +204,14 @@
 **Files:** `app_setup_tutor_dialog.dart`, new `lib/models/tutor_viewer.dart`, `dashboard_screen.dart`, `app_localizations.dart`, and the tests above.
 
 **Checklist**
-- [ ] Write the `TutorViewer` unit tests and the role widget tests; see them fail
-- [ ] Add `TutorViewer` and the step builder; load the roster in `show`
-- [ ] Add the role steps and the member variants; fill the placeholders from the label keys
-- [ ] Rewrite the tutor copy in en, ar and ur; remove the old keys
-- [ ] Theme tokens; overflow and theme tests
-- [ ] Move the dashboard first-run call after setup loads
-- [ ] Gates: `flutter analyze` and `flutter test`
-- [ ] Commit `feat(onboarding): role-aware setup tutor with wife, husband and roommate steps`
+- [x] Write the `TutorViewer` unit tests and the role widget tests; see them fail
+- [x] Add `TutorViewer` and the step builder; load the roster in `show`
+- [x] Add the role steps and the member variants; fill the placeholders from the label keys
+- [x] Rewrite the tutor copy in en, ar and ur; remove the old keys
+- [x] Theme tokens; overflow and theme tests
+- [x] Move the dashboard first-run call after setup loads
+- [x] Gates: `flutter analyze` and `flutter test`
+- [x] Commit `feat(onboarding): role-aware setup tutor with wife, husband and roommate steps`
 
 **Size:** L. About +250 code / +300 test lines; 13 new and 12 changed keys × 3 languages; 5–6 hours.
 

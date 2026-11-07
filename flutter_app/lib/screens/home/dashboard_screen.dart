@@ -204,11 +204,6 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
     } else {
       _householdId = _fetchHouseholdId();
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        AppSetupTutorDialog.showIfFirstTime(context);
-      }
-    });
   }
 
   @override
@@ -246,6 +241,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
   Future<void> _loadDashboardData(String hid) async {
     unawaited(_fetchCycles(hid));
     final setup = await _fetchSetup(hid);
+    _showTutorOnce(hid, setup?.roster);
     final payday = setup?.paydayDay ?? SalaryCycleService.defaultPaydayDay;
     if (mounted) {
       try {
@@ -256,6 +252,22 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
         context.read<BudgetProvider>().init(hid);
       } catch (_) {}
     }
+  }
+
+  bool _tutorChecked = false;
+
+  /// The setup tutor, once per phone, after the household has loaded so it
+  /// shows the steps for the viewer's role (no extra request: the checklist
+  /// already loaded the members).
+  void _showTutorOnce(String hid, HouseholdRoster? roster) {
+    if (_tutorChecked || !mounted) return;
+    _tutorChecked = true;
+    unawaited(AppSetupTutorDialog.showIfFirstTime(
+      context,
+      householdId: hid,
+      roster: roster,
+      loadMissingRoster: false,
+    ));
   }
 
   Future<void> _fetchCycles(String hid) async {

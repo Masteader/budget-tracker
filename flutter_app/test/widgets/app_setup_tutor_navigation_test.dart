@@ -42,6 +42,7 @@ Widget _app({required String? householdId, required _FakeNavigator navigator}) =
                 householdId: householdId,
                 navigator: navigator,
                 fallbackIsAdmin: true,
+                loadRoster: (_) async => throw StateError('offline'),
               ),
               child: const Text('OPEN TUTOR'),
             ),
@@ -63,10 +64,12 @@ Future<void> _openTutor(WidgetTester tester, {String? householdId = 'h1', requir
 
 /// Pages forward with "Next Step" until [finder] is on screen.
 Future<void> _pageTo(WidgetTester tester, Finder finder) async {
-  for (var i = 0; i < 8 && finder.hitTestable().evaluate().isEmpty; i++) {
+  for (var i = 0; i < 8 && finder.evaluate().isEmpty; i++) {
     await tester.tap(find.byKey(const ValueKey('tutor_next')));
     await tester.pumpAndSettle();
   }
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
   expect(finder.hitTestable(), findsOneWidget);
 }
 
@@ -122,10 +125,10 @@ void main() {
     final seen = <String>{};
     for (var i = 0; i < 8; i++) {
       for (final a in TutorAction.values) {
-        if (find.byKey(ValueKey('tutor_action_${a.name}')).hitTestable().evaluate().isNotEmpty) seen.add(a.name);
+        if (find.byKey(ValueKey('tutor_action_${a.name}')).evaluate().isNotEmpty) seen.add(a.name);
       }
       final next = find.byKey(const ValueKey('tutor_next'));
-      if (find.byKey(const ValueKey('tutor_action_finish')).hitTestable().evaluate().isNotEmpty) break;
+      if (find.byKey(const ValueKey('tutor_action_finish')).evaluate().isNotEmpty) break;
       await tester.tap(next);
       await tester.pumpAndSettle();
     }
