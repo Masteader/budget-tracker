@@ -149,6 +149,18 @@ def test_chk_02_the_plan_s_own_fields_stay_open_to_whoever_reads_it(rows, who):
     assert (plan["notes"], plan["merchant"], plan["paid_installments"]) == ("due soon", "Renamed", 2)
 
 
+@pytest.mark.parametrize("who", [MEMBER, COWIFE])
+def test_chk_02_a_new_full_price_alone_is_a_change_of_the_purchase(rows, who):
+    """A new total with the same monthly amount still rewrites the purchase (its note names the
+    full price): refused alike, and nothing of it changes."""
+    _linked(rows, TX_HIS)
+    before, plan_before = _tx_row(rows, TX_HIS), _plan_row(rows)
+    resp = _edit(who, {"total_amount": 4000.0, "monthly_amount": 100.0})
+    assert resp.status_code == 403, resp.text
+    assert _tx_row(rows, TX_HIS) == before
+    assert _plan_row(rows) == plan_before
+
+
 def test_chk_02_the_same_amounts_again_are_no_change_of_the_purchase(rows):
     """Amounts sent unchanged move nothing, so they are the plan's own edit."""
     _linked(rows, TX_HIS)
