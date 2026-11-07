@@ -8,6 +8,7 @@ from __future__ import annotations
 import calendar
 import logging
 import re
+import uuid
 import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, Any, Iterable, List, Optional
@@ -829,7 +830,14 @@ def category_usable_by_household(category_code: str, household_id: str) -> bool:
     the same answer (CATEGORY_FORBIDDEN), so nothing is revealed about other households' codes.
     """
     ownership = get_category_owner_households(category_code)
-    return ownership["shared"] or str(household_id) in ownership["owners"]
+    if ownership["shared"]:
+        return True
+    # Postgres reads an uppercase UUID as the same household; compare canonical forms.
+    try:
+        canonical = str(uuid.UUID(str(household_id)))
+    except ValueError:
+        return False
+    return canonical in {o.lower() for o in ownership["owners"]}
 
 
 def get_category_owner_households(category_code: str) -> Dict[str, Any]:

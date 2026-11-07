@@ -3,7 +3,7 @@ Budgeting a category (sub-allocations) and switching one on take a category code
 request. Only a system category or one of the household's own custom categories is accepted:
 another household's custom code or an unknown code would leave budget rows and settings under
 a code the household cannot see. Both refusals give the same answer, so nothing is revealed
-about other households' codes.
+about other households' codes. Named test_fable_* so the real JWT and admin checks run.
 """
 from __future__ import annotations
 
@@ -89,6 +89,15 @@ def test_switching_on_accepts_system_and_own_codes(api, households, code):
     r = _toggle(api, a, code, True)
     assert r.status_code == 200, r.text
     assert [s["is_active"] for s in _rows(fake, "household_category_settings", a.hid, code)] == [True]
+
+
+def test_an_uppercase_household_id_still_owns_its_codes(households):
+    """Postgres reads an uppercase UUID as the same household, so the check must too."""
+    from salary_cycle import category_usable_by_household
+
+    _, a, _ = households
+    assert category_usable_by_household("CUSTOM-PETS", a.hid.upper())
+    assert not category_usable_by_household("CUSTOM-SECRET", a.hid.upper())
 
 
 def test_switching_off_is_not_restricted(api, households):
