@@ -36,7 +36,9 @@ DART = "flutter_app/lib/l10n/app_localizations.dart"
 TS = "web_app/src/i18n/translations.ts"
 NOTICES = "ai_service/account_deletion_notices.py"
 BASE_APP = "7eb1550"
-BASE_WEB = "1a1ddb7"
+# main as merged into the release (db33356): its own new strings (the portal Budgets view) are
+# not part of this review. Before that merge this was the branch point, 1a1ddb7.
+BASE_WEB = "db33356"
 COLUMNS = ["key", "where_it_appears", "english", "arabic", "urdu", "reviewer_notes"]
 LANGUAGES = ("en", "ar", "ur")
 
