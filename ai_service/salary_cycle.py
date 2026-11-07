@@ -507,6 +507,8 @@ SUB_CATEGORY_FORBIDDEN = (
     "Forbidden: sub-categories can only be created or changed under a category that belongs to this household alone."
 )
 
+CATEGORY_FORBIDDEN = "Forbidden: this category is not available to this household."
+
 
 def sub_category_keywords(name: str) -> List[str]:
     """Matching keywords for a household-defined sub-category: its name, if long enough."""
@@ -817,6 +819,17 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
         "cycle_info": cycle_info,
         "categories": categories,
     }
+
+
+def category_usable_by_household(category_code: str, household_id: str) -> bool:
+    """
+    Whether ``household_id`` may budget ``category_code`` or switch it on: a system/shared
+    category, or a custom category this household owns (two households may own the same
+    CUSTOM-... code). Another household's custom code and an unknown code are both refused, with
+    the same answer (CATEGORY_FORBIDDEN), so nothing is revealed about other households' codes.
+    """
+    ownership = get_category_owner_households(category_code)
+    return ownership["shared"] or str(household_id) in ownership["owners"]
 
 
 def get_category_owner_households(category_code: str) -> Dict[str, Any]:

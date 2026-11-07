@@ -74,6 +74,8 @@ from nafaqah_service import (
 )
 from routes.nafaqah import nafaqah_http_error
 from salary_cycle import (
+    CATEGORY_FORBIDDEN,
+    category_usable_by_household,
     get_household_categories,
     toggle_category_status,
     create_household_custom_category,
@@ -578,6 +580,15 @@ async def toggle_category_endpoint(
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
+    # Switching on writes a setting and budget rows, so only for a system category or one of this
+    # household's own. Switching off only touches the household's own rows and stays open.
+    if req.is_active:
+        try:
+            usable = await asyncio.to_thread(category_usable_by_household, req.category_code, household_id)
+        except Exception as exc:
+            raise safe_error_response(exc, public_message="Failed to toggle category status.")
+        if not usable:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=CATEGORY_FORBIDDEN)
     try:
         return await asyncio.to_thread(
             toggle_category_status,

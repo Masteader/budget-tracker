@@ -62,8 +62,12 @@ def test_create_household_custom_category(monkeypatch):
     assert res["code"] == "CUSTOM-FARM"
     assert res["is_active"] is True
 
-def test_categories_api_endpoints(monkeypatch):
+def test_categories_api_endpoints(monkeypatch, fake_supabase):
     from main import app
+    # Switching on is checked against cost_control_codes (system or the household's own code).
+    fake_supabase.seed("cost_control_codes", [
+        {"id": "c-fuel", "code": "OPEX-FUEL", "category": "Fuel", "household_id": None, "is_system": True},
+    ])
     client = TestClient(app)
     hid = "f860188e-23b5-4749-b180-868c956151a6"
     headers = {"X-App-Token": os.environ.get("APP_AUTH_TOKEN", "test_token_for_ci_only")}

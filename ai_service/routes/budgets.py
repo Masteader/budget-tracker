@@ -50,6 +50,8 @@ from salary_cycle import (
     replace_household_category,
     simulate_affordability,
     SUB_CATEGORY_FORBIDDEN,
+    CATEGORY_FORBIDDEN,
+    category_usable_by_household,
     sub_category_sole_owner,
     sub_category_write_allowed,
     get_sub_category_owner_household,
@@ -441,6 +443,14 @@ async def set_sub_allocations(
     req: SubAllocationsRequest,
 ):
     await verify_household_admin_access(request, req.household_id)
+    # Budget rows only for a system category or one of this household's own (see
+    # category_usable_by_household).
+    try:
+        usable = await asyncio.to_thread(category_usable_by_household, req.category_code, req.household_id)
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to save sub-allocations.")
+    if not usable:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=CATEGORY_FORBIDDEN)
     try:
         return await asyncio.to_thread(
             save_sub_allocations,

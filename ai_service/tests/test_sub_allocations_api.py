@@ -13,7 +13,11 @@ AUTH_HEADERS = {"X-App-Token": os.environ.get("APP_AUTH_TOKEN", "test_token_for_
 HOUSEHOLD_ID = "f860188e-23b5-4749-b180-868c956151a6"
 
 
-def test_sub_allocations_save_and_breakdown(monkeypatch):
+def test_sub_allocations_save_and_breakdown(monkeypatch, fake_supabase):
+    # Sub-allocations are checked against cost_control_codes (system or the household's own code).
+    fake_supabase.seed("cost_control_codes", [
+        {"id": "c-util", "code": "OPEX-UTILITIES", "category": "Utilities", "household_id": None, "is_system": True},
+    ])
     mock_save_data = {
         "status": "success",
         "category_code": "OPEX-UTILITIES",
